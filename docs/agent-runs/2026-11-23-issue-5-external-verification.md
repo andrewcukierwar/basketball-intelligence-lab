@@ -3,7 +3,7 @@
 - **Date:** 2026-11-23
 - **Status:** Awaiting review.
 - **Related issues:** [#5](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/5) (closed by #15)
-- **Branch / commit / PR:** `claude/issue-5-external-verification` from `94ad909`. The code is in `e5020b6` and `32d1303`.
+- **Branch / commit / PR:** `claude/issue-5-external-verification` from `94ad909`. The code is in `e5020b6` and `32d1303`. [PR #16](https://github.com/andrewcukierwar/basketball-intelligence-lab/pull/16).
 
 ## Objective and authorized scope
 
