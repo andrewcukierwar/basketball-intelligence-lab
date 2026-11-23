@@ -193,6 +193,8 @@ The NBA feeds come from the Shufinskiy revision the pilot already pins. Bentes c
   data/raw/2022-23/issue-5-evidence-v1
 ```
 
+This example and the table below are for the M1 build `issue-5-v5`, made from snapshot `issue-5-v1`. For the current build, pass `issue-5-v6` and `issue-5-v2` instead. Its evidence results are in the archived-feed adjudication section above.
+
 Results for the M1 build `issue-5-v5`:
 
 | Comparison | Result |
