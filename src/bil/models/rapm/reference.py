@@ -128,7 +128,7 @@ def fit_rapm(possessions: Sequence[Possession], *, ridge: float) -> RAPMFit:
         rmatvec=rmatvec,
         dtype=np.float64,
     )
-    response_scale = max(1.0, float(np.max(design.response)))
+    response_scale = float(np.max(design.response)) or 1.0
     normalized_response = design.response / response_scale
     target = np.concatenate(
         (project(scaled_weights * normalized_response), np.zeros(player_columns))

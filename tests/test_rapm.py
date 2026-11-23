@@ -98,6 +98,21 @@ def test_rescaling_loss_and_penalty_preserves_the_fit() -> None:
     assert scaled.defense == pytest.approx(fit.defense, rel=0, abs=1e-8)
 
 
+def test_tiny_nonzero_response_preserves_relative_effects() -> None:
+    rows = generate_possessions(100, seed=18)
+    points_scale = 1e-190
+    fit = fit_rapm(rows, ridge=0.01)
+    scaled = fit_rapm([replace(row, points=row.points * points_scale) for row in rows], ridge=0.01)
+    assert scaled.intercept / points_scale == pytest.approx(fit.intercept, rel=0, abs=1e-8)
+    for player in fit.offense:
+        assert scaled.offense[player] / points_scale == pytest.approx(
+            fit.offense[player], rel=0, abs=1e-8
+        )
+        assert scaled.defense[player] / points_scale == pytest.approx(
+            fit.defense[player], rel=0, abs=1e-8
+        )
+
+
 def test_aliased_players_share_each_ridge_coefficient() -> None:
     rows = generate_possessions(800, seed=6014, paired=True)
     fit = fit_rapm(rows, ridge=1e-4)
