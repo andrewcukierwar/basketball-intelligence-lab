@@ -1,6 +1,6 @@
 # Experiment Log
 
-Do not overwrite negative or unexpected results. New experiments should be append-only, with links to generated run manifests.
+Do not overwrite negative or unexpected results. New experiments should be append-only, with links to generated [run manifests](run-manifest.md) and any linked scoring runs.
 
 ## Template
 

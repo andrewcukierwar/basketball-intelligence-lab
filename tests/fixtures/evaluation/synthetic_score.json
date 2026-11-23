@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "experiment_id": "synthetic-evaluation",
+  "evaluation_mode": "strict_rolling",
+  "status": "completed",
+  "reason": null,
+  "parent_run_id": null,
+  "code_git_sha": "0000000000000000000000000000000000000000",
+  "environment_artifact_id": "environment",
+  "config_artifact_id": "config",
+  "seeds": [
+    {
+      "scope": "rapm-target-fit",
+      "seed": 1729
+    }
+  ],
+  "registration_artifact_id": "registration",
+  "protocol_id": "r1-v1-synthetic",
+  "registered_at": "2026-11-22T20:00:00Z",
+  "splits": [
+    {
+      "split_id": "initial-fit",
+      "role": "fit",
+      "start_date": "2001-07-01",
+      "end_date": "2023-07-01",
+      "season_start_years": [
+        2001,
+        2002,
+        2003,
+        2004,
+        2005,
+        2006,
+        2007,
+        2008,
+        2009,
+        2010,
+        2011,
+        2012,
+        2013,
+        2014,
+        2015,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022
+      ],
+      "season_types": [
+        "regular",
+        "playoffs"
+      ]
+    },
+    {
+      "split_id": "validation-2023",
+      "role": "validation",
+      "start_date": "2023-07-01",
+      "end_date": "2024-07-01",
+      "season_start_years": [
+        2023
+      ],
+      "season_types": [
+        "regular",
+        "playoffs"
+      ]
+    },
+    {
+      "split_id": "validation-2024",
+      "role": "validation",
+      "start_date": "2024-07-01",
+      "end_date": "2025-07-01",
+      "season_start_years": [
+        2024
+      ],
+      "season_types": [
+        "regular",
+        "playoffs"
+      ]
+    },
+    {
+      "split_id": "holdout-2025",
+      "role": "holdout",
+      "start_date": "2025-07-01",
+      "end_date": "2026-07-01",
+      "season_start_years": [
+        2025
+      ],
+      "season_types": [
+        "regular",
+        "playoffs"
+      ]
+    }
+  ],
+  "run_id": "synthetic-score",
+  "stage": "score",
+  "created_at": "2026-11-23T14:25:00Z",
+  "artifacts": [
+    {
+      "artifact_id": "environment",
+      "kind": "environment",
+      "uri": "fixture:environment",
+      "sha256": "c52d8b7478298e22b91af88e258d62610b3042843ae5f700355a2597427fa281",
+      "size_bytes": 21,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "config",
+      "kind": "config",
+      "uri": "fixture:config",
+      "sha256": "97db1ebf0bdffadf1d399e201112c909a991302cbd8e9bbff5d8334ad051f177",
+      "size_bytes": 16,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "registration",
+      "kind": "registration",
+      "uri": "fixture:registration",
+      "sha256": "59400729eb5112e35398ee812919b8d2947fb5f1de51fd9fd006fc5773b4f564",
+      "size_bytes": 22,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "parent-forecast",
+      "kind": "forecast_manifest",
+      "uri": "synthetic_forecast.json",
+      "sha256": "598994b3bb932fbe32b51c6418fa2cebea1eeff9b13a028a0176cb64499fa1a2",
+      "size_bytes": 7872,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "score-source",
+      "kind": "source",
+      "uri": "fixture:score-source",
+      "sha256": "cc16bc230c0e94cff45b607283cee6216435ec09947b041e176c545412541ea2",
+      "size_bytes": 22,
+      "source_artifact_id": "synthetic-outcomes",
+      "rights_ref": "synthetic-bil"
+    },
+    {
+      "artifact_id": "outcomes-keys",
+      "kind": "selection",
+      "uri": "fixture:outcomes-keys",
+      "sha256": "8a1c32831ee045dc1df9bde3849e1c0bdfe8a692772b9b7a875822b93000328f",
+      "size_bytes": 23,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "access-log",
+      "kind": "access_log",
+      "uri": "fixture:access-log",
+      "sha256": "0a5a6a670cb101ea6eaeb874bf16f6e4564b8f486ef52566b7789b93bdfa824e",
+      "size_bytes": 20,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "metrics",
+      "kind": "metrics",
+      "uri": "fixture:metrics",
+      "sha256": "defce360a93529d3b91fc832ee1afa3c23a2492c7d57a6c5f88c8b2c86fdc83b",
+      "size_bytes": 17,
+      "source_artifact_id": null,
+      "rights_ref": null
+    }
+  ],
+  "input_views": [
+    {
+      "view_id": "outcomes",
+      "role": "outcomes",
+      "as_of_at": "2026-11-23T14:20:00Z",
+      "selection_artifact_id": "outcomes-keys",
+      "source_artifact_ids": [
+        "score-source"
+      ],
+      "max_known_available_at": "2025-11-04T14:00:00Z",
+      "unknown_availability_count": 0,
+      "selected_count": 1,
+      "exclusions": []
+    }
+  ],
+  "forecast": null,
+  "score": {
+    "forecast_run_id": "synthetic-forecast",
+    "forecast_manifest_artifact_id": "parent-forecast",
+    "outcome_view_id": "outcomes",
+    "scoring_as_of_at": "2026-11-23T14:20:00Z",
+    "score_kind": "synthetic",
+    "access_log_artifact_id": "access-log",
+    "metrics_artifact_id": "metrics",
+    "results": [
+      {
+        "split_id": "holdout-2025",
+        "cohort_id": "synthetic-regular",
+        "metric_code": "margin_mae",
+        "unit": "points",
+        "model_id": "synthetic-candidate",
+        "baseline_id": "synthetic-baseline",
+        "value": 4.0,
+        "paired_delta": -1.0,
+        "interval": null,
+        "games_scored": 1,
+        "targets_expected": 2,
+        "targets_scored": 1,
+        "sum_weights": 1.0,
+        "exclusions": [
+          {
+            "reason": "outcome_unavailable",
+            "count": 1
+          }
+        ]
+      }
+    ]
+  }
+}
