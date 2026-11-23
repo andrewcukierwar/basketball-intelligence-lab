@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "split_id": "holdout-2025",
+      "cohort_id": "synthetic-regular",
+      "metric_code": "margin_mae",
+      "unit": "points",
+      "model_id": "synthetic-candidate",
+      "baseline_id": "synthetic-baseline",
+      "value": 4.0,
+      "paired_delta": -1.0,
+      "interval": null,
+      "games_scored": 1,
+      "targets_expected": 2,
+      "targets_scored": 1,
+      "sum_weights": 1.0,
+      "exclusions": [
+        {
+          "reason": "outcome_unavailable",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

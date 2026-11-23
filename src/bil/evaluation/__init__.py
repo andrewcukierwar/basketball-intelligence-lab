@@ -1,1 +1,1 @@
-"""Shared chronological evaluation and validation tools (future)."""
+"""Chronological eligibility, forecast lineage and frozen scoring checks."""
