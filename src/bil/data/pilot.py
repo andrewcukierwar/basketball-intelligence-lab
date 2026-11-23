@@ -238,6 +238,17 @@ def _build_game(
                 "Parser rebound repairs failed; archived V3 action order replaced V2 order",
             )
             issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        recredited = sum(
+            row["attribution_rule"] == "same_clock_box_credit" for row in rows["score_allocation"]
+        )
+        if recredited:
+            labels.append("same_clock_box_credit")
+            warning = GameIssue(
+                "same_clock_box_credit",
+                f"{recredited} scores credited to another lineup state at the same clock "
+                "to match box plus-minus",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
         unresolved = sum(row["status"] == "unresolved" for row in rows["possession"])
         if unresolved:
             labels.append("unresolved_possessions")

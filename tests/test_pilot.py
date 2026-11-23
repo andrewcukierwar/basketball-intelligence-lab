@@ -393,3 +393,28 @@ def test_back_to_back_possessions_are_recorded_not_raised() -> None:
     pilot_parser._record_back_to_back(flagged)(Loader())
     # The 200-200 pair is exempt because of the flagrant foul; the 100-100 pair is flagged.
     assert flagged == {3, 4}
+
+
+def test_box_credit_search_moves_only_same_clock_credit() -> None:
+    from bil.data.pilot_normalize import CreditChoice, TimedEvent, choose_box_credits
+
+    before = ((1, 2, 3, 4, 5), (21, 22, 23, 24, 25))
+    after = ((1, 2, 3, 4, 6), (21, 22, 23, 24, 25))
+    events = [
+        TimedEvent(Event(n, 3, 1, 600, {}, {}), n, 600_000, 120_000, lineup)  # type: ignore[arg-type]
+        for n, lineup in ((1, before), (2, after))
+    ]
+    roster = {player: PlayerBox(100, 0, 0) for player in range(1, 7)}
+    roster.update({player: PlayerBox(200, 0, 0) for player in range(21, 26)})
+    pm = Counter({player: 1 for player in range(1, 6)})
+    pm.update({player: -1 for player in range(21, 26)})
+    choice = CreditChoice(0, 0, 1, events[0], tuple(events))
+
+    # The box credits the point to the lineup after the same-clock substitution.
+    roster.update({player: PlayerBox(100, 0, 1) for player in (1, 2, 3, 4, 6)})
+    roster.update({player: PlayerBox(200, 0, -1) for player in range(21, 26)})
+    assert choose_box_credits(pm, roster, [choice]) == [(choice, events[1])]
+
+    roster[6] = PlayerBox(100, 0, 3)
+    with pytest.raises(GameIssue, match="2 players"):
+        choose_box_credits(pm, roster, [choice])
