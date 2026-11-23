@@ -13,6 +13,7 @@ the structural lineup, clock and possession invariants remain independent checks
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import combinations, product
@@ -66,6 +67,7 @@ def choose_starters(
     except StarterGap as first:
         pending: list[tuple[Starters, StarterGap]] = [({}, first)]
     accepted: list[tuple[T, Starters]] = []
+    rejected: Counter[str] = Counter()
     tried = 0
     while pending:
         chosen, open_gap = pending.pop()
@@ -85,7 +87,8 @@ def choose_starters(
             except StarterGap as later:
                 pending.append((trial, later))
                 continue
-            except GameIssue:
+            except GameIssue as issue:
+                rejected[issue.code] += 1
                 continue
             accepted.append((result, trial))
     if len(accepted) == 1:
@@ -95,8 +98,10 @@ def choose_starters(
         result, starters = accepted[0]
         return StarterChoice(result, starters, tried, immaterial=True)
     if not accepted:
+        reasons = ", ".join(f"{code} {count}" for code, count in rejected.most_common(3))
         raise GameIssue(
-            "unresolved_starters", f"No candidate starters reconcile ({tried} candidates)"
+            "unresolved_starters",
+            f"No candidate starters reconcile ({tried} candidates: {reasons})",
         )
     raise GameIssue(
         "ambiguous_starters", f"{len(accepted)} of {tried} candidate starter sets reconcile"

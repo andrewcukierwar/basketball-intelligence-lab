@@ -20,6 +20,8 @@ SUBSECOND_CLOCK_MS = 60_000
 TRUNCATION_ALLOWANCE_MS = 1_000
 # Largest number of same-clock credit changes considered when matching box plus-minus.
 MAX_CREDIT_CHANGES = 3
+# Bound on credit-change combinations evaluated for one game.
+MAX_CREDIT_COMBINATIONS = 200_000
 
 EVENT_KINDS = {
     1: "shot",
@@ -553,10 +555,18 @@ def choose_box_credits(
     for move in moves:
         by_choice.setdefault(move[0].allocation, []).append(move)
     groups = list(by_choice.values())
+    evaluated = 0
     for size in range(1, MAX_CREDIT_CHANGES + 1):
         found = []
         for chosen in combinations(groups, size):
             for picked in product(*chosen):
+                evaluated += 1
+                if evaluated > MAX_CREDIT_COMBINATIONS:
+                    raise GameIssue(
+                        "player_plus_minus_mismatch",
+                        f"{len(gap)} players; credit search exceeded "
+                        f"{MAX_CREDIT_COMBINATIONS} combinations",
+                    )
                 total: Counter[int] = Counter()
                 for _, _, change in picked:
                     total.update(change)

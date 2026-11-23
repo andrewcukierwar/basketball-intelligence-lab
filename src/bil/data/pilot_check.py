@@ -124,6 +124,12 @@ CHECKS = {
         join stint s on s.game_id = a.game_id and s.stint_seq = a.credited_stint_seq
         where e.elapsed_ms < s.start_elapsed_ms or e.elapsed_ms > s.end_elapsed_ms
            or e.period <> s.period""",
+    "credited_lineup_contains_shooter": """
+        select count(*) from score_allocation a
+        join event_actor x on x.game_id = a.game_id and x.seq = a.seq and x.role = 'shooter'
+        join sides s on s.game_id = a.game_id and s.stint_seq = a.credited_stint_seq
+        where not ((a.scoring_team_id = s.home_team and list_contains(s.home_ids, x.player_id))
+                or (a.scoring_team_id = s.away_team and list_contains(s.away_ids, x.player_id)))""",
     "shooters_on_court": """
         select count(*) from event_actor x where x.role = 'shooter' and not exists (
           select 1 from sides s where s.game_id = x.game_id

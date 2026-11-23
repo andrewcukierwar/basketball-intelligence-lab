@@ -21,7 +21,13 @@ pytest.importorskip("pbpstats")
 import duckdb  # noqa: E402
 import requests  # noqa: E402
 
-from bil.data import pilot, pilot_parser, pilot_sources, pilot_starters  # noqa: E402
+from bil.data import (  # noqa: E402
+    pilot,
+    pilot_normalize,  # noqa: E402
+    pilot_parser,
+    pilot_sources,
+    pilot_starters,
+)
 from bil.data.pilot import compare_periods, summarize_reviews  # noqa: E402
 from bil.data.pilot_inputs import (  # noqa: E402
     GameBox,
@@ -396,7 +402,7 @@ def test_back_to_back_possessions_are_recorded_not_raised() -> None:
     assert flagged == {3, 4}
 
 
-def test_box_credit_search_moves_only_same_clock_credit() -> None:
+def test_box_credit_search_moves_only_same_clock_credit(monkeypatch: pytest.MonkeyPatch) -> None:
     from bil.data.pilot_normalize import CreditChoice, TimedEvent, choose_box_credits
 
     before = ((1, 2, 3, 4, 5), (21, 22, 23, 24, 25))
@@ -415,6 +421,19 @@ def test_box_credit_search_moves_only_same_clock_credit() -> None:
     roster.update({player: PlayerBox(100, 0, 1) for player in (1, 2, 3, 4, 6)})
     roster.update({player: PlayerBox(200, 0, -1) for player in range(21, 26)})
     assert choose_box_credits(pm, roster, [choice]) == [(choice, events[1])]
+
+    # Two credit choices at different clocks that each reproduce the box are ambiguous.
+    later = [
+        TimedEvent(item.source, item.seq + 10, 500_000, 220_000, item.lineups) for item in events
+    ]
+    second = CreditChoice(1, 0, 1, later[0], tuple(later))
+    with pytest.raises(GameIssue, match="2 same-clock credit sets"):
+        choose_box_credits(pm, roster, [choice, second])
+
+    monkeypatch.setattr(pilot_normalize, "MAX_CREDIT_COMBINATIONS", 0)
+    with pytest.raises(GameIssue, match="exceeded 0 combinations"):
+        choose_box_credits(pm, roster, [choice])
+    monkeypatch.undo()
 
     roster[6] = PlayerBox(100, 0, 3)
     with pytest.raises(GameIssue, match="2 players"):
@@ -513,3 +532,21 @@ def test_check_build_passes_synthetic_output_and_catches_defects(tmp_path: Path)
     assert failed["player_plus_minus_exact"] == 1
     assert failed["player_minutes_within_tolerance"] == 1
     assert sum(failed.values()) == 2
+
+    # Record a shooter who is on neither the actual nor the credited lineup.
+    rows["event_actor"].append(
+        {
+            "game_id": game.game_id,
+            "stream_revision": 1,
+            "seq": rows["score_allocation"][1]["seq"],
+            "slot": 1,
+            "role": "shooter",
+            "player_id": "26",
+            "team_id": str(game.home_id),
+            "source_slot": "PLAYER1_ID",
+            "raw_actor_id": "26",
+        }
+    )
+    moved = check_build(build(roster, "moved"), tmp_path / "moved-snapshot")
+    assert moved["credited_lineup_contains_shooter"] == 1
+    assert moved["shooters_on_court"] == 1
