@@ -1,6 +1,6 @@
 # Initial GitHub Backlog
 
-**Tracking convention:** BIL-### are *planning identifiers*, not GitHub issue numbers. Create actual issues incrementally rather than dumping all future work into an unmanageable board.
+**Tracking convention:** BIL-### are original planning identifiers. The [live GitHub issues](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues) and [milestones](https://github.com/andrewcukierwar/basketball-intelligence-lab/milestones) now track completion, direct prerequisites and complexity. See the [project plan’s tracking conventions](PROJECT_PLAN.md#9-project-management).
 
 ## Priority 0 — M0 (research foundation)
 

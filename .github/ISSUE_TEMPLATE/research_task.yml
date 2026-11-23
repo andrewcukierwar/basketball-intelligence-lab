@@ -1,25 +1,39 @@
 name: Research or engineering task
 description: Research question, data contract, experiment, or implementation with explicit evidence and validation
 title: "[BIL] "
+labels: ["state: not yet started"]
 body:
   - type: dropdown
     id: workstream
     attributes:
       label: Workstream
+      description: Assign the corresponding GitHub milestone during triage.
       options:
         - M0 Research foundation
-        - M1 Data infrastructure
+        - M1 Validated historical data
         - M2 RAPM
         - M3 SPM
         - M4 Estimated Skills
         - M5 EPM Integration
         - M6 Defensive Tracking
         - M7 Benchmarking
-        - M8 Daily Production
-        - R2 Frontier Replication
-        - R3 Comparative Research
-        - R4 Original Model
-        - R5 Platform
+        - M8 Reliable daily pipeline
+        - M9 DARKO replication
+        - M10 LEBRON replication
+        - M11 Cross-model benchmark
+        - M12 Original Basketball Intelligence model
+        - M13 Public intelligence platform
+    validations:
+      required: true
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Implementation complexity
+      description: Apply the corresponding complexity label during triage.
+      options:
+        - Low
+        - Medium
+        - High
     validations:
       required: true
   - type: textarea
@@ -56,4 +70,11 @@ body:
   - type: textarea
     id: dependencies
     attributes:
-      label: Dependencies, exclusions and risks
+      label: Direct prerequisites
+      description: List the issues that must be complete before this task can start, or write None. Add these links to Blocked by after creating the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Exclusions and risks
