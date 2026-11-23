@@ -3,7 +3,7 @@
 - **Date:** 2026-11-23
 - **Status:** Awaiting review. The PR proposes closing issue #5.
 - **Related issues:** [#5](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/5)
-- **Branch / commit / PR:** `claude/issue-5-remaining-quarantines` from `7cdb8de`. The final build is at `92011a7`. PR link: see issue #5.
+- **Branch / commit / PR:** `claude/issue-5-remaining-quarantines` from `7cdb8de`. The final build is at `92011a7`. [PR #15](https://github.com/andrewcukierwar/basketball-intelligence-lab/pull/15).
 
 ## Objective and authorized scope
 
