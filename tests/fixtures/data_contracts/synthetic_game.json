@@ -1,0 +1,137 @@
+{
+  "source_artifact": [
+    {
+      "artifact_id": "synthetic-input",
+      "source_id": "synthetic-source",
+      "upstream_namespace": "synthetic",
+      "uri": "fixture:synthetic-source",
+      "source_revision": "v1",
+      "sha256": "bb0ddebdef14dd056676417d8efc1173d20dfc1a081f1e9a4763576c13b115ab",
+      "size_bytes": 32,
+      "retrieved_at": "2023-01-04T09:00:00Z",
+      "rights_ref": "bil-synthetic"
+    }
+  ],
+  "team": [
+    {"team_id": "9100000001"},
+    {"team_id": "9100000002"}
+  ],
+  "player": [
+    {"player_id": "9200000001"},
+    {"player_id": "9200000002"},
+    {"player_id": "9200000003"},
+    {"player_id": "9200000004"},
+    {"player_id": "9200000005"},
+    {"player_id": "9200000006"},
+    {"player_id": "9300000001"},
+    {"player_id": "9300000002"},
+    {"player_id": "9300000003"},
+    {"player_id": "9300000004"},
+    {"player_id": "9300000005"}
+  ],
+  "season": [
+    {"start_year": 2022, "league": "NBA"}
+  ],
+  "game": [
+    {
+      "game_id": "0022209999",
+      "revision": 1,
+      "available_at": "2023-01-04T03:30:00Z",
+      "availability_basis": "published",
+      "ingested_at": "2023-01-04T09:00:00Z",
+      "source_refs": [
+        {
+          "artifact_id": "synthetic-input",
+          "locator": "game"
+        }
+      ],
+      "change": "upsert",
+      "league": "NBA",
+      "season_start_year": 2022,
+      "season_type": "regular",
+      "game_date": "2023-01-03",
+      "date_basis": "played",
+      "home_team_id": "9100000001",
+      "away_team_id": "9100000002",
+      "neutral_site": false,
+      "status": "final",
+      "scheduled_tip_at": "2023-01-04T00:30:00Z",
+      "actual_tip_at": "2023-01-04T00:30:00Z",
+      "finalized_at": "2023-01-04T03:20:00Z",
+      "home_final": 3,
+      "away_final": 0,
+      "supersedes_game_id": null
+    }
+  ],
+  "game_stream": [
+    {
+      "game_id": "0022209999",
+      "revision": 1,
+      "available_at": "2023-01-04T03:30:00Z",
+      "availability_basis": "published",
+      "ingested_at": "2023-01-04T09:00:00Z",
+      "source_refs": [
+        {
+          "artifact_id": "synthetic-input",
+          "locator": "stream"
+        }
+      ],
+      "change": "upsert",
+      "official_game_revision": 1,
+      "parser_version": "synthetic-v1",
+      "observed_date": "2023-01-03",
+      "complete": true,
+      "quality": "accepted",
+      "event_count": 18
+    }
+  ],
+  "event": [
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 1, "period": 1, "remaining_ms": 720000, "observed_at": null, "kind": "period_start", "team_id": null, "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-1", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/1"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 2, "period": 1, "remaining_ms": 720000, "observed_at": null, "kind": "jump_ball", "team_id": "9100000001", "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-2", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/2"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 3, "period": 1, "remaining_ms": 717000, "observed_at": null, "kind": "foul", "team_id": "9100000002", "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-3", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/3"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 4, "period": 1, "remaining_ms": 717000, "observed_at": null, "kind": "free_throw", "team_id": "9100000001", "home_delta": 1, "away_delta": 0, "revises_seq": null, "source_event_id": "event-4", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/4"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 5, "period": 1, "remaining_ms": 717000, "observed_at": null, "kind": "substitution", "team_id": "9100000001", "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-5", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/5"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 6, "period": 1, "remaining_ms": 717000, "observed_at": null, "kind": "timeout", "team_id": "9100000001", "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-6", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/6"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 7, "period": 1, "remaining_ms": 716000, "observed_at": null, "kind": "shot", "team_id": "9100000001", "home_delta": 2, "away_delta": 0, "revises_seq": null, "source_event_id": "event-7", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/7"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 8, "period": 1, "remaining_ms": 716000, "observed_at": null, "kind": "other", "team_id": "9100000002", "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-8", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/8"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 9, "period": 1, "remaining_ms": 0, "observed_at": null, "kind": "period_end", "team_id": null, "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-9", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/9"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 10, "period": 2, "remaining_ms": 720000, "observed_at": null, "kind": "period_start", "team_id": null, "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-10", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/10"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 11, "period": 2, "remaining_ms": 720000, "observed_at": null, "kind": "other", "team_id": "9100000002", "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-11", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/11"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 12, "period": 2, "remaining_ms": 0, "observed_at": null, "kind": "period_end", "team_id": null, "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-12", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/12"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 13, "period": 3, "remaining_ms": 720000, "observed_at": null, "kind": "period_start", "team_id": null, "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-13", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/13"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 14, "period": 3, "remaining_ms": 720000, "observed_at": null, "kind": "other", "team_id": "9100000001", "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-14", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/14"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 15, "period": 3, "remaining_ms": 0, "observed_at": null, "kind": "period_end", "team_id": null, "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-15", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/15"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 16, "period": 4, "remaining_ms": 720000, "observed_at": null, "kind": "period_start", "team_id": null, "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-16", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/16"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 17, "period": 4, "remaining_ms": 720000, "observed_at": null, "kind": "other", "team_id": "9100000002", "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-17", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/17"}]},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 18, "period": 4, "remaining_ms": 0, "observed_at": null, "kind": "period_end", "team_id": null, "home_delta": 0, "away_delta": 0, "revises_seq": null, "source_event_id": "event-18", "source_refs": [{"artifact_id": "synthetic-input", "locator": "events/18"}]}
+  ],
+  "event_actor": [
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 4, "slot": 1, "role": "shooter", "player_id": "9200000002", "team_id": "9100000001", "source_slot": "actor-1", "raw_actor_id": "9200000002"},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 5, "slot": 1, "role": "sub_out", "player_id": "9200000001", "team_id": "9100000001", "source_slot": "actor-1", "raw_actor_id": "9200000001"},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 5, "slot": 2, "role": "sub_in", "player_id": "9200000006", "team_id": "9100000001", "source_slot": "actor-2", "raw_actor_id": "9200000006"},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 7, "slot": 1, "role": "shooter", "player_id": "9200000006", "team_id": "9100000001", "source_slot": "actor-1", "raw_actor_id": "9200000006"}
+  ],
+  "lineup": [
+    {"game_id": "0022209999", "stream_revision": 1, "lineup_id": "home-1", "team_id": "9100000001", "player_ids": ["9200000001", "9200000002", "9200000003", "9200000004", "9200000005"]},
+    {"game_id": "0022209999", "stream_revision": 1, "lineup_id": "home-2", "team_id": "9100000001", "player_ids": ["9200000002", "9200000003", "9200000004", "9200000005", "9200000006"]},
+    {"game_id": "0022209999", "stream_revision": 1, "lineup_id": "away-1", "team_id": "9100000002", "player_ids": ["9300000001", "9300000002", "9300000003", "9300000004", "9300000005"]}
+  ],
+  "stint": [
+    {"game_id": "0022209999", "stream_revision": 1, "stint_seq": 1, "period": 1, "start_seq": 1, "end_seq": 6, "start_elapsed_ms": 0, "end_elapsed_ms": 3000, "home_lineup_id": "home-1", "away_lineup_id": "away-1"},
+    {"game_id": "0022209999", "stream_revision": 1, "stint_seq": 2, "period": 1, "start_seq": 6, "end_seq": 10, "start_elapsed_ms": 3000, "end_elapsed_ms": 720000, "home_lineup_id": "home-2", "away_lineup_id": "away-1"},
+    {"game_id": "0022209999", "stream_revision": 1, "stint_seq": 3, "period": 2, "start_seq": 10, "end_seq": 13, "start_elapsed_ms": 720000, "end_elapsed_ms": 1440000, "home_lineup_id": "home-2", "away_lineup_id": "away-1"},
+    {"game_id": "0022209999", "stream_revision": 1, "stint_seq": 4, "period": 3, "start_seq": 13, "end_seq": 16, "start_elapsed_ms": 1440000, "end_elapsed_ms": 2160000, "home_lineup_id": "home-2", "away_lineup_id": "away-1"},
+    {"game_id": "0022209999", "stream_revision": 1, "stint_seq": 5, "period": 4, "start_seq": 16, "end_seq": 19, "start_elapsed_ms": 2160000, "end_elapsed_ms": 2880000, "home_lineup_id": "home-2", "away_lineup_id": "away-1"}
+  ],
+  "possession": [
+    {"game_id": "0022209999", "stream_revision": 1, "possession_seq": 1, "period": 1, "start_seq": 2, "end_seq": 8, "offense_team_id": "9100000001", "defense_team_id": "9100000002", "end_reason": "made_shot", "status": "accepted"},
+    {"game_id": "0022209999", "stream_revision": 1, "possession_seq": 2, "period": 1, "start_seq": 8, "end_seq": 10, "offense_team_id": "9100000002", "defense_team_id": "9100000001", "end_reason": "period_end", "status": "accepted"},
+    {"game_id": "0022209999", "stream_revision": 1, "possession_seq": 3, "period": 2, "start_seq": 11, "end_seq": 13, "offense_team_id": "9100000002", "defense_team_id": "9100000001", "end_reason": "period_end", "status": "accepted"},
+    {"game_id": "0022209999", "stream_revision": 1, "possession_seq": 4, "period": 3, "start_seq": 14, "end_seq": 16, "offense_team_id": "9100000001", "defense_team_id": "9100000002", "end_reason": "period_end", "status": "accepted"},
+    {"game_id": "0022209999", "stream_revision": 1, "possession_seq": 5, "period": 4, "start_seq": 17, "end_seq": 19, "offense_team_id": "9100000002", "defense_team_id": "9100000001", "end_reason": "period_end", "status": "accepted"}
+  ],
+  "score_allocation": [
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 4, "scoring_team_id": "9100000001", "points_delta": 1, "possession_seq": null, "credited_stint_seq": 1, "possession_reason": "unassigned_dead_ball", "attribution_rule": "synthetic-actual-lineup"},
+    {"game_id": "0022209999", "stream_revision": 1, "seq": 7, "scoring_team_id": "9100000001", "points_delta": 2, "possession_seq": 1, "credited_stint_seq": 2, "possession_reason": "control_possession", "attribution_rule": "synthetic-actual-lineup"}
+  ]
+}

@@ -36,6 +36,7 @@ M0 establishes the methodology specification, source audit and research contract
 - [EPM methodology evidence](docs/research/epm-methodology.md)
 - [Methodology uncertainty register](docs/research/epm-uncertainties.md)
 - [Data-source audit](docs/data-sources.md)
+- [Canonical data contracts](docs/data-contracts.md)
 - [Validation strategy](docs/validation-strategy.md)
 - [Research decisions](docs/DECISIONS.md)
 - [Experiment log](docs/experiment-log.md)
