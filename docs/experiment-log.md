@@ -21,8 +21,6 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ## Log
 
-No model experiments completed yet. Initial priority is data provenance and synthetic RAPM correctness.
-
 ### EXP-0001 — V3 action order for unresolved 2022–23 pilot games
 - **Status:** Completed
 - **Date:** 2026-11-23
@@ -83,3 +81,16 @@ No model experiments completed yet. Initial priority is data provenance and synt
   - Using liveData's tenth-second clocks cut the mean player-minutes error from 146 ms to 29 ms and reconciled two of the four games that rely on the truncation allowance exactly. Some liveData event clocks are missing or disagree with V2, so mixing clock sources gave larger errors for 74 player-games. V2 clocks therefore remain the build basis.
 - **Limitations / interpretation:** Every feed derives from the NBA's event log. data.nba and liveData share upstream order numbers, and data.nba mislabels periods in one game. Bentes appears box-calibrated, which makes it strong evidence for BIL's lineups but not for the box.
 - **Next decision:** The ADR-0010 proposals.
+
+### EXP-0005 — Synthetic offensive/defensive RAPM
+
+- **Status:** Completed.
+- **Date:** 2026-11-23.
+- **Research question:** Can the sparse solver recover known offensive and defensive effects? How do sample size, ridge strength and paired lineups affect recovery?
+- **Category:** Experimental (synthetic).
+- **Code SHA / command:** `51b00c6`, `uv run --locked --extra rapm python -m bil.models.rapm.synthetic` with Python 3.12.13, NumPy 2.5.5 and SciPy 1.18.1.
+- **Inputs and split:** The committed generator produces all observations. Seed 6014 supplies the 800-row rotating and paired noiseless training sets. Seeds 6440 and 6441 supply the 4,000 rotating noisy rows and the scoring draws; a 48-row prefix tests low exposure. Seed 6992 supplies 1,200 separately drawn evaluation lineups with exact expectations. There are no historical inputs or cutoffs.
+- **Model and baselines:** Zero-prior RAPM with unit observation weights and ridge $10^{-4}$ for noiseless recovery. The noisy cases use ridge 0.01, 100 and 1,000. The intercept-only fit uses the sample mean for each training set. A separately assembled dense solution checks the weighted objective in a distinct test fixture.
+- **Results:** Noiseless rotation recovers all 24 effects within $2\times10^{-5}$ points per 100 possessions, with effect RMSE $5.501\times10^{-6}$. Identical lineup columns split effects equally and produce 3.079 held-out expected-rate RMSE. At ridge 0.01, the expected-rate RMSE is 76.031 with 48 rows and 6.899 with 4,000. The 48-row intercept-only model returns 9.366. [Full results and tolerances](research/rapm-synthetic.md#verification-and-sensitivity)
+- **Limitations:** One fixed seed, additive effects and independent possession outcomes. The test set scores the generated conditional expectation. The sensitivity grid sets no NBA penalty or minimum exposure threshold.
+- **Next decision:** Specify how the private possession pilot becomes a RAPM row set and preserve reconciliation and chronology in the subsequent M2 design.

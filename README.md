@@ -16,7 +16,7 @@ Our first objective is to reproduce the published methodology behind Taylor Snar
 
 **We will not train a model using EPM ratings as labels.** Dunks & Threes ratings, where their use is permitted, serve only as independent external diagnostics—not a loss function, training target, or hyperparameter optimization objective.
 
-M0 established the methodology specification, source audit and research contracts. M1 has a private, reconciled 2022–23 possession pilot. The RAPM baseline follows in M2. No production ratings have been implemented yet.
+M0 established the methodology specification, source audit and research contracts. M1 has a private, reconciled 2022–23 possession pilot. M2 starts with a synthetic RAPM reference for checking the estimator against known effects.
 
 ## Long-term research
 
@@ -38,6 +38,7 @@ M0 established the methodology specification, source audit and research contract
 - [Data-source audit](docs/data-sources.md)
 - [Canonical data contracts](docs/data-contracts.md)
 - [2022–23 possession pilot](docs/data-pilot.md)
+- [Synthetic offensive/defensive RAPM](docs/research/rapm-synthetic.md)
 - [Validation strategy](docs/validation-strategy.md)
 - [Evaluation run manifest](docs/run-manifest.md)
 - [Research decisions](docs/DECISIONS.md)
@@ -55,13 +56,13 @@ The repository begins as a lightweight Python research scaffold; modeling and in
 
 Requirements: Python 3.11+ (CI uses 3.12). Recommended: [uv](https://docs.astral.sh/uv/).
 
-    uv sync --locked --extra dev
+    uv sync --locked --extra dev --extra pilot --extra rapm
     uv run pytest
     uv run ruff check .
     uv run ruff format --check .
     uv run mypy src
 
-The committed `uv.lock` pins the local development environment. CI installs the development and pilot extras with pip on Python 3.12. To run the pilot tests locally, sync with `uv sync --locked --extra dev --extra pilot` and use the [pilot guide](docs/data-pilot.md).
+The committed `uv.lock` pins the local development environment. CI installs the same extras with pip on Python 3.12. The [pilot guide](docs/data-pilot.md) and [synthetic RAPM guide](docs/research/rapm-synthetic.md) describe how to reproduce the research checks.
 
 ## Research standards
 
@@ -74,6 +75,6 @@ The committed `uv.lock` pins the local development environment. CI installs the 
 
 ## Status
 
-**M0 — Research foundation:** complete. **M1 — Historical NBA dataset:** the 2022–23 pilot accepts 1,290 of 1,314 games under documented invariants and tolerances, pending review. See the [pilot guide](docs/data-pilot.md) and [project milestones](docs/PROJECT_PLAN.md#9-project-management). Contributions should be small, tested and accompanied by methodological evidence.
+**M0 — Research foundation:** complete. **M1 — Historical NBA dataset:** the 2022–23 pilot accepts 1,290 of 1,314 games under documented invariants and tolerances. **M2 — RAPM baseline:** synthetic reference verified. See the [pilot guide](docs/data-pilot.md) and [project milestones](docs/PROJECT_PLAN.md#9-project-management).
 
 This is an independent research project and is not affiliated with Dunks & Threes, DARKO, BBall Index or the NBA.

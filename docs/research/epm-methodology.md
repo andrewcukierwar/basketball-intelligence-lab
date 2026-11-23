@@ -31,7 +31,7 @@ Joseph Sill's 2010 paper provides primary evidence for the ridge and out-of-samp
 ## Validation and evidence gates
 
 - [Issue #5][data-issue] verifies lineups, points, IDs and possessions before any fit. [The source audit](../data-sources.md) records the gap between public tracking aggregates and EPM's undisclosed tracking inputs.
-- [Issue #6][rapm-issue] verifies a synthetic regression before fitting NBA data. Later SPM and skill work evaluates RAPM label stability, rolling-origin skill loss and held-out basketball outcomes. [Issue #4][evaluation-issue] owns chronological split and run-manifest conventions.
+- [Issue #6][rapm-issue] verifies the [synthetic RAPM reference](rapm-synthetic.md) before fitting NBA data. Later SPM and skill work evaluates RAPM label stability, rolling-origin skill loss and held-out basketball outcomes. [Issue #4][evaluation-issue] owns chronological split and run-manifest conventions.
 - Under [ADR-0001](../DECISIONS.md#adr-0001--methodology-replication-rather-than-output-imitation), published EPM is excluded from labels, calibration, feature selection, losses and hyperparameter selection. Any future external diagnostic requires a permitted data source and frozen model choices. [Dunks & Threes terms][terms]
 
 [epm]: https://dunksandthrees.com/about/epm
