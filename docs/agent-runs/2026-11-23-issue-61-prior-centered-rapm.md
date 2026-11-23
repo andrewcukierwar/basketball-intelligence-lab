@@ -1,9 +1,9 @@
 # Agent run — Prior-centered sparse RAPM
 
 - **Date:** 2026-11-23
-- **Status:** Implementation and local verification complete. Independent review and publication pending.
+- **Status:** Implementation and independent verification complete.
 - **Issues:** [#61](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/61), parent [#34](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/34)
-- **Branch and implementation:** `codex/issue-61-prior-centered-rapm`, base `d3d01f3`, implementation `da96a58`, with a follow-up fix for role-level scaling.
+- **Branch and implementation:** `codex/issue-61-prior-centered-rapm`, base `d3d01f3`, implementation `da96a58`, and scaling correction `b20546d`.
 
 ## Scope and decisions
 
@@ -19,8 +19,8 @@ Added `fit_prior_rapm` using the existing sparse possession design and the same 
 | Numerical controls in the same test | Verified exact zero-prior compatibility, stronger role shrinkage, common response and prior scaling across `1e-190` to `1e190`, and a defense penalty of `1e280`. Huge unobserved priors and constant role levels retained small responses and prior contrasts in the other role. A representable intercept was recovered after an intermediate role shift overflow. |
 | `ruff check`, `ruff format --check`, `mypy src`, `git diff --check` | Passed. The first type check caught ambiguous NumPy index types in the active-role lookup. Explicit integer indexing resolved it. |
 
-Independent review found that the initial normalization erased tiny responses when offense and defense prior levels were very different. The fix sizes the solve using only within-role contrasts and observed rates, then restores the role levels through the intercept. The original two-row reproducer now returns defensive coefficients of approximately ±`2.5e-189`, matching the fit with zero priors.
+Independent review found that the initial normalization erased tiny responses when offense and defense prior levels were very different. The fix sizes the solve using only within-role contrasts and observed rates, then restores the role levels through the intercept. The original two-row reproducer now returns defensive coefficients of approximately ±`2.5e-189`, matching the fit with zero priors. Independent re-review reproduced both effects and passed all 67 branch tests. The combined checkout for this run passed all 90 tests, including both private archived cases, and reproduced the four OpenRAPM benchmark results.
 
 ## Next action
 
-Review the exact changes and evidence before closing #61. The synthetic fit does not select a historical penalty, construct dated priors or enforce chronological eligibility. The dated weight and cutoff work belongs to [#64](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/64).
+The synthetic fit leaves historical penalty selection and dated prior construction to downstream work. The dated weight and cutoff work belongs to [#64](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/64).
