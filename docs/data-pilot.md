@@ -38,3 +38,19 @@ The manifest records output file digests, row counts, the snapshot digest, code 
 The typed Parquet tables follow the [canonical contract](data-contracts.md) for games, game streams, events, actors, lineups, stints, possessions and scoring allocations. Quarantined games retain a game row, a quarantined stream and a quality issue. Their normalized event, lineup and possession records are excluded from the accepted tables. `game_review.parquet` supplies one row per expected or requested game and points to each game's disposition and comparison strata. Player box rows serve as reconciliation evidence in the pinned inputs.
 
 The pilot quarantines unresolved games without live fallback requests or manual overrides. Full-season reports are generated in the local manifest. [Source validation](research/nba-source-validation.md) [pbpstats 1.3.11](https://pypi.org/project/pbpstats/1.3.11/)
+
+## First reviewed full-season build
+
+The build at `19c1bf7` on 2026-11-23 wrote its private manifest and tables under `data/processed/2022-23/issue-5-final-v1/`. The accepted subset contains 223,995 counted possessions and preserves 2,402 additional parser-excluded intervals. Score allocations reconcile independently of possession totals, including 1,290 points recorded outside control possessions.
+
+| Season type | Expected games | Accepted games | Quarantined games | Full V3 period-score checks matched / attempted | V3 substitution checks matched / attempted |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Regular season | 1,230 | 1,055 | 175 | 1,093 / 1,095 | 1,222 / 1,230 |
+| Playoffs | 84 | 76 | 8 | 77 / 77 | 84 / 84 |
+| Total | 1,314 | 1,131 | 183 | 1,170 / 1,172 | 1,306 / 1,314 |
+
+All 1,314 V3 final scores agreed with the team boxes. Local verification of the exported accepted tables found no violations of the five-player, shot actor, period duration, possession sequence, final scoring, score allocation, player minutes or player plus-minus checks. Game-level period comparisons can succeed even when a different check quarantines the game. The manifest records checks that could not be attempted separately from disagreement.
+
+Regular-season overtime coverage was 51 of 79 games, compared with 1,004 of 1,151 regulation games. Playoff overtime coverage was 3 of 4 games. Accepted technical-free-throw game counts were 676 of 800 in the regular season and 34 of 39 in the playoffs. These differences matter when using the subset for analysis.
+
+The largest quarantine groups are unresolved event order (79 games), unresolved starters (33), other parser errors (22), and player plus-minus mismatches (18). Prioritize a pinned alternate event-order reference and independent period-starter evidence. The build establishes an audited subset. [Issue #5](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/5) remains open for coverage and anomaly resolution before milestone acceptance.
