@@ -17,15 +17,11 @@
 5. **Research evaluation:** Rolling-origin forecasts, baseline comparisons, ablations, stability and calibration; isolated permitted external benchmarks.
 6. **Publication/production (later):** Versioned daily player/team outputs and monitoring.
 
-## Canonical entities (initial contract)
+## Canonical data and evaluation
 
-- **Game:** game_id, season, season_type, date, home_team_id, away_team_id, finalized status, source timestamps.
-- **Event:** game_id, event_id/sequence, period, clock, team_id, event_type, score delta, participants and provenance.
-- **Possession:** game_id, possession_id, period, start/end sequence, offense/defense team IDs, lineup IDs, points, flags and validation status.
-- **Stint:** game_id, stint_id, period/start/end, five players per team, points, possessions, duration and context.
-- **Player feature snapshot:** player_id, as_of_time, feature_name/value, numerator/denominator where meaningful, feature version and upstream source cutoff.
-- **Impact output:** player_id, as_of_time, methodology, version, offense/defense/total per 100 possessions, reference-vs-experiment tag, run_id and data_version.
-- **Run manifest:** code commit, config hash, input hashes, train/validation/test periods, seed, source access rules, diagnostics and outputs.
+The [canonical data contracts](data-contracts.md) specify identities, revisions, as-of availability and schemas for source artifacts, games, events, possessions, stints, observations and feature snapshots. The stream revision ties a game's event order, lineups and scoring allocations together.
+
+The [rolling-origin evaluation and run-manifest issue](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/4) owns forecast origins, training and evaluation partitions, model outputs and run metadata. The [validation strategy](validation-strategy.md) describes the overall evaluation approach.
 
 ## Repository boundaries
 
