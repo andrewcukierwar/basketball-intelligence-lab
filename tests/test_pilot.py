@@ -712,6 +712,10 @@ def test_livedata_starters_require_consistency_with_period_events() -> None:
     assert propagate(closing, 100, 2, (1, 2, 3, 6), moves) is None
     assert propagate(closing, 100, 1, (1, 2, 3, 4), moves) is None
     assert propagate(PeriodEnd({100: [1, 2, 3, 4, 6]}, 12), 100, 2, (1, 2, 3, 4), moves) is None
+    # Too few event-identified starters to trust the feed.
+    assert propagate(closing, 100, 2, (1, 2), moves) is None
+    # A set of six that lacks the substituted player cannot contain the feed's lineup.
+    assert propagate(closing, 100, 2, (1, 2, 3, 4, 7, 8), moves) is None
 
 
 def test_period_defect_needs_both_feeds_to_confirm_every_disputed_period() -> None:
@@ -724,6 +728,8 @@ def test_period_defect_needs_both_feeds_to_confirm_every_disputed_period() -> No
     assert v3_alone_differs(ours, v3, both)
     assert not v3_alone_differs(ours, v3, CrossFeed(live_periods=dict(ours)))
     assert not v3_alone_differs(ours, dict(ours), both)
+    # A period missing from V2 and from both feeds is not evidence of a V3 defect.
+    assert not v3_alone_differs({1: (30, 20)}, {1: (30, 20), 2: (50, 40)}, CrossFeed())
 
 
 def test_unresolved_possession_takes_unanimous_feed_offense_without_repeating() -> None:

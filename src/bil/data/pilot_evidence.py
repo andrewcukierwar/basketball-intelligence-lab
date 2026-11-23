@@ -44,6 +44,9 @@ FEEDS = {
 }
 BENTES = ("lineup_stats_regular_2023.parquet", "lineup_stats_playoffs_2023.parquet")
 LOWER_TRUST = (
+    "livedata_starters",
+    "v3_period_defect",
+    "datanba_possession_labels",
     "inferred_starters",
     "immaterial_starters",
     "same_clock_box_credit",
@@ -168,6 +171,9 @@ def possession_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, obj
         from event e join possession p
           on p.game_id = e.game_id and e.seq >= p.start_seq and e.seq < p.end_seq
         where e.kind in ('shot', 'free_throw', 'turnover')
+          and e.game_id not in (
+            select game_id from game_review
+            where list_contains(strata, 'datanba_possession_labels'))
         """
     )
     feeds = {
@@ -197,9 +203,15 @@ def possession_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, obj
         from per group by status order by status
         """
     ).fetchall()
+    excluded = connection.execute(
+        """select count(*) from game_review
+           where list_contains(strata, 'datanba_possession_labels')"""
+    ).fetchone()
+    result["games_excluded_relabeled_from_datanba"] = excluded[0] if excluded else 0
     result["note"] = (
         "Live-ball events mostly name the acting team, so this checks event attribution and "
-        "joining more than possession boundaries; see possession_counts_vs_pbpstats."
+        "joining more than possession boundaries; see possession_counts_vs_pbpstats. Games "
+        "with possessions relabeled from data.nba are excluded because they agree by design."
     )
     counts = connection.execute(
         """

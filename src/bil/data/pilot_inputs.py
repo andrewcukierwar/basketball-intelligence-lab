@@ -267,6 +267,8 @@ def cross_feeds(livedata: Path, datanba: Path) -> dict[str, CrossFeed]:
     for row in archive_rows(livedata):
         game_id = nba_game_id(row["gameId"])
         games[game_id].has_livedata = True
+        if not row["period"].isdigit() or not row["orderNumber"].isdigit():
+            continue
         period = int(row["period"])
         order = int(row["orderNumber"])
         if row["actionType"] == "period" and row["subType"] == "end":
@@ -296,7 +298,12 @@ def cross_feeds(livedata: Path, datanba: Path) -> dict[str, CrossFeed]:
         feed = games[game_id]
         if row["oftid"].isdigit() and int(row["oftid"]) and row["evt"].isdigit():
             feed.offense[int(row["evt"])] = int(row["oftid"])
-        if row["hs"].isdigit() and row["vs"].isdigit() and row["ord"].isdigit():
+        if (
+            row["hs"].isdigit()
+            and row["vs"].isdigit()
+            and row["ord"].isdigit()
+            and row["PERIOD"].isdigit()
+        ):
             key = game_id, int(row["PERIOD"])
             order = int(row["ord"])
             if key not in nba_ends or order > nba_ends[key][0]:

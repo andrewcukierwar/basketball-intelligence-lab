@@ -36,6 +36,7 @@ PARSER_VERSION = "pbpstats-1.3.11-bil-v6"
 
 # Starter choices for ambiguous periods, keyed by (period, team ID).
 Starters = dict[tuple[int, int], tuple[int, ...]]
+MIN_KNOWN_STARTERS = 3
 # liveData substitutions at each period's starting clock, keyed by (period, team ID), as
 # (outgoing, incoming). An absent key means no such substitution was logged.
 BetweenPeriods = dict[tuple[int, int], tuple[frozenset[int], frozenset[int]]]
@@ -158,6 +159,9 @@ def _propagated_starters(
         return None
     lineup = (closing - outgoing) | incoming
     known = set(partial)
+    # Require most of the lineup from the period's own events before trusting the feed.
+    if len(known) < MIN_KNOWN_STARTERS:
+        return None
     if len(lineup) != 5 or not (known <= lineup if len(known) < 5 else lineup <= known):
         return None
     return tuple(sorted(lineup))
@@ -277,6 +281,8 @@ def parse_game(
     assign_starters = StatsNbaEnhancedPbpLoader._set_period_start_items
 
     def remember_items(loader: object) -> None:
+        # Each pass reassigns every period's starters, so keep only the latest pass's record.
+        settled.clear()
         loaded.append(cast(list[object], getattr(loader, "items")))
         assign_starters(loader)
 

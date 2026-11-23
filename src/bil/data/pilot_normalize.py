@@ -257,7 +257,9 @@ def build_possessions(
     An unresolved possession takes the offense that ``offense_evidence`` (a feed's offense
     team by source event number) gives unanimously for its shots, free throws and turnovers,
     unless that would give it the same offense as an adjacent possession in the period or the
-    index is in ``keep_unresolved``. Returns the indices relabeled this way.
+    index is in ``keep_unresolved``. Possessions are relabeled in order, so an earlier relabel
+    can block a later neighbor; that keeps the result free of repeated offenses. Returns the
+    indices relabeled this way.
     """
     by_event_num = {item.source.event_num: item for item in events}
     by_event: dict[int, tuple[int, int, str]] = {}

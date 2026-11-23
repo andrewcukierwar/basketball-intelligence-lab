@@ -80,7 +80,8 @@ def v3_alone_differs(
     """True when every period V3 disputes is confirmed by both liveData and data.nba."""
     disputed = [period for period in reference if ours.get(period) != reference[period]]
     return bool(disputed) and all(
-        ours.get(period) == cross.live_periods.get(period) == cross.datanba_periods.get(period)
+        ours.get(period) is not None
+        and ours.get(period) == cross.live_periods.get(period) == cross.datanba_periods.get(period)
         for period in disputed
     )
 
