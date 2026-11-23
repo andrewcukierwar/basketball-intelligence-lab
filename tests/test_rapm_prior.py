@@ -261,3 +261,29 @@ def test_equal_role_level_does_not_erase_small_responses():
     )
     assert fit.intercept == baseline.intercept
     assert fit.offense == fit.defense == common_prior
+
+
+@pytest.mark.parametrize("defense_prior", [None, {10: 9e-190, 11: -2e-190}])
+def test_distinct_role_levels_do_not_erase_small_responses_or_other_role_contrasts(defense_prior):
+    rows = [
+        Possession((1, 2, 3, 4, 5), (6, 7, 8, 9, 10), points=1e-190),
+        Possession((1, 2, 3, 4, 5), (6, 7, 8, 9, 11), points=3e-190),
+    ]
+    options = {"offense_ridge": 1.5, "defense_ridge": 3, "defense_prior": defense_prior}
+    baseline = fit_prior_rapm(rows, **options)
+    offense_prior = dict.fromkeys(range(1, 6), 8e306)
+    fit = fit_prior_rapm(rows, offense_prior=offense_prior, **options)
+    if defense_prior is None:
+        assert fit.defense[10] == pytest.approx(2.5e-189, rel=1e-12, abs=0)
+        assert fit.defense[11] == pytest.approx(-2.5e-189, rel=1e-12, abs=0)
+    assert fit.defense == baseline.defense
+    assert all(fit.offense[player] == value for player, value in offense_prior.items())
+    assert fit.intercept == pytest.approx(-4e307)
+
+
+def test_role_level_shift_can_cancel_before_unscaling_intercept():
+    row = Possession((1, 2, 3, 4, 5), (6, 7, 8, 9, 10), points=1e306)
+    fit = fit_prior_rapm(
+        [row], offense_ridge=1.5, defense_ridge=3, offense_prior=dict.fromkeys(range(1, 6), 4e307)
+    )
+    assert fit.intercept == pytest.approx(-1e308)

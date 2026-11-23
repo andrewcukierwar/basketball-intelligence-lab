@@ -184,27 +184,31 @@ def _solve_rapm(
         dtype=np.float64,
     )
     response_scale = float(np.max(design.response))
-    # A common offset on all observed role coefficients contributes 5a - 5a = 0, even
-    # if the two sets of observed players differ. Keep that offset out of response scaling.
-    active_prior = prior[used] if prior is not None else None
-    normalized_prior = None
-    if active_prior is not None and np.any(active_prior != active_prior[0]):
-        response_scale = max(response_scale, float(np.max(np.abs(active_prior))))
-        normalized_prior = np.zeros(player_columns)
-        normalized_prior[used] = active_prior / response_scale
+    offense_level = defense_level = 0.0
+    if prior is not None:
+        offense_level = float(prior[int(np.argmax(offense_used))])
+        defense_level = float(prior[player_count + int(np.argmax(defense_used))])
+        prior_levels = np.repeat([offense_level, defense_level], player_count)
+        # Uniform role levels change only the intercept. Size the solve from the
+        # observed rates and within-role contrasts so a large level cannot erase a
+        # small but representable scoring response or variation in the other role.
+        with np.errstate(over="ignore"):
+            contrasts = np.subtract(prior, prior_levels, out=np.zeros(player_columns), where=used)
+        response_scale = max(
+            response_scale, min(float(np.max(np.abs(contrasts))), np.finfo(np.float64).max)
+        )
     response_scale = response_scale or 1.0
     shifted_response = design.response / response_scale
-    prior_intercept_shift = 0.0
-    target_scale = 1.0
-    if normalized_prior is not None:
-        # The two role constants affect only the intercept. Remove them before projecting
-        # the target so a large constant prior cannot mask variation in the observed rates.
-        role_levels = normalized_prior[
-            [int(np.argmax(offense_used)), player_count + int(np.argmax(defense_used))]
-        ]
-        shifted_response -= players @ (normalized_prior - np.repeat(role_levels, player_count))
-        prior_intercept_shift = _LINEUP_SIZE * float(role_levels[0] - role_levels[1])
-        target_scale = float(np.max(np.abs(shifted_response))) or 1.0
+    if prior is not None:
+        finite = np.isfinite(contrasts)
+        scaled_contrasts = np.empty_like(contrasts)
+        np.divide(contrasts, response_scale, out=scaled_contrasts, where=finite)
+        # Opposite-sign float64 priors can have an unrepresentable raw contrast.
+        scaled_contrasts[~finite] = prior[~finite] / response_scale - (
+            prior_levels[~finite] / response_scale
+        )
+        shifted_response -= players @ scaled_contrasts
+    target_scale = float(np.max(np.abs(shifted_response))) or 1.0
     target = np.concatenate(
         (project(scaled_weights * (shifted_response / target_scale)), np.zeros(player_columns))
     )
@@ -220,23 +224,42 @@ def _solve_rapm(
         for block, active in ((offense, offense_used), (defense, defense_used)):
             block[active] -= np.mean(block[active])
             block[~active] = 0.0
-        intercept = (
-            float((intercept_direction**2) @ (shifted_response - players @ solution))
-            - prior_intercept_shift
+        intercept = _unscale_intercept(
+            float((intercept_direction**2) @ (shifted_response - players @ solution)),
+            response_scale,
+            offense_level,
+            defense_level,
         )
-        if normalized_prior is not None:
-            solution += normalized_prior
-        solution *= response_scale
-        intercept *= response_scale
+        effects = solution * response_scale
         if prior is not None:
-            if normalized_prior is None:
-                solution += prior
-            else:
-                solution[~used] = prior[~used]
-    if not isfinite(intercept) or not np.all(np.isfinite(solution)):
+            effects += prior
+            overflow = ~np.isfinite(effects)
+            # A deviation can overflow before adding an opposite-sign prior even when
+            # the combined effect is representable. Combine those terms before unscaling.
+            common_scale = np.maximum(response_scale, np.abs(prior[overflow]))
+            effects[overflow] = (
+                solution[overflow] * (response_scale / common_scale)
+                + prior[overflow] / common_scale
+            ) * common_scale
+    if not isfinite(intercept) or not np.all(np.isfinite(effects)):
         raise RuntimeError("sparse RAPM coefficients are not representable in float64")
     return RAPMFit(
         intercept,
-        dict(zip(design.player_ids, map(float, offense), strict=True)),
-        dict(zip(design.player_ids, map(float, defense), strict=True)),
+        dict(zip(design.player_ids, map(float, effects[:player_count]), strict=True)),
+        dict(zip(design.player_ids, map(float, effects[player_count:]), strict=True)),
     )
+
+
+def _unscale_intercept(
+    intercept: float, response_scale: float, offense_level: float, defense_level: float
+) -> float:
+    unscaled = intercept * response_scale
+    prior_shift = _LINEUP_SIZE * (offense_level - defense_level)
+    if isfinite(unscaled) and isfinite(prior_shift):
+        return unscaled - prior_shift
+    # Moving the role levels into the intercept can cancel an intermediate overflow.
+    scale = max(response_scale, abs(offense_level), abs(defense_level))
+    return (
+        intercept * (response_scale / scale)
+        - _LINEUP_SIZE * (offense_level / scale - defense_level / scale)
+    ) * scale
