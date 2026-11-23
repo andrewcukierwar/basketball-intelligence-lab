@@ -1,30 +1,24 @@
-# EPM Uncertainty Register
+# EPM uncertainty register
 
-**Purpose:** Keep unknown proprietary details visible. Every proposed answer must be classified: DOCUMENTED, INFERRED, EXPERIMENTAL, or ORIGINAL.
+The [EPM specification](epm-methodology.md) records the October 2026 reference description, accessed 2026-11-23. Questions below remain open where the corresponding source section leaves implementation details unspecified. Tests listed here are proposed BIL work, with evaluation against independent basketball data or controlled synthetic inputs.
 
-| ID | Question | Status | Proposed experiment / evidence needed |
-| --- | --- | --- | --- |
-| EPM-U01 | Exact possession response scaling and adjusted baseline | Open — inferred conventions | Compare mathematically consistent RAPM formulations; inspect primary methodology |
-| EPM-U02 | Exact SPM functional form and feature transformations | Open — not disclosed | Fit transparent baseline; ablate nonlinear alternatives without optimizing to EPM |
-| EPM-U03 | Exact SPM target windows and target reliability weighting | Open — partially documented | Test long-window definitions using independent outcome evaluation |
-| EPM-U04 | Exact defensive tracking input list and historical availability | Open — partially documented | Feature-by-season audit and source provenance |
-| EPM-U05 | Exact skill model decay parameters and constraints | Open — only general optimization described | Independently optimize next-game likelihood |
-| EPM-U06 | Whether decay is parameterized by calendar days or possessions for each skill | Open — partially documented | Compare next-game forecasting performance |
-| EPM-U07 | Detailed player aging, team, opponent, rest and seasonality functions | Open — partially documented | Test parsimonious individual context corrections |
-| EPM-U08 | Home court and rubber-band correction definitions | Open — general adjustment documented | Fit/test explicit score-state controls |
-| EPM-U09 | Exact prior penalty matrix, treatment of rookies and role-based regularization | Open — not disclosed | Sensitivity and stability ablations |
-| EPM-U10 | Centering/identification and offense/defense aggregation conventions | Open — inferred | Specify reproducible identifiability constraints |
-| EPM-U11 | Actual EPM prior fade and playoff weighting | Open — partially documented | Defer until Expected EPM stable |
-| EPM-U12 | Historical model versioning and retrospective backfill behavior | Open — version-sensitive | Separate reconstructed versus live-equivalent estimates |
-| EPM-U13 | Data feed differences between public play-by-play and source used by EPM | Open | Reconciliation and edge-case audits |
+| ID | Public evidence and open detail | Proposed validation or decision |
+| --- | --- | --- |
+| EPM-U01 | “Regularized Adjusted Plus-Minus” describes team-possession outcomes and two variables per player. Response scaling, exact target, possession termination, points during retained possession, exclusions and garbage time are unspecified. [Methodology][epm] | **Original, M1–M2.** Hand-reconcile substitutions during free throws, technical free throws, replay, heaves, offensive rebounds and period endings. Test synthetic score changes and within-stint design equivalence before aggregation. |
+| EPM-U02 | “Statistical Plus-Minus” links player statistics to RAPM. Functional form, exact columns, denominator choices, era adjustments, interactions and transformations are unspecified. [Methodology][epm] | **Experimental, M3.** Begin with a transparent linear model. Measure out-of-time RAPM target fit and later on-court outcome prediction before adopting a transformation. |
+| EPM-U03 | “Calculating EPM” supplies both season windows and explicitly confirms playoffs for box-score SPM. Tracking-window playoff inclusion, target calculation details and SPM label reliability weights are unspecified. [Methodology][epm] | **Experimental, M3/M6.** Hold seasons fixed while varying eligibility and reliability weighting. Measure split-sample target stability and forward performance by minutes. Keep later seasons out of target construction for genuine holdouts. |
+| EPM-U04 | “Calculating EPM” identifies a defensive tracking model. Exact tracking inputs, whether they have public equivalents, and their combination with box-score defense remain unspecified. [Methodology][epm] | **Experimental, M6.** Inventory per-game exposure and feature missingness by season and provider. Evaluate incremental tracking value on paired samples and test missing-feature handling on the full box-score sample. |
+| EPM-U05 | “Estimated Skill Methodology” specifies exponential decay, Differential Evolution and next-game prediction. The fitted values, training loss, bounds, parameter tying, exposure, shrinkage, initialization and treatment of players with no history remain open. [Methodology][epm] | **Experimental, M4.** Freeze an opportunity-aware loss by stat, compare against career and season baselines with nested chronological validation, and report sparse-career and rookie performance. |
+| EPM-U06 | “Estimated Skill Methodology” identifies days and possessions as possible skill clocks. The per-stat assignment and exact possession exposure definition are unspecified. [Methodology][epm] | **Experimental, M4.** Compare clocks on the same date cutoffs, measuring effects after layoffs and for low-minute players. |
+| EPM-U07 | “Estimated Skills” and “Game-Agnostic and Game-Optimized” describe several context families. Exact forms, covariate definitions, weighting, expected-rotation inputs and how aggregate skills enter each model remain open. [Methodology][epm] | **Experimental, M4–M5.** Fit each context effect using only earlier observations and independently timestamped inputs. Compare with the game-agnostic baseline. |
+| EPM-U08 | “Calculating EPM” confirms home-court and rubber-band controls for both target and final RAPM. Whether the adjustment enters as a fitted feature or outcome offset and how it varies by time, score or era remain open. [Methodology][epm] | **Experimental, M2.** Compare explicit pre-possession score and time terms with an independently fitted offset on held-out games. Test neutral-court and late-blowout strata. |
+| EPM-U09 | “Combining SPM and RAPM” and “Calculating EPM” establish the SPM prior. Exact penalty strengths, covariance, offense/defense differences and handling of missing priors remain open. [Methodology][epm] | **Experimental, M5.** Check that a zero prior recovers baseline RAPM and that increasing penalty strength pulls estimates toward their priors. Measure sensitivity by exposure and rookie status. |
+| EPM-U10 | “Overview” supplies per-100 units and “Regularized Adjusted Plus-Minus” supplies two player variables. Internal signs, centering, identifiability, and component reporting rules remain open. The page explicitly describes daily league centering for team ratings. [Methodology][epm] | **Original, M2.** State player baseline, signs and total-impact convention in the estimator contract. Test invariance of fitted outcomes to equivalent representations under transformed priors and penalties. |
+| EPM-U11 | “Actual EPM” describes a preseason anchor and stronger reliance on postseason results. The exact prior fade, transition into the playoffs, and formula are unspecified. [Methodology][epm] | **Experimental, after Expected EPM.** Freeze preseason estimates and test candidate weighting against separate end-of-season and playoff evidence. |
+| EPM-U12 | “Expected EPM” excludes games on the rating date. “Game Predictions” and “Prediction Results” identify backtests, exceptions and overlapping SPM years. Historical publication snapshots, input revision cutoffs and model artifacts per date are unverified. [Methodology][epm] | **Original, M0/M7.** Record data availability and model-fit cutoffs separately, including SPM target windows. Label modern fits applied to overlapping years as retrospective. Claim live equivalence only with contemporaneous evidence. |
+| EPM-U13 | “Calculating EPM” reports the scale of the fit. The exact EPM feed, event corrections and possession parser are unspecified. Public feeds disagree in schema and processing. [Methodology][epm] [Source audit](../data-sources.md) | **Original, M1.** Compare official box totals, an independent parser on an identified feed, and an alternate feed where authorized. Report discrepancies by season type and reason. |
+| EPM-U14 | “Calculating EPM” describes exponential final RAPM recency weighting. The clock, factors, offense/defense differences, normalization and interaction with prior strength are unspecified. [Methodology][epm] | **Experimental, M5.** Compare decay and penalty under nested chronological validation. Hold weight normalization fixed when varying prior strength, because rescaling all observation weights changes the effective penalty. |
 
-## Updating this register
+When new evidence arrives, keep the original question ID and record the source and access date, which part it resolves, and the validation result and decision. Mark choices as Documented, Inferred, Experimental or Original. Agreement with EPM ratings cannot resolve a methodological claim or choose a hyperparameter.
 
-Each resolved question must provide:
-- A precise evidence source and access date.
-- Status and explicit decision.
-- Alternative explanations that remain plausible.
-- The experiment/validation result supporting the selected choice.
-- A link to relevant code, test, or decision entry.
-
-**Rule:** Agreement with EPM outputs is not sufficient to mark an implementation detail as documented or to choose the final hyperparameter.
+[epm]: https://dunksandthrees.com/about/epm

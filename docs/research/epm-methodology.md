@@ -1,65 +1,44 @@
-# EPM Methodology — Evidence and Replication Specification
+# EPM methodology evidence and replication specification
 
-**Purpose:** Track what is publicly documented about Taylor Snarr's modern Estimated Plus-Minus and map it to a reproducible independent implementation. Not a specification of private code.
+**Target:** The 2026–27 architecture described by Taylor Snarr's Dunks & Threes methodology page. The page dates its figures to October 2026 and identifies 2026–27 as the first live season of the remodeled system in its game-prediction discussion. The public description is version-sensitive. Accessed 2026-11-23. [Dunks & Threes methodology][epm]
 
-**Primary source:** https://dunksandthrees.com/about/epm (reconfirm exact details and publication version before coding).
+This audit supports [issue #1][issue]. **Documented** means the cited source states the claim. **Inferred** means the source supports a replication interpretation. **Experimental** means a proposed comparison using independent basketball outcomes. **Original** means a BIL convention. Open implementation questions and the evidence needed to resolve them are in the [uncertainty register](epm-uncertainties.md).
 
-## Scope and terminology
+## RAPM, SPM and integration
 
-- **Expected EPM:** Dynamic, career-informed estimate of current/future offensive and defensive player impact.
-- **Actual EPM:** Retrospective season-specific impact measure, with a preseason prior that diminishes as season evidence accumulates.
-- Units: offensive, defensive and total points per 100 possessions, with explicit centering and defensive signs.
-
-## Documented building blocks
-
-| Component | Publicly documented information | Our intended replication |
+| Component | Evidence and time window | Independent specification |
 | --- | --- | --- |
-| Historical RAPM | Adjusted offensive/defensive player on-court impact using regularization | Sparse multi-season RAPM on validated lineup/possession outcomes |
-| Box-score SPM | Trained on multi-season RAPM; historical training approximately 2003–04 to 2022–23 | Build historical player statistical panels with independent long-term RAPM targets |
-| Defensive tracking SPM | Uses player-tracking data; training approximately 2017–18 to 2022–23 | Audit public tracking aggregates; quantify missing features and periods |
-| Estimated Skills | Career history, stat-specific exponential decay and optimized parameters including Differential Evolution | Independent player-skill prediction engine, trained on future statistical outcomes |
-| Context | Home court, score/rubber-band effects and skill-projection factors such as age, team/opponent strength, seasonality and rest | Separate documented from speculative implementations; ablate each adjustment |
-| Final EPM | Prior-informed RAPM using SPM statistical prior and decayed historical possessions | Center regularized coefficient estimates on SPM-based priors |
-| Historical scale | 2001–02 onward; about 6.2M possessions through 2025–26 cited in methodology | Start one validated season, then build historical coverage |
+| Historical RAPM for SPM | **Documented.** Ridge regression with team-possession outcomes and separate offensive and defensive player variables. The SPM-target RAPM uses possession data with home-court and score-state (rubber-band) adjustment. See “Regularized Adjusted Plus-Minus” and “Calculating EPM.” [Dunks & Threes methodology][epm] | **Original.** Begin with a zero-prior benchmark on validated possessions. A candidate response is 100 times points scored by the possession's offense. Include five offensive and five defensive effects. Define positive defensive impact as reducing opponent scoring. Fix response, exposure, intercept, centering and penalty conventions before fitting. |
+| Box-score SPM | **Documented.** The RAPM training sample spans 2003–04 through 2022–23 inclusive, 20 seasons and approximately 4.9 million possessions, including playoffs. SPM relates player statistics to multi-season RAPM from the same seasons. See “Statistical Plus-Minus” and “Calculating EPM.” [Dunks & Threes methodology][epm] | **Inferred.** Build player-level statistics over the label window using independent offensive and defensive RAPM labels. The observation unit, pooling, functional form, features, transformations, coefficients, and exposure and label-reliability weights remain open. |
+| Defensive tracking SPM | **Documented.** A second SPM covers defense and is fit to multi-season RAPM from 2017–18 through 2022–23, six seasons and approximately 1.5 million possessions. The page explicitly mentions playoffs for the box-score model. It places 2023–24 onward outside both SPM training samples. See “Calculating EPM.” [Dunks & Threes methodology][epm] | **Inferred.** Reconstruct public defensive aggregates where their definitions, grain and coverage are verified. The tracking model's playoff inclusion and how its output combines with box-score defense remain open. Treat missing tracking as missing and measure it by season, opportunity and player. |
+| Date-specific SPM prior | **Documented.** Applying the fitted SPM models to Estimated Skills produces a date-specific predictive prior. See “The Two Parts of EPM,” “Combining SPM and RAPM,” and “Calculating EPM.” [Dunks & Threes methodology][epm] | **Inferred.** Align prior and on-court coefficients in units and sign. Record eligibility, cold starts, and prior-generation and training cutoffs. |
+| Final RAPM | **Documented.** Daily SPM-informed RAPM uses eligible earlier possessions beginning in 2001–02, with exponential recency weighting and home-court and rubber-band controls. Through 2025–26 the author reports 5,153 daily runs per flavor over 32,190 games and about 6.2 million possessions. See “Calculating EPM.” [Dunks & Threes methodology][epm] | **Inferred.** Use a prior-centered weighted ridge objective as a reference reconstruction. The publication supplies no final RAPM decay factor, clock, penalty structure, adjustment formula, possession inclusion policy, or player-centering rule. Keep this fit distinct from the RAPM that supplies SPM labels. |
 
-## Core conceptual model
+A candidate final objective is `(y - Xβ)ᵀW(y - Xβ) + (β - μ)ᵀΛ(β - μ)`, minimized over coefficients `β`. Here `y` is the possession outcome, `X` describes participants and context, `W` weights observations, `μ` contains the SPM priors, and `Λ` determines penalization. A candidate parameterization enters offense with +1 and defense with −1, with an intercept for baseline scoring. With five players per side, adding a constant to every effect on one side can be absorbed by the intercept. BIL must specify its baseline and reporting conventions even when regularization yields a unique fit. The assessment in [issue #6][rapm-issue] should verify signs, scale, identification and the zero-prior special case. **Inferred objective, Original parameterization.**
 
-A ridge RAPM estimate is the weighted regression of possession outcomes on on-court participants with regularization.
+Joseph Sill's 2010 paper provides primary evidence for the ridge and out-of-sample APM lineage, including stint-based examples. Its choices belong to Sill's study. Possession and stint objectives can share player estimates only when aggregation preserves the design and the weighted sufficient statistics. Changing offense, lineup, context or weights within a stint can prevent simple aggregation. **Original validation requirement.** [Sill, §§2–4][sill]
 
-An SPM prior predicts a player's statistical impact from individually estimated skills.
+## Estimated Skills, context and output families
 
-A conceptual prior-centered objective is:
+| Component | Evidence | Independent specification |
+| --- | --- | --- |
+| Skill prediction | **Documented.** Each stat has its own model. Differential Evolution tunes exponential weighting of past games to predict the next game. The author illustrates a game weight of `ρ^age` for `ρ` between zero and one, with one giving equal weights. The age unit is days or possessions depending on the stat. See “Estimated Skill Methodology.” [Dunks & Threes methodology][epm] | **Experimental.** Compare days-based and possession-based decay against future skill outcomes, using valid opportunities such as attempts for shooting rates. Determine input-specific denominators, sample stabilization and cold-start rules. Preserve the separate decay semantics of skills and final RAPM. |
+| Skill context | **Documented.** Described drivers include age, league trends, seasonality, team and opponent strength, home court, and back-to-back games. Game-optimized inputs additionally include season type and aggregate skills of teammates and opponents expected to play. See “Estimated Skills” and “Game-Agnostic and Game-Optimized.” [Dunks & Threes methodology][epm] | **Experimental.** Evaluate context adjustments individually in chronological folds. Record whether inputs depend on lineup expectations and the information available when those expectations were formed. |
+| Expected EPM | **Documented.** Daily forecast of impact in points per 100 possessions. Same-date games are excluded. Game-agnostic ratings describe a player across contexts and are the site's main ratings. Game-optimized ratings condition on a particular game. See “Overview” and “Expected EPM.” [Dunks & Threes methodology][epm] | **Original.** Establish the game-agnostic reference first. Keep the rating date, game eligibility, input availability, correction versions and model-fit cutoff in the run record. Date timezone, late finalization, and scheduling conventions require an explicit BIL contract. |
+| Actual EPM | **Documented.** Rates regular-season and playoff performance from games played. It starts from preseason Expected EPM, season evidence gains influence as it accrues, and postseason ratings lean more heavily on playoff results. Small samples stay closer to preseason expectations. See “Actual EPM.” [Dunks & Threes methodology][epm] | **Inferred.** A separately versioned retrospective product requires an immutable preseason snapshot and a defined season or postseason evidence set. The precise prior schedule and weighting are open. |
+| Historical evaluation | **Documented.** The current page distinguishes the contemporaneous 2024–25 and 2025–26 game-prediction record from re-predictions. It describes earlier-season skill fits from 2006–07, flags game predictions for 2001–02 to 2004–05 as an exception to earlier-season-only training, and acknowledges SPM training overlap through 2022–23. The separate 2020 metric comparison uses an earlier design and season-to-season team outcomes. [Dunks & Threes methodology][epm] [2020 metric comparison][comparison] | **Original.** Use the [validation strategy](../validation-strategy.md) to distinguish retrospective ratings, rolling-origin fits and forecasts actually frozen before outcomes. A prior skill or final RAPM fit cutoff does not establish point-in-time validity if SPM training, corrections or model design use later information. |
 
-    min_beta (y - X beta)' W (y - X beta)
-             + (beta - mu)' Lambda (beta - mu)
+## Validation and evidence gates
 
-where mu is the SPM prior. This is a **research reconstruction**, not the creator's full unpublished production formula.
+- [Issue #5][data-issue] verifies lineups, points, IDs and possessions before any fit. [The source audit](../data-sources.md) records the gap between public tracking aggregates and EPM's undisclosed tracking inputs.
+- [Issue #6][rapm-issue] verifies a synthetic regression before fitting NBA data. Later SPM and skill work evaluates RAPM label stability, rolling-origin skill loss and held-out basketball outcomes. [Issue #4][evaluation-issue] owns chronological split and run-manifest conventions.
+- Under [ADR-0001](../DECISIONS.md#adr-0001--methodology-replication-rather-than-output-imitation), published EPM is excluded from labels, calibration, feature selection, losses and hyperparameter selection. Any future external diagnostic requires a permitted data source and frozen model choices. [Dunks & Threes terms][terms]
 
-## Specific research requirements
-
-1. Define possession response, offset/baseline, coefficient identification, player signs and exposure weighting.
-2. Determine whether long-term SPM training targets and final RAPM use different dates/windows.
-3. Investigate distinct offensive and defensive prior construction.
-4. Evaluate feature quality, tracking missingness and sample-size reliability.
-5. Implement age-of-observation weighting without future-data leakage.
-6. Reproduce stat-specific next-game skill forecasting and optimize using out-of-time skill outcomes.
-7. Keep actual-season ratings separate from forward-looking expected ratings.
-8. Record documented/inferred/experimental/original choices in epm-uncertainties.md.
-
-## Fidelity versus correctness
-
-**Correctness:** Synthetic effect recovery, lineups, score reconciliation, sparse solver equivalence, chronological prediction and independent holdouts.
-
-**Fidelity:** Compare original EPM offense/defense/total values only where permitted, and only for diagnosis. Never fit models or tune parameters to the original outputs.
-
-Historical EPM API values from a later rebuilt methodology should not be misrepresented as exact as-of-date forecasts produced by an older version.
-
-## Reading list
-
-- [Dunks & Threes EPM methodology](https://dunksandthrees.com/about/epm)
-- [EPM metric comparison](https://dunksandthrees.com/blog/metric-comparison)
-- [Engelmann RAPM](https://github.com/jerryengelmann/RAPM)
-- [OpenRAPM](https://github.com/bbstats/openrapm)
-- [Basketball-Reference BPM methodology](https://www.basketball-reference.com/about/bpm2.html)
-
-**Next action:** Create a source-by-source evidence matrix with exact quotes/section references, date, model component and confidence. Do not fill gaps by claiming undocumented facts.
+[epm]: https://dunksandthrees.com/about/epm
+[sill]: https://www.sloansportsconference.com/research-papers/improved-nba-adjusted-using-regularization-and-out-of-sample-testing
+[comparison]: https://dunksandthrees.com/blog/metric-comparison
+[terms]: https://dunksandthrees.com/terms
+[issue]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/1
+[evaluation-issue]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/4
+[data-issue]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/5
+[rapm-issue]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/6
