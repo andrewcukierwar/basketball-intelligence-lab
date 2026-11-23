@@ -1,8 +1,7 @@
 """Recompute local scalar scores against mature, pinned outcomes."""
 
 from collections import Counter
-from datetime import datetime
-from math import fsum, isclose, isfinite, sqrt
+from math import fsum, isclose, sqrt
 
 from bil.evaluation.eligibility import instant, require
 from bil.evaluation.manifest import (
@@ -15,6 +14,7 @@ from bil.evaluation.manifest import (
     forecast_batches,
     index,
     json_record,
+    number,
     reasons,
     verify_bytes,
 )
@@ -24,16 +24,6 @@ METRICS = {
     "margin_rmse": ("root_mean_squared", "points"),
     "possession_mse": ("mean_squared", "points_squared"),
 }
-
-
-def number(value: object) -> float:
-    require(
-        isinstance(value, (int, float)) and not isinstance(value, bool),
-        "expected a finite numeric value",
-    )
-    assert isinstance(value, (int, float))
-    require(isfinite(value), "expected a finite numeric value")
-    return float(value)
 
 
 def _metric(code: str, errors: list[float]) -> float | None:
@@ -186,16 +176,15 @@ def _check_result(
             if outcome is None:
                 excluded["outcome_unavailable"] += 1
                 continue
+            _check_match(batch, target, outcome, split)
             if manifest.mode == "strict_rolling" and outcome.get("actual_tip_at") is None:
                 excluded["actual_tip_unavailable"] += 1
                 continue
-            _check_match(batch.origin, target, outcome, split)
             actual = number(outcome["value"])
-            values = prediction["values"]
-            errors.append(number(values[result["model_id"]]) - actual)
+            errors.append(prediction[result["model_id"]] - actual)
             baseline_id = result["baseline_id"]
             if baseline_id is not None:
-                baseline_errors.append(number(values[baseline_id]) - actual)
+                baseline_errors.append(prediction[baseline_id] - actual)
             games.add(target["game_id"])
 
     require(count(result["targets_expected"]) == len(keys), "expected target count differs")
@@ -214,7 +203,7 @@ def _check_result(
         require(low <= high, "invalid interval ordering")
 
 
-def _check_match(origin: datetime, target: Record, outcome: Record, split: Record) -> None:
+def _check_match(batch: FrozenBatch, target: Record, outcome: Record, split: Record) -> None:
     key = target["key"]
     for field in ("game_id", "season_start_year", "season_type"):
         require(
@@ -225,6 +214,11 @@ def _check_match(origin: datetime, target: Record, outcome: Record, split: Recor
         played is not None and day(split["start_date"]) <= played < day(split["end_date"]),
         f"{key}: outcome played date is outside the frozen split",
     )
+    require(
+        batch.rating_date is None or played == batch.rating_date,
+        f"{key}: outcome played date differs from the frozen rating date",
+    )
+    origin = batch.origin
     require(origin < outcome["finalized_at"], f"{key}: forecast origin fails outcome chronology")
     actual_tip = outcome.get("actual_tip_at")
     if actual_tip is not None:

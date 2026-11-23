@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from graphlib import CycleError, TopologicalSorter
+from math import isfinite
 from typing import Any, cast
 
 from bil.evaluation.eligibility import (
@@ -55,6 +56,18 @@ def count(value: object) -> int:
     if type(value) is not int or value < 0:
         raise ValidationError(f"expected a nonnegative count, got {value!r}")
     return value
+
+
+def number(value: object, field: str = "value") -> float:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        try:
+            parsed = float(value)
+        except OverflowError:
+            pass
+        else:
+            if isfinite(parsed):
+                return parsed
+    raise ValidationError(f"{field}: expected a finite numeric value")
 
 
 def reasons(records: list[Record]) -> dict[str, int]:
@@ -250,8 +263,9 @@ def verify_bytes(artifact: Record, content: bytes) -> None:
 class FrozenBatch:
     split_id: str
     origin: datetime
+    rating_date: date | None
     targets: dict[str, Record]
-    predictions: dict[str, Record]
+    predictions: dict[str, dict[str, float]]
 
 
 def forecast_batches(manifest: Manifest) -> list[FrozenBatch]:
@@ -328,7 +342,7 @@ def forecast_batches(manifest: Manifest) -> list[FrozenBatch]:
                 f"{batch_id}: missing batch contains generated targets",
             )
             require(target_id is not None, f"{batch_id}: expected target denominator is unknown")
-            batches.append(FrozenBatch(split_id, origin, targets, {}))
+            batches.append(FrozenBatch(split_id, origin, rating_date, targets, {}))
             continue
         require(
             batch["status"] == "generated" and batch["missing_reason"] is None,
@@ -350,16 +364,32 @@ def forecast_batches(manifest: Manifest) -> list[FrozenBatch]:
             )
         require(target_id is not None, f"{batch_id}: missing target cohort artifact")
         content = manifest.content(batch["predictions_artifact_id"], "predictions")
-        predictions = index(json_record(content)["predictions"], "key")
+        prediction_records = index(json_record(content)["predictions"], "key")
         expected_keys = {key for key, target in targets.items() if target["status"] == "generated"}
         require(
-            predictions.keys() == expected_keys,
+            prediction_records.keys() == expected_keys,
             f"{batch_id}: predictions disagree with the frozen target roster",
         )
-        batches.append(FrozenBatch(split_id, origin, targets, predictions))
+        predictions = {
+            key: _prediction_values(key, row.get("values"))
+            for key, row in prediction_records.items()
+        }
+        batches.append(FrozenBatch(split_id, origin, rating_date, targets, predictions))
     require(manifest.views.keys() == validated_views, "forecast has an unlinked input view")
     require(bool(batches), "forecast has no planned or generated batches")
     return batches
+
+
+def _prediction_values(key: str, values: object) -> dict[str, float]:
+    if not isinstance(values, dict) or not values:
+        raise ValidationError(f"{key}: expected a nonempty prediction model map")
+    predictions = {}
+    for model_id, value in values.items():
+        require(
+            isinstance(model_id, str) and model_id.strip(), f"{key}: missing prediction model ID"
+        )
+        predictions[model_id] = number(value, f"{key} prediction for {model_id}")
+    return predictions
 
 
 def _batch_targets(

@@ -369,3 +369,47 @@ def test_score_rejects_immature_outcome_and_late_origin():
     )
     with pytest.raises(ValidationError, match="origin must precede the actual target tip"):
         run.check_score()
+
+
+@pytest.mark.parametrize(
+    ("values", "message"),
+    [
+        ({"synthetic-candidate": "not a number"}, "expected a finite numeric value"),
+        ({"synthetic-candidate": float("inf")}, "expected a finite numeric value"),
+        ({"synthetic-candidate": True}, "expected a finite numeric value"),
+        ({"": 5}, "missing prediction model ID"),
+        ({}, "expected a nonempty prediction model map"),
+        ([1, 2], "expected a nonempty prediction model map"),
+    ],
+)
+def test_all_generated_predictions_are_valid_even_if_outcome_missing(values, message):
+    run = Run()
+    run.update("forecast", "predictions", lambda p: p["predictions"][1].update(values=values))
+    with pytest.raises(ValidationError, match=message):
+        run.check_forecast()
+
+    forecast_bytes = encode(run.forecast)
+    receipt = run.artifact_entry("score", "parent-forecast")
+    receipt.update(sha256=digest(forecast_bytes), size_bytes=len(forecast_bytes))
+    with pytest.raises(ValidationError, match=message):
+        run.check_score(forecast_bytes)
+
+
+def test_score_rejects_moved_game_against_its_original_daily_origin():
+    run = Run()
+    available_at = "2025-11-05T14:00:00Z"
+
+    def move_game(proof):
+        proof["revisions"][0].update(
+            observed_date="2025-11-04",
+            finalized_at="2025-11-05T03:00:00Z",
+            available_at=available_at,
+        )
+        proof["outcomes"][0].update(actual_tip_at="2025-11-05T01:00:00Z")
+
+    run.update("score", "outcomes-keys", move_game)
+    run.score["input_views"][0]["max_known_available_at"] = available_at
+    with pytest.raises(
+        ValidationError, match="outcome played date differs from the frozen rating date"
+    ):
+        run.check_score()
