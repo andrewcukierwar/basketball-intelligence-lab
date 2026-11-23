@@ -21,7 +21,7 @@
 
 The [canonical data contracts](data-contracts.md) specify identities, revisions, as-of availability and schemas for source artifacts, games, events, possessions, stints, observations and feature snapshots. The stream revision ties a game's event order, lineups and scoring allocations together.
 
-The [rolling-origin evaluation and run-manifest issue](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/4) owns forecast origins, training and evaluation partitions, model outputs and run metadata. The [validation strategy](validation-strategy.md) describes the overall evaluation approach.
+The [rolling-origin validation contract](validation-strategy.md) defines forecast origins, eligible history, and the frozen validation and holdout windows. The [evaluation run manifest](run-manifest.md) pins prediction bytes, data views, training lineage and scoring artifacts.
 
 ## Repository boundaries
 

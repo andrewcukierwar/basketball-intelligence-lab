@@ -38,6 +38,7 @@ M0 establishes the methodology specification, source audit and research contract
 - [Data-source audit](docs/data-sources.md)
 - [Canonical data contracts](docs/data-contracts.md)
 - [Validation strategy](docs/validation-strategy.md)
+- [Evaluation run manifest](docs/run-manifest.md)
 - [Research decisions](docs/DECISIONS.md)
 - [Experiment log](docs/experiment-log.md)
 

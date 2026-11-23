@@ -1,46 +1,83 @@
-# Research Validation Strategy
+# Research validation and rolling-origin contract
 
-## Separate questions
+**Status:** Proposed R1 evaluation protocol v1 for [issue #4][issue]. **Classification:** Original BIL design. The [canonical data contracts](data-contracts.md#provenance-and-time) govern visibility and revisions. The [run manifest](run-manifest.md) records the evidence for each evaluation. Rolling-origin evaluation and proper probability scores follow established forecasting practice. [Tashman][tashman] [Gneiting and Raftery][scoring]
 
-1. **Implementation correctness:** Is the code mathematically correct? Synthetic data, unit tests, invariants, solver equivalence.
-2. **Methodological fidelity:** Did we implement the published idea faithfully? Evidence register and documented assumptions.
-3. **External rating agreement:** Are the resulting numbers like EPM, if benchmarking is permitted? Diagnostic only; never a training or tuning objective.
-4. **Predictive validity:** Do ratings and skill estimates forecast genuinely unseen outcomes?
-5. **Operational integrity:** Could a historical or daily result be reproduced, with correct cutoff and data versions?
+## Claims and evidence
 
-## Required test tiers
+| Evaluation mode | Information and timing | Supported claim |
+| --- | --- | --- |
+| Retrospective reconstruction | An explicitly dated research snapshot may include later corrections or facts without historical publication evidence. A chronological replay can still order inputs and targets by basketball date. | Historical reconstruction or a retrospective replay with stated availability limitations. Report coverage and any overlap with fitted periods. |
+| Strict rolling-origin backtest | Recreate each origin from source revisions with evidenced availability and eligible observation time. Learned state, preprocessing, label construction and baselines must respect their fit cutoffs. Retain actual generation time even when replayed later. | Simulated out-of-time prediction over the eligible, declared cohort. |
+| Prospective paper forecast | Register the protocol, planned origins and cohort rules in advance. Freeze the expected target roster, per-target prediction status and prediction bytes before the declared deadline and verified target tip with an independently timestamped receipt. Join labels and score after outcomes mature. | Predictions demonstrably frozen before the outcomes. Reconcile wholly missed origins to the registered schedule and report coverage failures. |
 
-- **Unit:** Feature denominators, signs, timestamp cutoffs, shrinkage, recency weights, lineup matrix indices and statistical identities.
-- **Property/synthetic:** Create toy leagues with known offensive/defensive effects; recover coefficients to tolerance, including collinear and low-sample cases.
-- **Integration:** Possession reconstruction with substitutions, technical fouls, end periods, overtime, ambiguous free throws and known feed inconsistencies.
-- **Reconciliation:** Official score and team totals; player minutes and plus-minus; missing/invalid lineup rate; source-to-source differences.
-- **Model evaluation:** Frozen split manifests; baseline comparison; off-by-one time leakage tests; ablation tests; reproducible runs.
+Report **implementation correctness**, **methodology fidelity**, **predictive validity**, **external rating agreement**, and **reproducibility** as separate observations. Synthetic effect recovery, exact lineup/score reconciliation and sparse versus dense solver agreement test correctness. Independent held-out basketball outcomes test predictive validity. The source-linked [EPM specification](research/epm-methodology.md) establishes what a fidelity claim requires.
 
-## Chronological protocols
+## Frozen development and evaluation windows
 
-- **Retrospective fit:** Uses data available at model-building time; can analyze past players, but not labeled a live historical forecast.
-- **Rolling-origin backtest:** Re-estimate only from past data at each cutoff. Hyperparameters chosen in earlier inner validation windows.
-- **Prospective paper trail:** Freeze predictions before game results. Record cutoff, feature availability and minutes model.
+The season key is the NBA starting year. Dates are the official Eastern played dates. Each interval includes its start and excludes its end. The season range and date interval both apply to target membership. The dates below apply to R1 protocol v1, with regular season and playoffs included and play-in excluded. Report regular and playoff results separately even when also reporting a pooled result. Freeze the cohort recipe and record the known target keys at each origin before scoring. Apply predefined timing and reschedule rules when matching targets to actual games. A rescheduled game stays a single NBA game and belongs to its actual eligible played date and season.
 
-Do not randomly split possessions from the same game across train and test and call it independent. Account for repeated players, games, teams and dates.
+| Role | NBA seasons | Played-date interval | Allowed use |
+| --- | --- | --- | --- |
+| Initial fitting and inner development | 2001–02 through 2022–23 | `[2001-07-01, 2023-07-01)` | Fit on eligible history. Run chronological inner checks using 2021–22 and 2022–23 with earlier fit data at each origin. The date interval lets the late 2019–20 postseason retain its official season. |
+| Outer validation fold 1 | 2023–24 | `[2023-07-01, 2024-07-01)` | Compare registered candidates and baselines using the frozen update policy for each candidate. Results can inform development and final holdout registration. |
+| Outer validation fold 2 | 2024–25 | `[2024-07-01, 2025-07-01)` | Repeat the comparison on a second season. Record all configurations tried and keep later choices out of any earlier forecast state. |
+| Confirmatory historical holdout | 2025–26 | `[2025-07-01, 2026-07-01)` | Run once per registered specification after freezing model code and choices, inclusion rules, learning schedule, cohorts, baselines and metrics. Log all accesses to outcome-dependent results. |
+| Prospective evaluation | Eligible future games after the registration timestamp | Per prospective registration | Score only predictions whose freeze evidence passes the timing checks. Public historical results and earlier games from the ongoing season do not qualify. |
 
-## Baselines
+Component windows can be narrower. A full-reference box SPM fit uses independent RAPM from 2003–04 through 2022–23. The defensive tracking reference uses 2017–18 through 2022–23. Treat these as reference target windows, with eligibility still determined by evidence. An earlier inner origin cannot receive the finished 2022–23 label fit or later SPM weights. Fit an earlier eligible analogue or mark that component evaluation unavailable. The pilot season 2022–23 is for data checks and development. It overlaps both published SPM training windows. The date split is a BIL choice and does not reproduce Dunks & Threes' validation design. [Dunks & Threes methodology][epm] [Pilot audit](research/nba-source-validation.md)
 
-For skill forecasts: career average, season average, rolling weighted average and simple empirical Bayes.
+The default is expanding eligible history with a predetermined update schedule. Within validation or holdout, predictions may consume earlier games in the same window only once those outcomes are eligible under the registered update policy. The holdout freezes the configuration and update logic. Earlier holdout outcomes can enter the registered walk-forward updates, and holdout results cannot drive configuration changes, fit schedules, calibration redesign, inclusion rules or stopping decisions. If using a locked pre-window fit for a comparison, register its cutoff and label that policy separately. Retuning after inspecting a holdout converts that window to development evidence for the revised method. Confirmatory validation then requires a fresh reserved window or registered prospective collection.
 
-For impact: zero-prior RAPM, SPM alone, prior-informed RAPM, alternative decay choices.
+Membership in a date window grants no permission to use a row. Current public archives often lack contemporaneous availability. Report strict eligible counts, missingness by reason and the date range actually scored. An empty or unusably sparse strict cohort is reported as such. A separately labeled retrospective run can cover more data with the availability limitation made explicit. The 2025–26 outcomes are already public, so a confirmatory claim depends on documenting their exposure and use within BIL. Any methodological changes, shifted windows or alternate scopes get a new protocol revision.
 
-For team/game: opponent-adjusted net ratings and simple schedule-aware models. Use predicted minutes in true pregame forecasts; if using future observed minutes, label as an oracle-minutes isolation experiment.
+## Origins, fitting and outcome isolation
 
-## Primary metrics
+1. **Register predictions.** R1's reference origin for rating date `D` is 00:00 Eastern on `D`, converted with `America/New_York` so that daylight saving is respected. Pregame candidates use the schedule view visible at that origin and known player/team membership. A target game must have been scheduled for `D` in that view. Aim the skill prediction at the player's known team game, including candidates who may DNP. A moved game gets a new eligible origin on its new date. Log cancellations, unknown schedule history, supersession and missing predictions. Never recover a missed forecast by choosing a new origin from a played-game log.
+2. **Build the input view.** An input revision needs `available_at <= C` and the [canonical visibility rules](data-contracts.md#provenance-and-time). Past-game outcomes must be observed strictly before `C`. Game-based inputs to daily EPM also require official played date `< D`, even for runs executed later that day. Known schedules and pregame status can describe future fixtures. Later corrections, injury status or realized lineup information cannot enter an earlier feature view. Save the exact input versions and the exclusion counts.
+3. **Fit with mature labels.** At each `fit_as_of_at <= C`, every supervised label's entire outcome window must have closed strictly before the fit cutoff, with evidenced label revision availability no later than it. For forward-prediction training, build features from each training example's own earlier data view. If a feature is another model's prediction, as in forward calibration or stacking, use an out-of-time parent fit eligible at that example's origin and record its exact fit ID on the training row. For a historical estimator such as SPM calibrated on statistics and independent RAPM from the same past seasons, declare the common calibration window and prove that every input and target is eligible at fit time. Fit transforms, feature selection, priors, skill decay, calibration and minutes models within their eligible stages. Joins, player ID mappings and cached feature/label tables obey the same rule.
+4. **Freeze and score separately.** For a strict historical pregame claim, require evidence that the origin preceded the actual target tip. The prospective run also requires `origin_at <= generated_at <= frozen_at < actual_tip_at` and a freeze no later than the registered deadline. A scheduled tip alone does not prove when a game started. The independently timestamped receipt binds the registration, origin, expected target roster and its statuses, and the exact predictions. Register expected origins up front. For a wholly missed receipt or batch, derive expected targets using independently dated schedule and eligibility inputs visible at that origin and the registered cohort rule. If that evidence is insufficient, report the missing origin and incomplete denominator. A later scoring stage links the frozen digest to a pinned outcome view and an explicit scoring cutoff. Later truth revisions produce a new linked scoring run using the same predictions. All possessions from a game stay in the same target partition.
+5. **Keep diagnostics explicit.** Realized players, lineup combinations and opportunities may define scoring examples for a frozen-rating lineup diagnostic. They do not enter pregame prediction inputs. The score-state for a possession diagnostic, if used, is the score before that possession. Realized minutes appear only in a separately reported oracle-minutes diagnostic. Retain every expected forecast key with its status, then report estimates on scored outcomes and missingness on the full registered cohort.
 
-- Skills: appropriate future-outcome likelihood, binomial/log loss where relevant, count/rate errors with opportunity-weighting and calibration.
-- Player impact: holdout on-court likelihood/error, temporal stability, ranking reliability, offense/defense slices and model ablations.
-- Team/game: scoring margin MAE/RMSE, win accuracy, probability log loss/Brier, calibration and matchup/season slices.
-- External EPM (permission-dependent): Pearson/Spearman, mean signed error, offense/defense/total MAE/RMSE, top-N overlap, role/age/minutes residuals.
+Dunks & Threes documents same-date game exclusion for Expected EPM. BIL's midnight origin and the shared pregame schedule policy are explicit replication/evaluation conventions. A different pre-tip forecast deadline or same-day context policy requires registration as a different protocol. [Dunks & Threes methodology][epm]
 
-## Evidence quality gates
+## Baselines, outcomes and reporting
 
-Record per-experiment data checksums, train/validation/test ranges, model config, code SHA, seed, run ID and exclusions. Confidence intervals, uncertainty or repeated temporal folds are preferred over ranking models by tiny single-split differences.
+Give the proposed model and baselines the same input cutoff, target definition and eligibility rules. Report accuracy deltas on paired scored targets and the full cohort coverage. Fit fallback and probability calibration rules before evaluating the corresponding fold.
 
-The first production-quality model may be less numerically similar to EPM than an output imitator; methodology correctness and independent validation take priority.
+| Family | Minimum comparator and later ablations | Primary evaluation |
+| --- | --- | --- |
+| Player skills | Eligible career and season-to-date rates with recorded league shrinkage for cold starts. Add a fixed rolling average and a simple empirical-Bayes variant when evaluating Estimated Skills. | Next scheduled team game for each eligible player. For binary-attempt rates use opportunity-weighted log loss, with actual attempts used only by the scorer. Report count or minute MAE for corresponding count forecasts, and calibration for probability forecasts. A rate without positive opportunities is unscorable and remains in the coverage report. DNP/availability is a separate target. |
+| Player impact | League-average/context-only possession model and independent zero-prior RAPM. Once SPM and informed RAPM exist, compare SPM alone, zero-prior RAPM and informed RAPM on the same cohort. | Held-out points per possession with frozen player ratings on realized lineups. Score squared error per possession and aggregate by game. Report offense/defense slices, coverage and stability separately. Label realized-lineup conditioning in every result. [Sill RAPM reference][sill] |
+| Team and game | League-average home advantage and an earlier-games opponent-adjusted net rating with a simple schedule-aware update. Use the same eligible predicted minutes when comparing player-derived methods. | Home-minus-away final margin MAE and RMSE, plus win probability log loss, Brier score and calibration. Report win accuracy as a descriptive metric. Any oracle-minutes result has its own diagnostic output. |
+
+Report metric unit, denominator, number of games or player-games, baseline and pairwise delta, eligible versus scored counts, exclusions, and regular-season/playoff slices. Include uncertainty for comparisons, preserving game clusters and temporal dependence through a pre-registered block or fold-based method. Avoid treating possessions or player rows from one game as independent replications. Register the primary metric and interpretation before holdout access. Keep negative or invalidated runs in the [experiment log](experiment-log.md).
+
+**External EPM agreement.** Where usage is permitted, align the benchmark version, date, scope, offense/defense signs and minutes cohort. Report published EPM agreement as a separate diagnostic with correlation, error and signed bias, and optional ranks or slices chosen in advance. Freeze the BIL model and lineage first. Published EPM ratings cannot supply labels, features, calibration, feature or configuration selection, hyperparameter objectives, early stopping, or a decision to redesign a model for closer agreement. A benchmark reconstructed later is versioned as such. External agreement supplies no independent outcome evidence. [ADR-0001](DECISIONS.md#adr-0001--methodology-replication-rather-than-output-imitation) [Dunks & Threes terms][terms]
+
+## Verification examples and leakage tests
+
+The cases below define expected behavior for implementation. The [synthetic run fixtures](run-manifest.md#synthetic-examples) show a forecast and linked scoring receipt without real data.
+
+| Test | Expected result |
+| --- | --- |
+| Midnight, DST and same-date exclusion | For 2025-11-03 Eastern, `C = 2025-11-03T05:00:00Z`. A Nov 2 final observed earlier and published at 04:59:00Z is eligible. A known schedule event published at 05:00:00Z is visible. A Nov 3 game never enters the rating inputs for Nov 3. Test the summer UTC offset separately. |
+| Known versus revised availability | An official final or feature revision seen after the origin cannot overwrite the earlier visible revision. A retrospective archive captured in 2026 is excluded at 2025 strict origins unless the exact earlier revision has dated proof. |
+| Target horizon or feed lag crosses fit cutoff | A two-game label whose second game ends at the cutoff is excluded. A game that ended earlier but whose needed result is published later is also excluded. A prediction with no provable prior-to-tip timestamp fails the prospective gate. |
+| Transitive leakage | Changing any row after the origin cannot affect earlier feature snapshots, independent RAPM labels, SPM weights, preprocessing, fitted calibration or baseline predictions. Pass the same test with a cached representation. |
+| Per-example fit leakage | A feature for an old training target uses only its own origin's visible inputs even if both the later correction and mature target are known by the model-fit date. Whole-period normalization fitted with future rows fails. |
+| Forward stacker or calibration leakage | A base fit from July 2025 can make a November 2025 forecast, but its predictions for 2024 targets cannot train a later calibrator. Each 2024 example requires the parent fit ID and evidence that the fit cutoff was at or before that example's origin. A historical SPM co-window calibration is tested under its separate rule. |
+| Game-group split and schedule revisions | A target game, its players and possessions cannot appear in multiple scored partitions. Superseded/cancelled fixtures leave the active schedule only once that evidence is visible. A valid new forecast for a moved game receives its own prospective freeze. |
+| Observed minutes and exposure | Replacing future appearances, minutes or attempts leaves the pregame forecast artifact unchanged. The scorer can use attempts for a conditional rate loss. Oracle minutes never flow through the main forecast path. |
+| Holdout selection and EPM isolation | Mutating holdout labels after freezing cannot change the registered model specification or earlier predictions. Under the registered expanding policy, only later origins whose fit cutoffs permit those labels may change. Reject an EPM artifact from any fitting or selection lineage. |
+| Repeatable scoring | At the same hashes and cutoff the same frozen bytes, paired cohort and metric definitions reproduce the score. Changing label revision records a new scoring manifest. A later restore of training inputs cannot change a frozen forecast file. |
+| Prospective cohort or batch tampering | Deleting an unforecast target from the attested cohort invalidates the receipt even when the prediction digest is unchanged. Dropping an entire batch leaves a registered origin unreconciled. Without dated inputs to reconstruct that cohort, report incomplete coverage. |
+
+Complete the separate unit, synthetic, integration and real-game reconciliation checks before treating pilot datasets as training inputs. The tests cover time and lineage contracts alongside known-coefficient and solver checks later in [issue #6][rapm]. [Canonical fixture plan](data-contracts.md#fixtures-and-test-plan)
+
+[issue]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/4
+[rapm]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/6
+[tashman]: https://www.sciencedirect.com/science/article/pii/S0169207000000650
+[scoring]: https://sites.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
+[epm]: https://dunksandthrees.com/about/epm
+[sill]: https://www.sloansportsconference.com/research-papers/improved-nba-adjusted-using-regularization-and-out-of-sample-testing
+[terms]: https://dunksandthrees.com/terms

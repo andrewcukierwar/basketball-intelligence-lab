@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "experiment_id": "synthetic-evaluation",
+  "evaluation_mode": "strict_rolling",
+  "status": "completed",
+  "reason": null,
+  "parent_run_id": null,
+  "code_git_sha": "0000000000000000000000000000000000000000",
+  "environment_artifact_id": "environment",
+  "config_artifact_id": "config",
+  "seeds": [
+    {
+      "scope": "rapm-target-fit",
+      "seed": 1729
+    }
+  ],
+  "registration_artifact_id": "registration",
+  "protocol_id": "r1-v1-synthetic",
+  "registered_at": "2026-11-22T20:00:00Z",
+  "splits": [
+    {
+      "split_id": "initial-fit",
+      "role": "fit",
+      "start_date": "2001-07-01",
+      "end_date": "2023-07-01",
+      "season_start_years": [
+        2001,
+        2002,
+        2003,
+        2004,
+        2005,
+        2006,
+        2007,
+        2008,
+        2009,
+        2010,
+        2011,
+        2012,
+        2013,
+        2014,
+        2015,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022
+      ],
+      "season_types": [
+        "regular",
+        "playoffs"
+      ]
+    },
+    {
+      "split_id": "validation-2023",
+      "role": "validation",
+      "start_date": "2023-07-01",
+      "end_date": "2024-07-01",
+      "season_start_years": [
+        2023
+      ],
+      "season_types": [
+        "regular",
+        "playoffs"
+      ]
+    },
+    {
+      "split_id": "validation-2024",
+      "role": "validation",
+      "start_date": "2024-07-01",
+      "end_date": "2025-07-01",
+      "season_start_years": [
+        2024
+      ],
+      "season_types": [
+        "regular",
+        "playoffs"
+      ]
+    },
+    {
+      "split_id": "holdout-2025",
+      "role": "holdout",
+      "start_date": "2025-07-01",
+      "end_date": "2026-07-01",
+      "season_start_years": [
+        2025
+      ],
+      "season_types": [
+        "regular",
+        "playoffs"
+      ]
+    }
+  ],
+  "run_id": "synthetic-forecast",
+  "stage": "forecast",
+  "created_at": "2026-11-23T14:10:00Z",
+  "artifacts": [
+    {
+      "artifact_id": "environment",
+      "kind": "environment",
+      "uri": "fixture:environment",
+      "sha256": "c52d8b7478298e22b91af88e258d62610b3042843ae5f700355a2597427fa281",
+      "size_bytes": 21,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "config",
+      "kind": "config",
+      "uri": "fixture:config",
+      "sha256": "97db1ebf0bdffadf1d399e201112c909a991302cbd8e9bbff5d8334ad051f177",
+      "size_bytes": 16,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "registration",
+      "kind": "registration",
+      "uri": "fixture:registration",
+      "sha256": "59400729eb5112e35398ee812919b8d2947fb5f1de51fd9fd006fc5773b4f564",
+      "size_bytes": 22,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "fit-source",
+      "kind": "source",
+      "uri": "fixture:fit-source",
+      "sha256": "3b254c0aca4e2dab0134bdf8b7b0667364919ff85fd3f7ac65173e9479021cc4",
+      "size_bytes": 20,
+      "source_artifact_id": "synthetic-fit-source",
+      "rights_ref": "synthetic-bil"
+    },
+    {
+      "artifact_id": "feature-source",
+      "kind": "source",
+      "uri": "fixture:feature-source",
+      "sha256": "1828c7aff4662c3d7faa2551bef1acbaea8debfa87be9b1a8a30785ce5deab2a",
+      "size_bytes": 24,
+      "source_artifact_id": "synthetic-feature-source",
+      "rights_ref": "synthetic-bil"
+    },
+    {
+      "artifact_id": "features-keys",
+      "kind": "selection",
+      "uri": "fixture:features-keys",
+      "sha256": "f7372f2ff435630b28c5a2d8074ed89498f2d8c8b8484171b02819d6354e146d",
+      "size_bytes": 23,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "rapm-fit-keys",
+      "kind": "selection",
+      "uri": "fixture:rapm-fit-keys",
+      "sha256": "5c0a5ae59eaaee42371678a99e712594ed4d6e927f3ab9f22ac35d8c6254c76c",
+      "size_bytes": 23,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "spm-fit-keys",
+      "kind": "selection",
+      "uri": "fixture:spm-fit-keys",
+      "sha256": "67463c294cb7efaa13a5e1ce906f3e3a1e1fe6194ba874e8e5610d47b60d96e2",
+      "size_bytes": 22,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "rapm-state",
+      "kind": "fitted_state",
+      "uri": "fixture:rapm-state",
+      "sha256": "b84e98c09569b2eb3421be65c3fbd9b2dd54b843c0cde010ea75fc279a1c5178",
+      "size_bytes": 20,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "spm-state",
+      "kind": "fitted_state",
+      "uri": "fixture:spm-state",
+      "sha256": "e4189b8a16521d7414262c56e21944f8f57a03b92bdc83f52c2b8edee62bd026",
+      "size_bytes": 19,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "targets",
+      "kind": "cohort",
+      "uri": "fixture:targets",
+      "sha256": "e4b70fb1ac3239d141a17016841771362b26e242c8f4f1aa28bfa9d3e0aa1798",
+      "size_bytes": 17,
+      "source_artifact_id": null,
+      "rights_ref": null
+    },
+    {
+      "artifact_id": "predictions",
+      "kind": "predictions",
+      "uri": "fixture:predictions",
+      "sha256": "63138dddaa88845cae2a86c9e20c827a83ad906f25892d956f645d908308736b",
+      "size_bytes": 21,
+      "source_artifact_id": null,
+      "rights_ref": null
+    }
+  ],
+  "input_views": [
+    {
+      "view_id": "features",
+      "role": "features",
+      "as_of_at": "2025-11-03T05:00:00Z",
+      "selection_artifact_id": "features-keys",
+      "source_artifact_ids": [
+        "feature-source"
+      ],
+      "max_known_available_at": "2025-11-03T04:59:00Z",
+      "unknown_availability_count": 0,
+      "selected_count": 2,
+      "exclusions": []
+    },
+    {
+      "view_id": "rapm-fit",
+      "role": "fit",
+      "as_of_at": "2023-07-01T04:00:00Z",
+      "selection_artifact_id": "rapm-fit-keys",
+      "source_artifact_ids": [
+        "fit-source"
+      ],
+      "max_known_available_at": "2023-06-15T14:00:00Z",
+      "unknown_availability_count": 0,
+      "selected_count": 9,
+      "exclusions": []
+    },
+    {
+      "view_id": "spm-fit",
+      "role": "fit",
+      "as_of_at": "2025-07-01T04:00:00Z",
+      "selection_artifact_id": "spm-fit-keys",
+      "source_artifact_ids": [
+        "fit-source"
+      ],
+      "max_known_available_at": "2025-06-20T12:00:00Z",
+      "unknown_availability_count": 0,
+      "selected_count": 11,
+      "exclusions": []
+    }
+  ],
+  "forecast": {
+    "fits": [
+      {
+        "fit_id": "rapm-target-fit",
+        "component": "independent_rapm_labels",
+        "fit_as_of_at": "2023-07-01T04:00:00Z",
+        "generated_at": "2026-11-23T13:50:00Z",
+        "fit_view_id": "rapm-fit",
+        "config_artifact_id": "config",
+        "state_artifact_id": "rapm-state",
+        "parent_fit_ids": []
+      },
+      {
+        "fit_id": "spm-fit",
+        "component": "statistical_prior",
+        "fit_as_of_at": "2025-07-01T04:00:00Z",
+        "generated_at": "2026-11-23T13:55:00Z",
+        "fit_view_id": "spm-fit",
+        "config_artifact_id": "config",
+        "state_artifact_id": "spm-state",
+        "parent_fit_ids": [
+          "rapm-target-fit"
+        ]
+      }
+    ],
+    "batches": [
+      {
+        "batch_id": "synthetic-batch-01",
+        "split_id": "holdout-2025",
+        "origin_at": "2025-11-03T05:00:00Z",
+        "rating_date": "2025-11-03",
+        "feature_view_id": "features",
+        "fit_ids": [
+          "spm-fit"
+        ],
+        "target_artifact_id": "targets",
+        "predictions_artifact_id": "predictions",
+        "generated_at": "2026-11-23T14:00:00Z",
+        "deadline_at": null,
+        "frozen_at": null,
+        "freeze_receipt_artifact_id": null,
+        "status": "generated",
+        "missing_reason": null
+      }
+    ]
+  },
+  "score": null
+}
