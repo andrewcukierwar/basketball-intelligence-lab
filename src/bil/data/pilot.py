@@ -528,6 +528,9 @@ def main() -> None:
             raise SystemExit(1)
     elif args.action == "evidence":
         load_snapshot(args.evidence_dir, EVIDENCE_SOURCES)
+        recorded = json.loads((args.output_dir / "manifest.json").read_text(encoding="utf-8"))
+        if recorded["source_snapshot_sha256"] != sha256_file(args.snapshot_dir / "snapshot.json"):
+            raise SystemExit("The build was not made from this source snapshot")
         report = compare_evidence(args.output_dir, args.snapshot_dir, args.evidence_dir)
         if args.report:
             write_json(args.report, report)

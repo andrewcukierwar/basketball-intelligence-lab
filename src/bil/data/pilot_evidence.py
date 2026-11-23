@@ -1,8 +1,10 @@
-"""Compare an exported pilot build with independent, pinned evidence feeds.
+"""Cross-check an exported pilot build against separately archived, pinned evidence feeds.
 
 The evidence snapshot holds archived NBA liveData (cdn.nba.com) and data.nba.com play-by-play,
-pbpstats.com possessions, and Bentes lineup stints. None of these are build inputs. Each
-comparison reads exported tables only and reports agreement, so the results can be reproduced.
+pbpstats.com possessions, and Bentes lineup stints. None of these are build inputs. All of them
+derive from the NBA's own event log, so agreement shows consistent archiving and parsing rather
+than external truth: an error in the official log is shared by every feed. Each comparison reads
+exported tables only and reports agreement and coverage, so the results can be reproduced.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ import duckdb
 from bil.data.pilot_inputs import archive_rows, v3_games
 
 FEEDS = {
+    "pbpstats": ("GAMEID", ("GAMEID", "PERIOD", "STARTTIME", "ENDTIME", "OPPONENT")),
     "datanba": (
         "GAME_ID",
         ("evt", "cl", "etype", "oftid", "ord", "hs", "vs", "PERIOD", "GAME_ID"),
@@ -66,13 +69,13 @@ def stage_feeds(connection: duckdb.DuckDBPyConnection, evidence: Path, staging: 
                 for row in archive_rows(evidence / f"{name}{suffix}_2022.tar.xz"):
                     writer.writerow([row.get(column, "") for column in columns])
         connection.execute(
-            f"create table {name} as select * replace (lpad({game_key}, 10, '0') as {game_key}) "
+            f"create or replace table {name} as select * replace (lpad({game_key}, 10, '0') as {game_key}) "
             f"from read_csv({_literal(path)}, all_varchar = true)"
         )
     files = ", ".join(_literal(evidence / name) for name in BENTES)
     connection.execute(
         f"""
-        create table bentes as
+        create or replace table bentes as
         select game_id, secs_game_start as t0, secs_game_end as t1,
                list_sort(list_transform(string_split(lineup_team, ', '),
                                         lambda x: split_part(x, ' ', 1))) as ids
@@ -84,13 +87,14 @@ def stage_feeds(connection: duckdb.DuckDBPyConnection, evidence: Path, staging: 
 def stage_build(connection: duckdb.DuckDBPyConnection, build: Path) -> None:
     for name in ("event", "stint", "lineup", "possession", "game_review", "quality_issue"):
         connection.execute(
-            f"create view {name} as select * from read_parquet({_literal(build / name)}"
+            f"create or replace view {name} as select * from read_parquet({_literal(build / name)}"
             " || '.parquet')"
         )
     connection.execute(
         """
-        create table ours as
-        select s.game_id, s.period, l.team_id as team, s.start_elapsed_ms / 1000.0 as t0,
+        create or replace table ours as
+        select s.game_id, s.stint_seq, s.period, l.team_id as team,
+               s.start_elapsed_ms / 1000.0 as t0,
                s.end_elapsed_ms / 1000.0 as t1, s.start_elapsed_ms, s.end_elapsed_ms,
                list_sort(l.player_ids) as ids
         from stint s join lineup l
@@ -103,7 +107,7 @@ def lineup_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object]
     """Time-weighted agreement of each team's five players with Bentes stints."""
     connection.execute(
         """
-        create table bentes_team as
+        create or replace table bentes_team as
         select b.*, r.team from bentes b
         join (select distinct game_id, team, unnest(ids) as pid from ours) r
           on r.game_id = b.game_id and r.pid = b.ids[1]
@@ -111,7 +115,7 @@ def lineup_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object]
     )
     connection.execute(
         """
-        create table lineup_overlap as
+        create or replace table lineup_overlap as
         select o.game_id, o.team, greatest(o.t0, b.t0) as start_s,
                least(o.t1, b.t1) - greatest(o.t0, b.t0) as seconds, o.ids = b.ids as same,
                list_filter(o.ids, lambda x: not list_contains(b.ids, x)) as ours_only,
@@ -140,8 +144,13 @@ def lineup_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object]
         """select game_id, team, round(start_s, 1), round(seconds, 1), ours_only, bentes_only
            from lineup_overlap where not same and seconds > 2 order by game_id, start_s"""
     ).fetchall()
+    covered = connection.execute(
+        """select count(distinct game_id), (select count(distinct game_id) from ours)
+           from lineup_overlap"""
+    ).fetchone()
     return {
         "games": total[0] if total else 0,
+        "build_games_covered": f"{covered[0]} of {covered[1]}" if covered else None,
         "time_share": total[1] if total else None,
         "lowest_game_share": lowest[0] if lowest else None,
         "lower_trust_strata": strata,
@@ -153,7 +162,7 @@ def possession_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, obj
     """Compare possession offense with each feed's offense team on live-ball events."""
     connection.execute(
         """
-        create table live_events as
+        create or replace table live_events as
         select e.game_id, cast(e.source_event_id as int) as evt, p.possession_seq,
                p.offense_team_id as offense, p.status
         from event e join possession p
@@ -188,6 +197,34 @@ def possession_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, obj
         from per group by status order by status
         """
     ).fetchall()
+    result["note"] = (
+        "Live-ball events mostly name the acting team, so this checks event attribution and "
+        "joining more than possession boundaries; see possession_counts_vs_pbpstats."
+    )
+    counts = connection.execute(
+        """
+        with theirs as (
+          select GAMEID as game_id, count(*) as possessions from (
+            select distinct GAMEID, PERIOD, STARTTIME, ENDTIME, OPPONENT from pbpstats)
+          group by 1),
+        mine as (
+          select game_id, count(*) filter (where status = 'accepted') as possessions
+          from possession group by 1)
+        select count(*), count(t.game_id), count(*) filter (where t.possessions = m.possessions),
+               count(*) filter (where abs(t.possessions - m.possessions) <= 2),
+               sum(m.possessions), sum(t.possessions)
+        from mine m left join theirs t using (game_id)
+        """
+    ).fetchone()
+    if counts:
+        result["possession_counts_vs_pbpstats"] = {
+            "build_games": counts[0],
+            "games_in_pbpstats": counts[1],
+            "equal": counts[2],
+            "within_2": counts[3],
+            "counted_possessions": counts[4],
+            "pbpstats_possessions": counts[5],
+        }
     result["possessions_vs_datanba"] = {
         status: {"possessions": n, "all_agree": full, "all_disagree": none}
         for status, n, full, none in rows
@@ -223,7 +260,12 @@ def order_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object]:
 
 
 def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object]:
-    """Check inferred starters against Bentes and liveData between-period substitutions."""
+    """Check inferred starters against Bentes and liveData between-period substitutions.
+
+    The liveData check starts from BIL's own lineup at the end of the previous period, so it
+    confirms the inference given that state. Bentes' first stint is a separate reconstruction.
+    Requires ``lineup_agreement`` to have built ``bentes_team``.
+    """
     inferred = []
     for game_id, detail in connection.execute(
         "select game_id, detail from quality_issue where code = 'inferred_starters'"
@@ -235,18 +277,19 @@ def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object
     for game_id, period, team, ids in inferred:
         start_ms = (period - 1) * 720_000 if period <= 4 else 2_880_000 + (period - 5) * 300_000
         first = connection.execute(
-            """select ids from bentes where game_id = ? and t0 = ? and list_has_any(ids, ?)""",
-            [game_id, start_ms // 1000, ids],
+            """select ids from bentes_team where game_id = ? and t0 = ? and team = ?""",
+            [game_id, start_ms // 1000, team],
         ).fetchall()
-        if first and first[0][0] == ids:
+        if len(first) == 1 and first[0][0] == ids:
             bentes_agree += 1
         else:
-            disagreements.append(["bentes", game_id, str(period), team])
+            disagreements.append(["bentes", game_id, str(period), team, f"{len(first)} rows"])
         if period == 1:
             continue
         previous = connection.execute(
-            "select ids from ours where game_id = ? and team = ? and end_elapsed_ms = ?",
-            [game_id, team, start_ms],
+            """select ids from ours where game_id = ? and team = ? and period = ?
+               order by stint_seq desc limit 1""",
+            [game_id, team, period - 1],
         ).fetchall()
         clock = "PT12M00.00S" if period <= 4 else "PT05M00.00S"
         subs = connection.execute(
@@ -255,6 +298,7 @@ def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object
             [game_id, str(period), clock, team],
         ).fetchall()
         if not previous:
+            disagreements.append(["previous lineup", game_id, str(period), team, "missing"])
             continue
         live_checked += 1
         state = set(previous[0][0]) - {pid for kind, pid in subs if kind == "out"}
@@ -265,6 +309,7 @@ def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object
             disagreements.append(["liveData", game_id, str(period), team])
     return {
         "inferred_team_periods": len(inferred),
+        "livedata_not_applicable_period_1": sum(period == 1 for _, period, _, _ in inferred),
         "bentes_agree": bentes_agree,
         "livedata_checked": live_checked,
         "livedata_agree": live_agree,
@@ -281,31 +326,44 @@ def period_score_agreement(
         for game_id, game in v3_games(snapshot / f"nbastatsv3{suffix}_2022.tar.xz").items():
             for period, score in game.periods.items():
                 v3[(game_id, period)] = score
-    live = {
-        (game_id, int(period)): (int(home), int(away))
-        for game_id, period, home, away in connection.execute(
-            """select gameId, period, last(scoreHome order by cast(orderNumber as bigint)),
-                      last(scoreAway order by cast(orderNumber as bigint))
-               from cdnnba where actionType = 'period' and subType = 'end' group by all"""
-        ).fetchall()
-    }
-    data_nba = {
-        (game_id, int(period)): (int(home), int(away))
-        for game_id, period, home, away in connection.execute(
-            """select GAME_ID, PERIOD, last(hs order by cast(ord as bigint)),
-                      last(vs order by cast(ord as bigint)) from datanba group by all"""
-        ).fetchall()
-    }
-    shared = v3.keys() & live.keys() & data_nba.keys()
+
+    def scores(sql: str) -> dict[tuple[str, int], tuple[int, int]]:
+        return {
+            (game_id, int(period)): (int(home), int(away))
+            for game_id, period, home, away in connection.execute(sql).fetchall()
+            if str(home).isdigit() and str(away).isdigit()
+        }
+
+    live = scores(
+        """select gameId, period, last(scoreHome order by cast(orderNumber as bigint)),
+                  last(scoreAway order by cast(orderNumber as bigint))
+           from cdnnba where actionType = 'period' and subType = 'end' group by all"""
+    )
+    data_nba = scores(
+        """select GAME_ID, PERIOD, last(hs order by cast(ord as bigint)),
+                  last(vs order by cast(ord as bigint)) from datanba group by all"""
+    )
+    shared = sorted(v3.keys() & live.keys() & data_nba.keys())
     v3_alone = sorted(
-        {game for game, period in shared if v3[(game, period)] != live[(game, period)]}
-        & {game for game, period in shared if live[(game, period)] == data_nba[(game, period)]}
+        {
+            game
+            for game, period in shared
+            if v3[(game, period)] != live[(game, period)] == data_nba[(game, period)]
+        }
+    )
+    data_nba_alone = sorted(
+        {
+            game
+            for game, period in shared
+            if data_nba[(game, period)] != live[(game, period)] == v3[(game, period)]
+        }
     )
     return {
         "periods_compared": len(shared),
         "livedata_equals_datanba": sum(live[key] == data_nba[key] for key in shared),
         "v3_equals_livedata": sum(v3[key] == live[key] for key in shared),
         "games_where_v3_alone_differs": v3_alone,
+        "games_where_datanba_alone_differs": data_nba_alone,
     }
 
 

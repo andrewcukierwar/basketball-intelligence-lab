@@ -552,7 +552,21 @@ def test_check_build_passes_synthetic_output_and_catches_defects(tmp_path: Path)
     assert moved["shooters_on_court"] == 1
 
 
-def test_evidence_comparisons_count_agreement_on_synthetic_tables() -> None:
+def _v3_archive(path: Path, rows: list[list[str]]) -> None:
+    fields = ["gameId", "actionId", "actionNumber", "period", "teamId", "personId"]
+    fields += ["actionType", "subType", "scoreHome", "scoreAway"]
+    text = io.StringIO()
+    writer = csv.writer(text)
+    writer.writerow(fields)
+    writer.writerows(rows)
+    data = text.getvalue().encode()
+    with tarfile.open(path, "w:xz") as bundle:
+        member = tarfile.TarInfo("v3.csv")
+        member.size = len(data)
+        bundle.addfile(member, io.BytesIO(data))
+
+
+def test_evidence_comparisons_count_agreement_on_synthetic_tables(tmp_path: Path) -> None:
     from bil.data import pilot_evidence
 
     with duckdb.connect() as connection:
@@ -561,9 +575,9 @@ def test_evidence_comparisons_count_agreement_on_synthetic_tables() -> None:
             create table game_review as select '0022200001' as game_id,
               ['inferred_starters'] as strata;
             create table ours as select * from (values
-              ('0022200001', 2, '100', 720.0, 750.0, 720000, 750000, ['1','2','3','4','5']),
-              ('0022200001', 1, '100', 0.0, 720.0, 0, 720000, ['1','2','3','4','6']))
-              t(game_id, period, team, t0, t1, start_elapsed_ms, end_elapsed_ms, ids);
+              ('0022200001', 2, 2, '100', 720.0, 750.0, 720000, 750000, ['1','2','3','4','5']),
+              ('0022200001', 1, 1, '100', 0.0, 720.0, 0, 720000, ['1','2','3','4','6']))
+              t(game_id, stint_seq, period, team, t0, t1, start_elapsed_ms, end_elapsed_ms, ids);
             create table bentes as select * from (values
               ('0022200001', 720, 740, ['1','2','3','4','5']),
               ('0022200001', 740, 750, ['1','2','3','4','7']),
@@ -571,9 +585,19 @@ def test_evidence_comparisons_count_agreement_on_synthetic_tables() -> None:
             create table quality_issue as select '0022200001' as game_id,
               'inferred_starters' as code, 'period 2 team 100: 1,2,3,4,5' as detail;
             create table cdnnba as select * from (values
-              ('0022200001', 'substitution', 'out', '6', '100', '2', 'PT12M00.00S'),
-              ('0022200001', 'substitution', 'in', '5', '100', '2', 'PT12M00.00S'))
-              t(gameId, actionType, subType, personId, teamId, period, clock);
+              ('0022200001', '0', 'substitution', 'out', '6', '100', '2', 'PT12M00.00S', '0',
+               '', '', '1'),
+              ('0022200001', '0', 'substitution', 'in', '5', '100', '2', 'PT12M00.00S', '0',
+               '', '', '2'),
+              ('0022200001', '10', 'shot', '', '1', '100', '2', 'PT11M50.00S', '100', '', '', '3'),
+              ('0022200001', '12', 'turnover', '', '1', '100', '2', 'PT11M40.00S', '100',
+               '', '', '4'),
+              ('0022200001', '20', 'period', 'end', '0', '0', '1', 'PT00M00.00S', '0',
+               '30', '20', '5'),
+              ('0022200001', '21', 'period', 'end', '0', '0', '2', 'PT00M00.00S', '0',
+               '50', '40', '6'))
+              t(gameId, actionNumber, actionType, subType, personId, teamId, period, clock,
+                possession, scoreHome, scoreAway, orderNumber);
             create table event as select * from (values
               ('0022200001', 1, 'shot', '10'), ('0022200001', 2, 'turnover', '12'),
               ('0022200001', 3, 'shot', '11'))
@@ -583,27 +607,49 @@ def test_evidence_comparisons_count_agreement_on_synthetic_tables() -> None:
               ('0022200001', 2, 3, 4, '200', 'unresolved'))
               t(game_id, possession_seq, start_seq, end_seq, offense_team_id, status);
             create table datanba as select * from (values
-              ('0022200001', '10', '100', '1'), ('0022200001', '12', '200', '3'),
-              ('0022200001', '11', '100', '2'))
-              t(GAME_ID, evt, oftid, ord);
+              ('0022200001', '10', '100', '1', '1', '30', '20'),
+              ('0022200001', '12', '200', '3', '2', '50', '41'),
+              ('0022200001', '11', '100', '2', '2', '50', '41'))
+              t(GAME_ID, evt, oftid, ord, PERIOD, hs, vs);
+            create table pbpstats as select * from (values
+              ('0022200001', '1', '12:00', '11:40', 'B'), ('0022200001', '1', '12:00', '11:40', 'B'))
+              t(GAMEID, PERIOD, STARTTIME, ENDTIME, OPPONENT);
             """
         )
         lineups = pilot_evidence.lineup_agreement(connection)
-        assert lineups["games"] == 1 and lineups["disagreements_over_2s"] != []
+        assert lineups["build_games_covered"] == "1 of 1"
+        assert lineups["disagreements_over_2s"] != []
         assert abs(float(str(lineups["time_share"])) - 740 / 750) < 1e-9
 
         starters = pilot_evidence.starter_agreement(connection)
         assert starters["bentes_agree"] == 1 and starters["livedata_agree"] == 1
+        assert starters["disagreements"] == []
 
-        connection.execute("alter table cdnnba add column actionNumber varchar default '0'")
-        connection.execute("alter table cdnnba add column possession varchar default '0'")
         offense = pilot_evidence.possession_agreement(connection)
-        # The turnover's feed offense contradicts possession 1; possession 2 is contradicted.
+        # The turnover's data.nba offense contradicts possession 1, but liveData agrees.
         assert offense["datanba"] == {
             "accepted": {"events": 2, "agree": 1},
             "unresolved": {"events": 1, "agree": 0},
         }
-        assert offense["cdnnba"] == {}
+        assert offense["cdnnba"] == {"accepted": {"events": 2, "agree": 2}}
+        counts = offense["possession_counts_vs_pbpstats"]
+        assert isinstance(counts, dict) and counts["equal"] == 1
 
         order = pilot_evidence.order_agreement(connection)
         assert order["v2_file_order"] == {"games": 1, "games_with_descents": 1, "descents": 1}
+
+        # V3 alone is wrong in period 1; data.nba alone is wrong in period 2.
+        for suffix in ("", "_po"):
+            _v3_archive(
+                tmp_path / f"nbastatsv3{suffix}_2022.tar.xz",
+                [
+                    ["22200001", "1", "20", "1", "", "", "period", "end", "31", "20"],
+                    ["22200001", "2", "21", "2", "", "", "period", "end", "50", "40"],
+                ]
+                if not suffix
+                else [],
+            )
+        scores = pilot_evidence.period_score_agreement(connection, tmp_path)
+        assert scores["games_where_v3_alone_differs"] == ["0022200001"]
+        assert scores["games_where_datanba_alone_differs"] == ["0022200001"]
+        assert scores["periods_compared"] == 2
