@@ -360,6 +360,7 @@ def build_pilot(
         with TemporaryDirectory(dir=output.parent) as temp, duckdb.connect() as connection:
             connection.execute("SET TimeZone = 'UTC'")
             staging = Path(temp)
+            connection.execute("SET temp_directory = ?", [str(staging / "duckdb-spill")])
             games = _season_games(
                 connection, snapshot_dir, sources, chosen or set(), staging, snapshot_hash, when
             )

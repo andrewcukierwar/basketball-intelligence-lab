@@ -16,7 +16,7 @@ pytest.importorskip("pbpstats")
 import duckdb  # noqa: E402
 import requests  # noqa: E402
 
-from bil.data import pilot_parser, pilot_sources  # noqa: E402
+from bil.data import pilot, pilot_parser, pilot_sources  # noqa: E402
 from bil.data.pilot import compare_periods, summarize_reviews  # noqa: E402
 from bil.data.pilot_inputs import (  # noqa: E402
     GameBox,
@@ -208,6 +208,27 @@ def test_strata_distinguish_comparison_from_game_acceptance() -> None:
     assert overtime["quarantined"] == 3 and overtime["v3_periods_checked"] == 2
     assert overtime["v3_periods_matched"] == overtime["v3_periods_mismatched"] == 1
     assert overtime["v3_periods_not_checked"] == 1
+
+
+def test_build_routes_duckdb_spills_to_private_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "snapshot.json").write_text("{}", encoding="utf-8")
+    output = tmp_path / "output"
+
+    def games(connection: duckdb.DuckDBPyConnection, *args: object) -> list[object]:
+        staging = args[3]
+        assert isinstance(staging, Path)
+        assert staging.parent == output.parent
+        assert connection.execute("SELECT current_setting('temp_directory')").fetchone() == (
+            str(staging / "duckdb-spill"),
+        )
+        return []
+
+    monkeypatch.setattr(pilot, "load_snapshot", lambda _path: {"artifacts": []})
+    monkeypatch.setattr(pilot, "_season_games", games)
+    pilot.build_pilot(tmp_path, output, "0" * 40)
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["output", "snapshot.json"]
 
 
 def test_offline_parser_blocks_library_network_fallback(
