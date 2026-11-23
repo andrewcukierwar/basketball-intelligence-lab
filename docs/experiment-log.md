@@ -60,3 +60,26 @@ No model experiments completed yet. Initial priority is data provenance and synt
   6. Negative result: treating V3 substitution disagreements as non-blocking recovered none of the 8 games, because their V2 reconstruction also failed. It was reverted.
 - **Limitations / interpretation:** Box values were selection evidence for 49 games. The unresolved possessions are concentrated around held-ball jump balls and flagrant fouls.
 - **Next decision:** Accept the pilot at M1 level with the remaining 24 quarantines documented (ADR-0009).
+
+### EXP-0003 — External verification of the 2022–23 M1 build
+- **Status:** Completed
+- **Date:** 2026-11-23
+- **Research question/hypothesis:** Do independent feeds and reconstructions confirm BIL's lineups, possession labels, event order and inferred starters, and do they explain the remaining quarantines?
+- **Category:** Original (data verification)
+- **Code SHA / run ID:** `32d1303`, `python -m bil.data.pilot evidence` on build `issue-5-v5` built at `92011a7`.
+- **Datasets/checksums and cutoff:** Pilot snapshot `issue-5-v1` and evidence snapshot `issue-5-evidence-v1`. Hashes are in the source ledger.
+- **Train / validation / test periods:** Not applicable.
+- **Model and configuration:** Not applicable.
+- **Baselines:** Not applicable.
+- **Metrics and uncertainty:** Time-weighted lineup agreement, live-ball offense agreement, adjacent order reversals, starter matches and period-score matches.
+- **Results:**
+  - Lineups agree on 99.97% of court time, and the lowest game is 99.75%.
+  - Live-ball offense agrees on 99.99% of events in accepted possessions.
+  - Counted possessions equal pbpstats.com's in 1,257 of 1,290 games.
+  - All 87 V3-ordered games match data.nba order exactly.
+  - All 35 inferred starter sets match Bentes, and all 33 after period 1 match liveData.
+  - Two quarantines are V3 period-score defects.
+  - Ten are play-by-play substitution defects that V2 and liveData share and that the box contradicts.
+  - Using liveData's tenth-second clocks cut the mean player-minutes error from 146 ms to 29 ms and reconciled two of the four games that rely on the truncation allowance exactly. Some liveData event clocks are missing or disagree with V2, so mixing clock sources gave larger errors for 74 player-games. V2 clocks therefore remain the build basis.
+- **Limitations / interpretation:** Every feed derives from the NBA's event log. data.nba and liveData share upstream order numbers, and data.nba mislabels periods in one game. Bentes appears box-calibrated, which makes it strong evidence for BIL's lineups but not for the box.
+- **Next decision:** The ADR-0010 proposals.

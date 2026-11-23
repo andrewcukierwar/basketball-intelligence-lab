@@ -126,6 +126,37 @@ Maintain append-only decision records. Each entry should identify the date, stat
 - Every rule leaves a warning and a stratum, so analyses can exclude or compare these games.
 - The remaining 24 quarantines are source conflicts that only manual adjudication could settle, which the pilot does not allow. [Pilot guide](data-pilot.md) [Issue #5](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/5)
 
+## ADR-0010 — Pinned evidence feeds verify builds but do not feed them
+
+- **Date:** 2026-11-23
+- **Status:** Accepted for the pilot. The adjudication rules listed below are proposals.
+- **Evidence class:** Original BIL design.
+
+**Decision:** Pin archived data.nba.com, NBA liveData and pbpstats.com play-by-play, together with Bentes lineup stints, as a separate evidence snapshot, and compare every build with them. None of them changes acceptance or output.
+
+**Evidence:**
+- Lineups agree with Bentes on 99.97% of court time. The two disagreements longer than 2 seconds favor BIL against the official box.
+- Possession offense agrees with data.nba on 99.99% of live-ball events in accepted possessions.
+- Counted possessions equal pbpstats.com's in 1,257 of 1,290 games.
+- V3 order equals data.nba order in all 87 games that used it.
+- Every inferred starter set matches both Bentes and liveData's between-period substitutions.
+- liveData and data.nba identify two games where V3's period score, and not V2, is wrong.
+
+[External verification](data-pilot.md#external-verification)
+
+**Caveat:** All the feeds derive from the NBA's event log, so agreement shows consistent archiving and parsing rather than external truth.
+
+**Alternatives:** Use the feeds as build inputs immediately. That would turn independent checks into dependencies before their own defects were measured. data.nba and liveData share order numbers and so do not form two independent votes, and Bentes appears to correct lineups with box-derived data.
+
+**Proposals for a later decision:**
+1. Accept a V2 reconstruction when V3 alone disagrees on period scores and liveData and data.nba agree with V2. This recovers 2 games.
+2. Label unresolved possessions from data.nba when every live-ball event in them agrees. This resolves 28 of the 54 possessions.
+3. Derive period starters from liveData's between-period substitutions rather than inferring them from box minutes. That would restore the box as an independent check in the 31 inferred-starter games.
+
+The 10 play-by-play substitution defects are not recoverable without a box-consistent source of record.
+
+**Consequences:** The verification itself can be reproduced. A change to build acceptance needs its own decision and must report the evidence comparison again.
+
 ## Decision template
 
 ### ADR-XXXX — Title
