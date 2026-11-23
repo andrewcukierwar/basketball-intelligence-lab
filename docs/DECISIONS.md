@@ -157,6 +157,16 @@ The 10 play-by-play substitution defects are not recoverable without a box-consi
 
 **Consequences:** The verification itself can be reproduced. A change to build acceptance needs its own decision and must report the evidence comparison again.
 
+## ADR-0012 — Center the zero-prior RAPM player blocks separately
+
+- **Date:** 2026-11-23
+- **Status:** Accepted for the synthetic reference.
+- **Context:** Fixed five-player lineups allow uniform shifts in either player block to be absorbed by the intercept. The public EPM methodology leaves player centering and the penalty scale open.
+- **Decision:** Regress scaled offensive points on an intercept, five positive offense indicators and five negative defense indicators. Penalize both player blocks equally toward zero and leave the intercept free. Center each block on the unweighted mean over the fitted player universe. Keep observation weights unnormalized and specify the penalty explicitly for each run.
+- **Evidence:** The two block-level shifts preserve every prediction. The ridge penalty is minimized within that equivalence class by setting each block mean to zero. The synthetic fixture verifies signs, intercept, recovery and dense agreement.
+- **Consequences:** The intercept is the expected rate for zero-effect lineups. Ratings depend on the fitted player universe and the weight-to-penalty scale. Ridge assigns a unique numerical solution even when individual contributions are weakly identified by the lineups.
+- **Links:** [Synthetic RAPM specification](research/rapm-synthetic.md), [EPM uncertainty register](research/epm-uncertainties.md), [Issue #6](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/6)
+
 ## Decision template
 
 ### ADR-XXXX — Title

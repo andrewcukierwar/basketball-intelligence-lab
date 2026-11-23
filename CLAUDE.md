@@ -13,14 +13,14 @@ AGENTS.md, imported above, is the shared policy for every coding agent. This fil
 ## Commands
 
 ```sh
-uv sync --locked --extra dev --extra pilot   # pilot extra is needed for tests/test_pilot.py
+uv sync --locked --extra dev --extra pilot --extra rapm
 uv run pytest -q
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src                              # strict
 ```
 
-CI runs the same checks on Python 3.12 with `pip install ".[dev,pilot]"`. Pilot capture and build commands are in [docs/data-pilot.md](docs/data-pilot.md).
+CI runs the same checks on Python 3.12 with `pip install ".[dev,pilot,rapm]"`. The [pilot guide](docs/data-pilot.md) covers capture and builds. The [synthetic RAPM guide](docs/research/rapm-synthetic.md) covers the numerical reference and sensitivity experiment.
 
 ## Data handling
 
