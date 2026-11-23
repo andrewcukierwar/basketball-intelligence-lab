@@ -16,7 +16,7 @@ Our first objective is to reproduce the published methodology behind Taylor Snar
 
 **We will not train a model using EPM ratings as labels.** Dunks & Threes ratings, where their use is permitted, serve only as independent external diagnostics—not a loss function, training target, or hyperparameter optimization objective.
 
-M0 establishes the methodology specification, source audit and research contracts. The validated historical dataset and RAPM baseline follow in M1 and M2. No production ratings have been implemented yet.
+M0 established the methodology specification, source audit and research contracts. M1 has a private, reconciled 2022–23 possession pilot. The RAPM baseline follows in M2. No production ratings have been implemented yet.
 
 ## Long-term research
 
@@ -74,6 +74,6 @@ The committed `uv.lock` pins the local development environment. CI installs the 
 
 ## Status
 
-**M0 — Research foundation (in progress).** See [project milestones](docs/PROJECT_PLAN.md#9-project-management). Contributions should be small, tested and accompanied by methodological evidence.
+**M0 — Research foundation:** complete. **M1 — Historical NBA dataset:** the 2022–23 pilot accepts 1,290 of 1,314 games under documented invariants and tolerances, pending review. See the [pilot guide](docs/data-pilot.md) and [project milestones](docs/PROJECT_PLAN.md#9-project-management). Contributions should be small, tested and accompanied by methodological evidence.
 
 This is an independent research project and is not affiliated with Dunks & Threes, DARKO, BBall Index or the NBA.
