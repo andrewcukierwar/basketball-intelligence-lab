@@ -189,6 +189,15 @@ V2 remains the event source of record.
 - **Consequences:** The intercept is the expected rate for zero-effect lineups. Ratings depend on the fitted player universe and the weight-to-penalty scale. Ridge assigns a unique numerical solution even when individual contributions are weakly identified by the lineups.
 - **Links:** [Synthetic RAPM specification](research/rapm-synthetic.md), [EPM uncertainty register](research/epm-uncertainties.md), [Issue #6](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/6)
 
+## ADR-0013 — Limit the first historical RAPM fit to stable-lineup possessions
+
+- **Date:** 2026-11-23
+- **Status:** Proposed for the M2 baseline.
+- **Decision:** Use one unit-weight row per pilot-accepted possession with a single actual lineup pair. Take offensive points from the canonical control ledger. Preserve multiple-lineup intervals and unassigned scores in the reconciliation artifacts.
+- **Evidence:** The #19 pilot has 224,039 stable-lineup and 32,417 multiple-lineup accepted possessions. Control scoring rates differ materially between those groups. The contract fixture checks same-clock lineup changes, official score credit and retained-ball allocations.
+- **Consequences:** All fitted opportunities have exactly one five-on-five design vector. The cohort excludes 12.64% of accepted possessions. The baseline estimates stable-lineup scoring, and future comparisons can test broader representations.
+- **Links:** [Historical row contract](research/rapm-historical-rows.md), [Issue #20](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/20)
+
 ## Decision template
 
 ### ADR-XXXX — Title
