@@ -157,6 +157,28 @@ The 10 play-by-play substitution defects are not recoverable without a box-consi
 
 **Consequences:** The verification itself can be reproduced. A change to build acceptance needs its own decision and must report the evidence comparison again.
 
+## ADR-0011 — Use archived liveData and data.nba evidence for three narrow decisions
+
+- **Date:** 2026-11-23
+- **Status:** Accepted for the pilot. Adopts the three ADR-0010 proposals.
+- **Evidence class:** Original BIL design based on the measured agreement in ADR-0010.
+
+**Decision:** The pinned liveData and data.nba archives become build inputs (snapshot `issue-5-v2`), but only for these decisions:
+1. **Period starters after the first period.** When events do not give five starters, carry the previous period's closing lineup through liveData's between-period substitutions. Accept the result only when it is consistent with the event-derived starters. The box-value search remains the fallback.
+2. **V3 period-score defects.** Accept V2 when V3 alone disputes period scores and both feeds agree with V2 on every disputed period.
+3. **Unresolved possession labels.** Label an unresolved possession from data.nba when its offense is unanimous over the possession's live-ball events and does not repeat an adjacent possession's offense.
+
+V2 remains the event source of record.
+
+**Evidence:** See EXP-0004 for the full build.
+- liveData settled 33 starter team-periods in 29 games. Their lineups are identical to the box-selected ones, and all 33 match Bentes. Box values now choose the reconstruction in 20 games rather than 49.
+- Two V3 period-score defect games are accepted.
+- Only 3 of the 54 unresolved possessions could be relabeled. Where data.nba is unanimous, it usually agrees with the parser's label, which already repeats a neighbor's offense, so that possession needs a boundary, not a label. ADR-0010 estimated 28 by counting unanimity alone, which overstated the effect.
+
+**Consequences:**
+- For the affected games, the evidence comparisons with liveData and data.nba are no longer independent: starters in `livedata_starters` games, the relabeled possessions, and period scores in `v3_period_defect` games. Bentes and pbpstats.com remain verification-only.
+- Earlier builds stay reproducible from snapshot `issue-5-v1` at their recorded commits.
+
 ## Decision template
 
 ### ADR-XXXX — Title

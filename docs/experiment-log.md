@@ -83,3 +83,24 @@ No model experiments completed yet. Initial priority is data provenance and synt
   - Using liveData's tenth-second clocks cut the mean player-minutes error from 146 ms to 29 ms and reconciled two of the four games that rely on the truncation allowance exactly. Some liveData event clocks are missing or disagree with V2, so mixing clock sources gave larger errors for 74 player-games. V2 clocks therefore remain the build basis.
 - **Limitations / interpretation:** Every feed derives from the NBA's event log. data.nba and liveData share upstream order numbers, and data.nba mislabels periods in one game. Bentes appears box-calibrated, which makes it strong evidence for BIL's lineups but not for the box.
 - **Next decision:** The ADR-0010 proposals.
+
+### EXP-0004 — Archived-feed adjudication of starters, period scores and possession labels
+- **Status:** Completed
+- **Date:** 2026-11-23
+- **Research question/hypothesis:** Can liveData and data.nba evidence replace box-based starter selection, recover the V3 period-score defects and resolve unresolved possessions, without changing verified lineups?
+- **Category:** Original (data pipeline)
+- **Code SHA / run ID:** `b1a43ed` (rules in `9b4f24d`, review fixes in `b1a43ed`), build `issue-5-v6`.
+- **Datasets/checksums and cutoff:** Snapshot `issue-5-v2`, which is `issue-5-v1` plus four pinned liveData and data.nba archives.
+- **Train / validation / test periods:** Not applicable.
+- **Model and configuration:** Parser version `pbpstats-1.3.11-bil-v6`.
+- **Baselines:** Build `issue-5-v5` with 1,290 accepted games.
+- **Metrics and uncertainty:** Accepted games, changes to previously accepted rows, the `check` and `evidence` results, and the number of games where the box chose the reconstruction.
+- **Results:**
+  - 1,292 games accepted.
+  - liveData starters settled 33 team-periods in 29 games, with identical lineups, all matching Bentes. Box-chosen games fell from 49 to 20.
+  - Two V3 defect games were accepted.
+  - Only 3 of 54 unresolved possessions were relabeled, against an estimate of 28. Unanimous labels usually repeat a neighbor's offense, which means a missing boundary rather than a wrong label.
+  - No previously accepted lineup or event changed.
+  - All 79 regular-season overtime games are accepted.
+- **Limitations / interpretation:** The liveData and data.nba comparisons are no longer independent for the affected games.
+- **Next decision:** Possession boundaries for the remaining 51 unresolved possessions would need a different method, for example data.nba possession changes. That is not proposed.
