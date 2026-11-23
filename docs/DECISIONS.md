@@ -85,6 +85,20 @@ Maintain append-only decision records. Each entry should identify the date, stat
 
 **Consequences:** A strict rolling-origin result depends on dated source evidence. Retrospective replays state their availability limits, and registration protects holdout scores from model selection. Independent basketball outcomes, method fidelity and external EPM agreement remain separate claims. [Validation contract](validation-strategy.md) [Run manifest](run-manifest.md) [Issue #4](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/4)
 
+## ADR-0008 — Archived V3 action order as the offline event-order fallback
+
+- **Date:** 2026-11-23
+- **Status:** Provisional pilot decision.
+- **Evidence class:** Original BIL decision. The fallback point is documented parser behavior. The substitution of V3 order for data.nba.com order is inferred to be equivalent evidence, not documented as such.
+
+**Decision:** When pbpstats 1.3.11 cannot repair rebound order and would request data.nba.com event order, use the pinned NBA Stats V3 action order of the same game. V3 `actionNumber` equals the V2 `EVENTNUM`. Order by `actionId` and keep the first occurrence of each event number. Apply it only when the V3 and V2 event-number sets are identical, recheck rebound order, and record a warning and a stratum for the game. Keep V2 file order as the primary order.
+
+**Evidence:** The 79 games quarantined as `unresolved_event_order` all reached the parser's live fallback. With V3 order, 70 passed every existing check, including exact player plus-minus and minutes within 2,000 ms against the pinned boxes and V3 period scores. Nine stayed quarantined for other reasons. The 1,131 previously accepted games were unchanged in every output table. Using V3 order from the start instead of V2 recovered only 4 of 22 parser errors and 2 of 4 unsupported reorders, so it was not adopted. [Pilot guide](data-pilot.md) [Experiment log](experiment-log.md)
+
+**Alternatives:** Keep the games quarantined. Request live data.nba.com order, which is unavailable in this environment and would break the offline, pinned build. Hand-edit event order, which the pilot does not allow.
+
+**Consequences:** V3 and data.nba.com order may differ on same-clock ties. Cross-clock moves still quarantine the game, and reconciliation catches errors that change minutes, plus-minus or scores. An ordering error that changes none of those cannot be ruled out, so analyses should be able to report the `v3_event_order` stratum separately. [Issue #5](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/5)
+
 ## Decision template
 
 ### ADR-XXXX — Title
