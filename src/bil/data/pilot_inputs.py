@@ -7,7 +7,7 @@ import re
 import tarfile
 from collections import Counter, defaultdict
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from io import TextIOWrapper
 from itertools import groupby
@@ -59,6 +59,8 @@ class RawEvent:
 class V3Game:
     periods: dict[int, tuple[int, int]]
     substitutions: Counter[tuple[str, str, str]]
+    # Event numbers in archived V3 action order. V3 actionNumber is the V2 EVENTNUM.
+    order: list[int] = field(default_factory=list)
 
 
 def nba_game_id(value: str) -> str:
@@ -145,9 +147,11 @@ def shot_payload(rows: list[tuple[int, ...]]) -> object:
 def v3_games(path: Path) -> dict[str, V3Game]:
     final: dict[tuple[str, int], tuple[int, tuple[int, int]]] = {}
     games: dict[str, V3Game] = {}
+    actions: dict[str, list[tuple[int, int]]] = defaultdict(list)
     for row in archive_rows(path):
         game_id = nba_game_id(row["gameId"])
         game = games.setdefault(game_id, V3Game({}, Counter()))
+        actions[game_id].append((int(row["actionId"]), int(row["actionNumber"])))
         if row["actionType"].casefold() == "substitution":
             game.substitutions[(row["period"], row["teamId"], row["personId"])] += 1
         if row["actionType"] != "period" or row["subType"] != "end":
@@ -163,6 +167,15 @@ def v3_games(path: Path) -> dict[str, V3Game]:
             raise ValueError(f"Conflicting V3 final score for {game_id}")
     for (game_id, period), (_, points) in final.items():
         games[game_id].periods[period] = points
+    for game_id, pairs in actions.items():
+        if len({action_id for action_id, _ in pairs}) != len(pairs):
+            raise ValueError(f"Repeated V3 action ID for {game_id}")
+        sequence = games[game_id].order
+        seen: set[int] = set()
+        for _, event_num in sorted(pairs):
+            if event_num not in seen:
+                seen.add(event_num)
+                sequence.append(event_num)
     return games
 
 
