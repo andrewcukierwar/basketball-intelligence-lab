@@ -44,7 +44,7 @@ from bil.data.pilot_sources import (
     utc_now,
     write_json,
 )
-from bil.data.pilot_starters import choose_starters
+from bil.data.pilot_starters import StarterChoice, choose_starters
 
 SUFFIXES = {"regular": "", "playoffs": "_po"}
 
@@ -205,32 +205,58 @@ def _build_game(
             raise GameIssue("v3_substitution_mismatch", "V2 and V3 substitution signatures differ")
         order = reference.order
 
-        def attempt(starters: Starters) -> tuple[list[ParserEvent], Rows, bool, int]:
-            with TemporaryDirectory(dir=scratch) as game_directory:
-                result = parse_game(game, raw, shots, Path(game_directory), order, starters)
-                match, reconciled = compare_periods(result.events, game, periods)
-                if not match:
-                    raise PeriodScoreMismatch(reconciled)
-                rows = normalize_game(
-                    game,
-                    roster,
-                    raw,
-                    result.events,
-                    result.possessions,
-                    raw_source["artifact_id"],
-                    result.unresolved_possessions,
-                )
-            return result.events, rows, result.v3_order, reconciled
+        def reconstruct(primary: bool) -> StarterChoice[tuple[list[ParserEvent], Rows, bool, int]]:
+            def attempt(starters: Starters) -> tuple[list[ParserEvent], Rows, bool, int]:
+                with TemporaryDirectory(dir=scratch) as game_directory:
+                    result = parse_game(
+                        game,
+                        raw,
+                        shots,
+                        Path(game_directory),
+                        order,
+                        starters,
+                        primary_order=order if primary else None,
+                    )
+                    match, reconciled = compare_periods(result.events, game, periods)
+                    if not match:
+                        raise PeriodScoreMismatch(reconciled)
+                    rows = normalize_game(
+                        game,
+                        roster,
+                        raw,
+                        result.events,
+                        result.possessions,
+                        raw_source["artifact_id"],
+                        result.unresolved_possessions,
+                    )
+                return result.events, rows, result.v3_order, reconciled
 
-        try:
-            choice = choose_starters(
+            return choose_starters(
                 attempt, roster, lambda result: json.dumps(result[1], sort_keys=True, default=str)
             )
-        except PeriodScoreMismatch as mismatch:
-            periods_match, periods_reconciled = False, mismatch.reconciled
-            raise
+
+        v3_primary = False
+        try:
+            choice = reconstruct(primary=False)
+        except GameIssue as first:
+            # Last resort: parse in archived V3 action order. Every check still applies,
+            # including the guard against moving events across V2 clocks.
+            try:
+                choice = reconstruct(primary=True)
+                v3_primary = True
+            except GameIssue:
+                if isinstance(first, PeriodScoreMismatch):
+                    periods_match, periods_reconciled = False, first.reconciled
+                raise first from None
         parsed, rows, v3_order, periods_reconciled = choice.result
         periods_match = True
+        if v3_primary:
+            labels.append("v3_primary_order")
+            warning = GameIssue(
+                "v3_primary_order",
+                "V2 file order failed acceptance; the game was parsed in archived V3 action order",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
         if v3_order:
             labels.append("v3_event_order")
             warning = GameIssue(

@@ -32,7 +32,7 @@ from pbpstats.resources.enhanced_pbp.stats_nba.start_of_period import (  # type:
 
 from bil.data.pilot_inputs import GameBox, GameIssue, RawEvent, event_payload, shot_payload
 
-PARSER_VERSION = "pbpstats-1.3.11-bil-v4"
+PARSER_VERSION = "pbpstats-1.3.11-bil-v5"
 
 # Starter choices for ambiguous periods, keyed by (period, team ID).
 Starters = dict[tuple[int, int], tuple[int, ...]]
@@ -169,6 +169,7 @@ def parse_game(
     scratch: Path,
     event_order: list[int] | None = None,
     starters: Starters | None = None,
+    primary_order: list[int] | None = None,
 ) -> ParseResult:
     """Parse one game offline.
 
@@ -180,6 +181,9 @@ def parse_game(
     live box score. Instead, ``starters`` supplies the choice for that period and team, or a
     ``StarterGap`` reports the partial starters so a caller can search candidates.
 
+    ``primary_order`` writes the events in that order instead of V2 file order. It must cover
+    exactly the V2 events.
+
     The parser rejects a game when consecutive possessions have the same offense, which usually
     means a source event is missing or misordered. Those possession pairs are returned as
     unresolved instead, so lineups and scoring can still be reconciled for the whole game.
@@ -187,6 +191,12 @@ def parse_game(
     for folder in ("pbp", "game_details", "overrides"):
         (scratch / folder).mkdir(exist_ok=True)
     pbp_file = scratch / "pbp" / f"stats_{game.game_id}.json"
+    if primary_order is not None:
+        if len(primary_order) != len(set(primary_order)) or set(primary_order) != raw.keys():
+            raise GameIssue(
+                "unresolved_event_order", "Archived V3 order does not cover the V2 events"
+            )
+        raw = {event_num: raw[event_num] for event_num in primary_order}
     pbp_file.write_text(json.dumps(event_payload(raw)), encoding="utf-8")
     for side, team_id in (("home", game.home_id), ("away", game.away_id)):
         if team_id not in shots:
