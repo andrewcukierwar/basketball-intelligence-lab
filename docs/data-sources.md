@@ -8,7 +8,7 @@
 
 ## Coverage by season and evidence level
 
-Ranges are inclusive. For the asset rows below, every season in each range had a matching published filename at the audit date. The filename inventory is distinct from the measured game and field coverage in the [follow-up audit](research/nba-source-validation.md). Historical availability times remain unverified. The 2026–27 season is in progress. Older archive endpoints may also have partial coverage despite a matching filename.
+Ranges are inclusive. The GitHub release and tree inventories contained a matching filename for every season in their stated ranges. The [follow-up audit](research/nba-source-validation.md) records the measured game and field coverage. Historical availability times remain unverified. The 2026–27 season is in progress. Older archive endpoints may also have partial coverage despite a matching filename.
 
 | Source and dataset | Regular season | Playoffs | Evidence and known limitations |
 | --- | --- | --- | --- |
