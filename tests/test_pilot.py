@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import tarfile
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date
@@ -25,6 +28,7 @@ from bil.data.pilot_inputs import (  # noqa: E402
     RawEvent,
     deduplicate_events,
     v2_substitutions,
+    v3_games,
 )
 from bil.data.pilot_normalize import normalize_game  # noqa: E402
 from bil.data.pilot_output import write_tables  # noqa: E402
@@ -248,3 +252,53 @@ def test_offline_parser_blocks_library_network_fallback(
             tmp_path,
         )
     assert rejected.value.code == "offline_parser_request"
+
+
+def test_v3_order_follows_action_ids_and_keeps_first_event_number(tmp_path: Path) -> None:
+    fields = ["gameId", "actionId", "actionNumber", "period", "teamId", "personId"]
+    fields += ["actionType", "subType", "scoreHome", "scoreAway"]
+    rows = [
+        ["22200001", "3", "9", "1", "", "", "Turnover", "", "", ""],
+        ["22200001", "1", "2", "1", "", "", "period", "start", "", ""],
+        ["22200001", "4", "9", "1", "", "", "", "", "", ""],
+        ["22200001", "2", "7", "1", "", "", "Made Shot", "", "", ""],
+        ["22200001", "5", "11", "1", "", "", "period", "end", "2", "0"],
+    ]
+    text = io.StringIO()
+    writer = csv.writer(text)
+    writer.writerow(fields)
+    writer.writerows(rows)
+    data = text.getvalue().encode()
+    archive = tmp_path / "v3.tar.xz"
+    with tarfile.open(archive, "w:xz") as bundle:
+        member = tarfile.TarInfo("v3.csv")
+        member.size = len(data)
+        bundle.addfile(member, io.BytesIO(data))
+    game = v3_games(archive)["0022200001"]
+    assert game.order == [2, 7, 9, 11]
+    assert game.periods == {1: (2, 0)}
+
+
+class FakeLoader:
+    def __init__(self, event_nums: list[int]) -> None:
+        self.source_data = {"resultSets": [{"headers": ["GAME_ID", "EVENTNUM"], "rowSet": []}]}
+        self.source_data["resultSets"][0]["rowSet"] = [["g", num] for num in event_nums]
+        self.saved = 0
+
+    def _save_data_to_file(self) -> None:
+        self.saved += 1
+
+
+def test_archived_order_replaces_live_reorder_only_for_identical_events() -> None:
+    applied: list[bool] = []
+    reorder = pilot_parser._archived_order([1, 3, 2], applied)
+    loader = FakeLoader([1, 2, 3])
+    reorder(loader)
+    assert [row[1] for row in loader.source_data["resultSets"][0]["rowSet"]] == [1, 3, 2]
+    assert loader.saved == 1 and applied == [True]
+
+    for order in ([1, 3], [1, 3, 2, 4], [1, 3, 3]):
+        blocked: list[bool] = []
+        with pytest.raises(GameIssue) as rejected:
+            pilot_parser._archived_order(order, blocked)(FakeLoader([1, 2, 3]))
+        assert rejected.value.code == "unresolved_event_order" and not blocked

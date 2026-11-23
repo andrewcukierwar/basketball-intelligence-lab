@@ -195,7 +195,16 @@ def _build_game(
         if not substitutions_match:
             raise GameIssue("v3_substitution_mismatch", "V2 and V3 substitution signatures differ")
         with TemporaryDirectory(dir=scratch) as game_directory:
-            parsed, possessions = parse_game(game, raw, shots, Path(game_directory))
+            parsed, possessions, v3_order = parse_game(
+                game, raw, shots, Path(game_directory), reference.order
+            )
+            if v3_order:
+                labels.append("v3_event_order")
+                warning = GameIssue(
+                    "v3_event_order_applied",
+                    "Parser rebound repairs failed; archived V3 action order replaced V2 order",
+                )
+                issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
             periods_match, periods_reconciled = compare_periods(parsed, game, periods)
             if not periods_match:
                 raise GameIssue(
