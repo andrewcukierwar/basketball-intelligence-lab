@@ -418,3 +418,15 @@ def test_box_credit_search_moves_only_same_clock_credit() -> None:
     roster[6] = PlayerBox(100, 0, 3)
     with pytest.raises(GameIssue, match="2 players"):
         choose_box_credits(pm, roster, [choice])
+
+
+def test_minutes_tolerance_grows_with_truncated_substitution_clocks() -> None:
+    from bil.data.pilot_normalize import reconcile_minutes
+
+    roster = {7: PlayerBox(100, 600_000, 0)}
+    minutes = Counter({7: 603_500})
+    with pytest.raises(GameIssue, match="1 players"):
+        reconcile_minutes(minutes, roster)
+    with pytest.raises(GameIssue):
+        reconcile_minutes(minutes, roster, Counter({7: 1}))
+    reconcile_minutes(minutes, roster, Counter({7: 2}))

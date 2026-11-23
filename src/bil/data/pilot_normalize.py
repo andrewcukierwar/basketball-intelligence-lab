@@ -14,6 +14,10 @@ Row: TypeAlias = dict[str, object]
 Rows: TypeAlias = dict[str, list[Row]]
 Lineups: TypeAlias = tuple[tuple[int, ...], tuple[int, ...]]
 MINUTES_TOLERANCE_MS = 2_000
+# V2 clocks show whole seconds and truncate tenths in a period's final minute, so each of a
+# player's substitutions there can shift that player's minutes by up to one second.
+SUBSECOND_CLOCK_MS = 60_000
+TRUNCATION_ALLOWANCE_MS = 1_000
 # Largest number of same-clock credit changes considered when matching box plus-minus.
 MAX_CREDIT_CHANGES = 3
 
@@ -489,11 +493,31 @@ def score_and_events(
     return canonical, actors, allocations, pm, conflicts, choices
 
 
-def reconcile_minutes(minutes: Counter[int], roster: dict[int, PlayerBox]) -> None:
-    errors = [abs(minutes[player] - box.minutes_ms) for player, box in roster.items()]
-    differing = sum(error > MINUTES_TOLERANCE_MS for error in errors)
+def truncated_boundaries(events: list[TimedEvent], raw: dict[int, RawEvent]) -> Counter[int]:
+    """Count each player's substitutions at a truncated sub-minute clock."""
+    counts: Counter[int] = Counter()
+    for item in events:
+        if item.source.event_type == 8 and 0 < item.remaining_ms < SUBSECOND_CLOCK_MS:
+            fields = raw[item.source.event_num].fields
+            for key in ("PLAYER1_ID", "PLAYER2_ID"):
+                counts[int(fields[key])] += 1
+    return counts
+
+
+def reconcile_minutes(
+    minutes: Counter[int], roster: dict[int, PlayerBox], truncated: Counter[int] | None = None
+) -> None:
+    """Compare minutes within 2,000 ms plus one second per truncated substitution clock."""
+    counts = truncated or Counter()
+    errors = {player: abs(minutes[player] - box.minutes_ms) for player, box in roster.items()}
+    differing = sum(
+        error > MINUTES_TOLERANCE_MS + TRUNCATION_ALLOWANCE_MS * counts[player]
+        for player, error in errors.items()
+    )
     if differing:
-        raise GameIssue("player_minutes_mismatch", f"{differing} players; max {max(errors)} ms")
+        raise GameIssue(
+            "player_minutes_mismatch", f"{differing} players; max {max(errors.values())} ms"
+        )
 
 
 def _credit_change(choice: CreditChoice, option: TimedEvent) -> Counter[int]:
@@ -595,7 +619,7 @@ def normalize_game(
         )
         if conflicts:
             raise GameIssue("unresolved_score_allocation", "Possession conflicts persist")
-    reconcile_minutes(minutes, roster)
+    reconcile_minutes(minutes, roster, truncated_boundaries(events, raw))
     for choice, option in choose_box_credits(pm, roster, choices):
         allocation = allocations[choice.allocation]
         allocation["credited_stint_seq"] = by_stint[option.seq]
