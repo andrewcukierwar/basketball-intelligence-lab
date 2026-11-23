@@ -68,6 +68,13 @@ body:
     validations:
       required: true
   - type: textarea
+    id: falsification
+    attributes:
+      label: Falsification
+      description: State what result would falsify the hypothesis or show the task is infeasible, and what happens then.
+    validations:
+      required: true
+  - type: textarea
     id: dependencies
     attributes:
       label: Direct prerequisites
