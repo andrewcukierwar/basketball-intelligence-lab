@@ -3,7 +3,7 @@
 - **Date:** 2026-11-23
 - **Status:** Awaiting review.
 - **Related issues:** [#5](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/5) (closed by #15)
-- **Branch / commit / PR:** `claude/issue-5-feed-adjudication`, stacked on `claude/issue-5-external-verification` (PR #16). The code is in `9b4f24d` and `b1a43ed`, and the final build is `issue-5-v6` at `b1a43ed`.
+- **Branch / commit / PR:** `claude/issue-5-feed-adjudication`, stacked on `claude/issue-5-external-verification` (PR #16). The code is in `9b4f24d` and `b1a43ed`, and the final build is `issue-5-v6` at `b1a43ed`. [PR #17](https://github.com/andrewcukierwar/basketball-intelligence-lab/pull/17).
 
 ## Objective and authorized scope
 
