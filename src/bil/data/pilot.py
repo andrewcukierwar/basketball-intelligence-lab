@@ -16,6 +16,7 @@ from typing import cast
 
 import duckdb
 
+from bil.data.pilot_check import check_build
 from bil.data.pilot_inputs import (
     GAME_PREFIXES,
     GameBox,
@@ -33,7 +34,7 @@ from bil.data.pilot_inputs import (
 )
 from bil.data.pilot_normalize import MINUTES_TOLERANCE_MS, Row, Rows, located, normalize_game
 from bil.data.pilot_output import read_game_reviews, write_tables
-from bil.data.pilot_parser import PARSER_VERSION, ParserEvent, parse_game
+from bil.data.pilot_parser import PARSER_VERSION, ParserEvent, Starters, parse_game
 from bil.data.pilot_sources import (
     ATTRIBUTION,
     NBA_TERMS,
@@ -44,8 +45,17 @@ from bil.data.pilot_sources import (
     utc_now,
     write_json,
 )
+from bil.data.pilot_starters import StarterChoice, choose_starters
 
 SUFFIXES = {"regular": "", "playoffs": "_po"}
+
+
+class PeriodScoreMismatch(GameIssue):
+    def __init__(self, reconciled: int) -> None:
+        super().__init__(
+            "v3_period_score_mismatch", "V2 reconstructed period scores differ from V3"
+        )
+        self.reconciled = reconciled
 
 
 def _ref(artifact: Artifact, locator: str) -> dict[str, str]:
@@ -194,23 +204,105 @@ def _build_game(
         substitutions_match = v2_substitutions(raw) == reference.substitutions
         if not substitutions_match:
             raise GameIssue("v3_substitution_mismatch", "V2 and V3 substitution signatures differ")
-        with TemporaryDirectory(dir=scratch) as game_directory:
-            parsed, possessions, v3_order = parse_game(
-                game, raw, shots, Path(game_directory), reference.order
+        order = reference.order
+
+        def reconstruct(primary: bool) -> StarterChoice[tuple[list[ParserEvent], Rows, bool, int]]:
+            def attempt(starters: Starters) -> tuple[list[ParserEvent], Rows, bool, int]:
+                with TemporaryDirectory(dir=scratch) as game_directory:
+                    result = parse_game(
+                        game,
+                        raw,
+                        shots,
+                        Path(game_directory),
+                        order,
+                        starters,
+                        primary_order=order if primary else None,
+                    )
+                    match, reconciled = compare_periods(result.events, game, periods)
+                    if not match:
+                        raise PeriodScoreMismatch(reconciled)
+                    rows = normalize_game(
+                        game,
+                        roster,
+                        raw,
+                        result.events,
+                        result.possessions,
+                        raw_source["artifact_id"],
+                        result.unresolved_possessions,
+                    )
+                return result.events, rows, result.v3_order, reconciled
+
+            return choose_starters(
+                attempt, roster, lambda result: json.dumps(result[1], sort_keys=True, default=str)
             )
-            if v3_order:
-                labels.append("v3_event_order")
-                warning = GameIssue(
-                    "v3_event_order_applied",
-                    "Parser rebound repairs failed; archived V3 action order replaced V2 order",
-                )
-                issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
-            periods_match, periods_reconciled = compare_periods(parsed, game, periods)
-            if not periods_match:
-                raise GameIssue(
-                    "v3_period_score_mismatch", "V2 reconstructed period scores differ from V3"
-                )
-            rows = normalize_game(game, roster, raw, parsed, possessions, raw_source["artifact_id"])
+
+        v3_primary = False
+        try:
+            choice = reconstruct(primary=False)
+        except GameIssue as first:
+            # Last resort: parse in archived V3 action order. Every check still applies,
+            # including the guard against moving events across V2 clocks.
+            try:
+                choice = reconstruct(primary=True)
+                v3_primary = True
+            except GameIssue:
+                if isinstance(first, PeriodScoreMismatch):
+                    periods_match, periods_reconciled = False, first.reconciled
+                raise first from None
+        parsed, rows, v3_order, periods_reconciled = choice.result
+        periods_match = True
+        if v3_primary:
+            labels.append("v3_primary_order")
+            warning = GameIssue(
+                "v3_primary_order",
+                "V2 file order failed acceptance; the game was parsed in archived V3 action order",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if v3_order:
+            labels.append("v3_event_order")
+            warning = GameIssue(
+                "v3_event_order_applied",
+                "Parser rebound repairs failed; archived V3 action order replaced V2 order",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        recredited = sum(
+            row["attribution_rule"] == "same_clock_box_credit" for row in rows["score_allocation"]
+        )
+        if recredited:
+            labels.append("same_clock_box_credit")
+            warning = GameIssue(
+                "same_clock_box_credit",
+                f"{recredited} scores credited to another lineup state at the same clock "
+                "to match box plus-minus",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        unresolved = sum(row["status"] == "unresolved" for row in rows["possession"])
+        if unresolved:
+            labels.append("unresolved_possessions")
+            warning = GameIssue(
+                "unresolved_possessions",
+                f"{unresolved} possessions have unresolved offense: consecutive possessions "
+                "share an offense or a score contradicts the recorded control",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if choice.immaterial:
+            labels.append("immaterial_starters")
+            warning = GameIssue(
+                "immaterial_starters",
+                f"All {choice.candidates_tried} candidate starter sets gave one reconstruction",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        elif choice.starters:
+            labels.append("inferred_starters")
+            chosen = "; ".join(
+                f"period {period} team {team}: {','.join(map(str, ids))}"
+                for (period, team), ids in sorted(choice.starters.items())
+            )
+            warning = GameIssue(
+                "inferred_starters",
+                f"Only one of {choice.candidates_tried} candidate starter sets reconciled ({chosen})",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
         if [event.event_num for event in parsed] != list(raw):
             warning = GameIssue(
                 "same_clock_parser_reorder", "Pinned parser reordered same-clock events"
@@ -409,8 +501,19 @@ def main() -> None:
     build.add_argument("output_dir", type=Path)
     build.add_argument("--code-commit", required=True)
     build.add_argument("--game-id", action="append", type=nba_game_id)
+    check = subcommands.add_parser("check", help="check an exported build's invariants")
+    check.add_argument("output_dir", type=Path)
+    check.add_argument("snapshot_dir", type=Path)
     args = cli.parse_args()
-    if args.action == "capture":
+    if args.action == "check":
+        results = check_build(args.output_dir, args.snapshot_dir)
+        failed = {name: count for name, count in results.items() if count}
+        for name, count in results.items():
+            print(f"{'FAIL' if count else 'ok  '} {name}: {count}")
+        print(f"{len(results) - len(failed)} of {len(results)} checks passed.")
+        if failed:
+            raise SystemExit(1)
+    elif args.action == "capture":
         snapshot = capture_snapshot(args.snapshot_dir)
         print(f"Verified {len(snapshot['artifacts'])} private inputs. {ATTRIBUTION}.")
     else:

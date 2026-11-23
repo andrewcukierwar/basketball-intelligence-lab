@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import tarfile
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from hashlib import sha256
@@ -19,7 +21,13 @@ pytest.importorskip("pbpstats")
 import duckdb  # noqa: E402
 import requests  # noqa: E402
 
-from bil.data import pilot, pilot_parser, pilot_sources  # noqa: E402
+from bil.data import (  # noqa: E402
+    pilot,
+    pilot_normalize,  # noqa: E402
+    pilot_parser,
+    pilot_sources,
+    pilot_starters,
+)
 from bil.data.pilot import compare_periods, summarize_reviews  # noqa: E402
 from bil.data.pilot_inputs import (  # noqa: E402
     GameBox,
@@ -302,3 +310,243 @@ def test_archived_order_replaces_live_reorder_only_for_identical_events() -> Non
         with pytest.raises(GameIssue) as rejected:
             pilot_parser._archived_order(order, blocked)(FakeLoader([1, 2, 3]))
         assert rejected.value.code == "unresolved_event_order" and not blocked
+
+
+def test_starter_candidates_extend_or_trim_partial_sets() -> None:
+    roster = {player: PlayerBox(100, 60_000, 0) for player in range(1, 9)}
+    roster[9] = PlayerBox(100, 0, 0)
+    roster[21] = PlayerBox(200, 60_000, 0)
+    assert pilot_starters.candidate_starters(100, (1, 2, 3, 4), roster) == [
+        (1, 2, 3, 4, player) for player in (5, 6, 7, 8)
+    ]
+    assert len(pilot_starters.candidate_starters(100, (1, 2, 3), roster)) == 10
+    assert pilot_starters.candidate_starters(100, (1, 2, 3, 4, 5, 6), roster)[0] == (1, 2, 3, 4, 5)
+    assert len(pilot_starters.candidate_starters(100, (1, 2, 3, 4, 5, 6), roster)) == 6
+
+
+def test_choose_starters_requires_one_reconstruction() -> None:
+    roster = {player: PlayerBox(100, 60_000, 0) for player in range(1, 8)}
+    gap = pilot_parser.StarterGap(5, {100: (1, 2, 3, 4)})
+
+    def attempt_with(correct: set[int], same: bool) -> Callable[[pilot_parser.Starters], str]:
+        def attempt(starters: pilot_parser.Starters) -> str:
+            if not starters:
+                raise gap
+            chosen = starters[(5, 100)]
+            if chosen[-1] not in correct:
+                raise GameIssue("player_minutes_mismatch", "wrong starter")
+            return "same" if same else str(chosen)
+
+        return attempt
+
+    choice = pilot_starters.choose_starters(attempt_with({6}, False), roster, str)
+    assert choice.starters == {(5, 100): (1, 2, 3, 4, 6)} and choice.candidates_tried == 3
+    assert not choice.immaterial
+    assert pilot_starters.choose_starters(attempt_with({5, 7}, True), roster, str).immaterial
+    for correct, code in ((set(), "unresolved_starters"), ({5, 7}, "ambiguous_starters")):
+        with pytest.raises(GameIssue) as rejected:
+            pilot_starters.choose_starters(attempt_with(correct, False), roster, str)
+        assert rejected.value.code == code
+
+
+def test_conflicting_score_leaves_possession_unresolved(tmp_path: Path) -> None:
+    game, roster, events, possessions = synthetic_game()
+    raw = {
+        event.event_num: RawEvent(
+            {"PLAYER1_TEAM_ID": "200", "PLAYER1_ID": "21", "PLAYER2_ID": "26"}
+            if event.event_type == 8
+            else {},
+            [event.event_num + 1],
+        )
+        for event in events
+    }
+    # Give the home team's made-shot possession to the away team.
+    possessions[0] = Possession(possessions[0].events, game.away_id)
+    rows = normalize_game(game, roster, raw, events, possessions, "fixture")
+    statuses = [row["status"] for row in rows["possession"]]
+    assert statuses[0] == "unresolved" and statuses.count("unresolved") == 1
+    reasons = [row["possession_reason"] for row in rows["score_allocation"]]
+    assert reasons == ["unassigned_dead_ball", "unresolved"]
+    assert all(row["possession_seq"] is None for row in rows["score_allocation"])
+
+    flagged = normalize_game(game, roster, raw, events, possessions, "fixture", frozenset({1}))
+    assert [row["status"] for row in flagged["possession"]][:2] == ["unresolved", "unresolved"]
+
+
+@dataclass
+class LinkedPossession:
+    offense_team_id: int
+    events: list[object]
+    previous_possession: LinkedPossession | None = None
+    next_possession: LinkedPossession | None = None
+
+
+def test_back_to_back_possessions_are_recorded_not_raised() -> None:
+    chain = [LinkedPossession(team, []) for team in (100, 200, 200, 100, 100)]
+    for before, after in zip(chain, chain[1:], strict=False):
+        before.next_possession, after.previous_possession = after, before
+
+    class FlagrantFoul(pilot_parser.Foul):  # type: ignore[misc]
+        is_flagrant = True
+
+    FlagrantFoul.__abstractmethods__ = frozenset()
+    # pbpstats exempts a pair when the earlier possession or the one before it has a flagrant.
+    chain[1].events.append(object.__new__(FlagrantFoul))
+    flagged: set[int] = set()
+
+    class Loader:
+        items = chain
+
+    pilot_parser._record_back_to_back(flagged)(Loader())
+    # The 200-200 pair is exempt because of the flagrant foul; the 100-100 pair is flagged.
+    assert flagged == {3, 4}
+
+
+def test_box_credit_search_moves_only_same_clock_credit(monkeypatch: pytest.MonkeyPatch) -> None:
+    from bil.data.pilot_normalize import CreditChoice, TimedEvent, choose_box_credits
+
+    before = ((1, 2, 3, 4, 5), (21, 22, 23, 24, 25))
+    after = ((1, 2, 3, 4, 6), (21, 22, 23, 24, 25))
+    events = [
+        TimedEvent(Event(n, 3, 1, 600, {}, {}), n, 600_000, 120_000, lineup)  # type: ignore[arg-type]
+        for n, lineup in ((1, before), (2, after))
+    ]
+    roster = {player: PlayerBox(100, 0, 0) for player in range(1, 7)}
+    roster.update({player: PlayerBox(200, 0, 0) for player in range(21, 26)})
+    pm = Counter({player: 1 for player in range(1, 6)})
+    pm.update({player: -1 for player in range(21, 26)})
+    choice = CreditChoice(0, 0, 1, events[0], tuple(events))
+
+    # The box credits the point to the lineup after the same-clock substitution.
+    roster.update({player: PlayerBox(100, 0, 1) for player in (1, 2, 3, 4, 6)})
+    roster.update({player: PlayerBox(200, 0, -1) for player in range(21, 26)})
+    assert choose_box_credits(pm, roster, [choice]) == [(choice, events[1])]
+
+    # Two credit choices at different clocks that each reproduce the box are ambiguous.
+    later = [
+        TimedEvent(item.source, item.seq + 10, 500_000, 220_000, item.lineups) for item in events
+    ]
+    second = CreditChoice(1, 0, 1, later[0], tuple(later))
+    with pytest.raises(GameIssue, match="2 same-clock credit sets"):
+        choose_box_credits(pm, roster, [choice, second])
+
+    monkeypatch.setattr(pilot_normalize, "MAX_CREDIT_COMBINATIONS", 0)
+    with pytest.raises(GameIssue, match="exceeded 0 combinations"):
+        choose_box_credits(pm, roster, [choice])
+    monkeypatch.undo()
+
+    roster[6] = PlayerBox(100, 0, 3)
+    with pytest.raises(GameIssue, match="2 players"):
+        choose_box_credits(pm, roster, [choice])
+
+
+def test_minutes_tolerance_grows_with_truncated_substitution_clocks() -> None:
+    from bil.data.pilot_normalize import reconcile_minutes
+
+    roster = {7: PlayerBox(100, 600_000, 0)}
+    minutes = Counter({7: 603_500})
+    with pytest.raises(GameIssue, match="1 players"):
+        reconcile_minutes(minutes, roster)
+    with pytest.raises(GameIssue):
+        reconcile_minutes(minutes, roster, Counter({7: 1}))
+    reconcile_minutes(minutes, roster, Counter({7: 2}))
+
+
+def test_check_build_passes_synthetic_output_and_catches_defects(tmp_path: Path) -> None:
+    from bil.data.pilot_check import check_build
+
+    game, roster, events, possessions = synthetic_game()
+    raw = {
+        event.event_num: RawEvent(
+            {"PLAYER1_TEAM_ID": "200", "PLAYER1_ID": "21", "PLAYER2_ID": "26"}
+            if event.event_type == 8
+            else {},
+            [event.event_num + 1],
+        )
+        for event in events
+    }
+    rows = normalize_game(game, roster, raw, events, possessions, "synthetic")
+    source: pilot_sources.Artifact = {  # type: ignore[typeddict-item]
+        "artifact_id": "box",
+        "retrieved_at": "2026-11-23T00:00:00+00:00",
+    }
+    when = "2026-11-23T00:00:00+00:00"
+    rows["game"] = [pilot._game_row(game, "regular", source, when)]
+    rows["game_stream"] = [
+        {
+            "game_id": game.game_id,
+            **pilot._version(when, [source], []),
+            "official_game_revision": 1,
+            "parser_version": "synthetic",
+            "reconciliation_view_id": "synthetic",
+            "observed_date": game.played_date.isoformat(),
+            "complete": True,
+            "quality": "accepted",
+            "event_count": len(rows["event"]),
+        }
+    ]
+    rows["game_review"] = [
+        {
+            "game_id": game.game_id,
+            "season_type": "regular",
+            "accepted": True,
+            "reason": None,
+            "strata": [],
+            "v3_periods_reconciled": 4,
+            "v3_box_final_match": True,
+            "v3_periods_match": True,
+            "v3_substitutions_match": True,
+        }
+    ]
+    rows["quality_issue"] = []
+
+    def build(box: dict[int, PlayerBox], name: str) -> Path:
+        output, snapshot = tmp_path / name, tmp_path / f"{name}-snapshot"
+        staging = tmp_path / f"{name}-staging"
+        for folder in (output, snapshot, staging):
+            folder.mkdir()
+        with duckdb.connect() as connection:
+            artifacts = write_tables(connection, [rows], staging, output)
+            connection.execute(
+                "CREATE TABLE logs (game_id VARCHAR, player_id BIGINT, min DOUBLE, plus_minus BIGINT)"
+            )
+            for player, entry in box.items():
+                connection.execute(
+                    "INSERT INTO logs VALUES (?, ?, ?, ?)",
+                    [game.game_id, player, entry.minutes_ms / 60_000, entry.plus_minus],
+                )
+            connection.execute(
+                "COPY logs TO ? (FORMAT PARQUET)", [str(snapshot / "player_game_logs.parquet")]
+            )
+        (output / "manifest.json").write_text(
+            json.dumps({"output_artifacts": artifacts}), encoding="utf-8"
+        )
+        return output
+
+    output = build(roster, "valid")
+    assert not any(check_build(output, tmp_path / "valid-snapshot").values())
+
+    altered = dict(roster)
+    altered[26] = PlayerBox(game.away_id, 2_870_000, -1)
+    failed = check_build(build(altered, "altered"), tmp_path / "altered-snapshot")
+    assert failed["player_plus_minus_exact"] == 1
+    assert failed["player_minutes_within_tolerance"] == 1
+    assert sum(failed.values()) == 2
+
+    # Record a shooter who is on neither the actual nor the credited lineup.
+    rows["event_actor"].append(
+        {
+            "game_id": game.game_id,
+            "stream_revision": 1,
+            "seq": rows["score_allocation"][1]["seq"],
+            "slot": 1,
+            "role": "shooter",
+            "player_id": "26",
+            "team_id": str(game.home_id),
+            "source_slot": "PLAYER1_ID",
+            "raw_actor_id": "26",
+        }
+    )
+    moved = check_build(build(roster, "moved"), tmp_path / "moved-snapshot")
+    assert moved["credited_lineup_contains_shooter"] == 1
+    assert moved["shooters_on_court"] == 1

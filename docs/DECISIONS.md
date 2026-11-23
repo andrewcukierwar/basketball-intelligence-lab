@@ -99,6 +99,33 @@ Maintain append-only decision records. Each entry should identify the date, stat
 
 **Consequences:** V3 and data.nba.com order may differ on same-clock ties. Cross-clock moves still quarantine the game, and reconciliation catches errors that change minutes, plus-minus or scores. An ordering error that changes none of those cannot be ruled out, so analyses should be able to report the `v3_event_order` stratum separately. [Issue #5](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/5)
 
+## ADR-0009 — Resolve pilot anomalies at the narrowest evidenced scope
+
+- **Date:** 2026-11-23
+- **Status:** Provisional pilot decision.
+- **Evidence class:** Original BIL design. The parser behaviors these rules replace are documented in pbpstats 1.3.11, and the clock truncation is observed in the pinned feeds.
+
+**Context:** After ADR-0008, 113 of 1,314 games were quarantined. Most of those games had one local anomaly in an otherwise reconcilable game, and quarantining the whole game removed the most anomaly-prone games: overtime (53 of 79 regular-season games accepted), technical free throws, and same-clock substitutions. A whole-game quarantine was needed only when lineups, scores or minutes could not be established.
+
+**Decision:** Keep every whole-game check, and resolve each anomaly only as far as the evidence allows:
+1. **Period starters.** When events do not give five starters, try every candidate set and accept only one that alone passes all checks, or a set of candidates that all give an identical reconstruction. This replaces the parser's live box-score request.
+2. **Possession labels.** Back-to-back possessions for one team, or a score that contradicts the recorded offense, mark those possessions `unresolved`. They leave the counted possessions, and their points stay in the ledger with the `unresolved` reason. This uses the contract's existing statuses.
+3. **Credited lineups.** When only plus-minus fails, choose among the lineup states at the scoring event's clock. Accept the unique smallest set of up to three changes that reproduces the official box, or several that are indistinguishable at that clock. Actual lineups and minutes do not change.
+4. **Clock precision.** The minutes tolerance adds 1,000 ms per player substitution at a truncated final-minute clock to the 2,000 ms base.
+5. **Last-resort order.** Parse a failed game in archived V3 action order, keeping the cross-clock guard against V2.
+
+**Evidence:**
+- The accepted games rose from 1,201 to 1,290. All 84 playoff games are accepted, as are 78 of 79 regular-season overtime games.
+- The 1,201 games accepted before are row-for-row unchanged.
+- The independent output check passes.
+- Marking a V3 substitution disagreement non-blocking, when V2 otherwise reconciles, recovered no games, so it was not adopted. [EXP-0002](experiment-log.md)
+
+**Consequences:**
+- Box minutes or plus-minus served as selection evidence in 49 accepted games: 31 starter inferences and 18 credit changes. For those games, the box checks confirm uniqueness rather than independent agreement. V3 period scores, the substitution signature and the structural invariants still apply.
+- 54 possessions are unresolved.
+- Every rule leaves a warning and a stratum, so analyses can exclude or compare these games.
+- The remaining 24 quarantines are source conflicts that only manual adjudication could settle, which the pilot does not allow. [Pilot guide](data-pilot.md) [Issue #5](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/5)
+
 ## Decision template
 
 ### ADR-XXXX — Title

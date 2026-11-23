@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from itertools import combinations, product
 from typing import TypeAlias
 
 from bil.data.pilot_inputs import GameBox, GameIssue, PlayerBox, RawEvent
@@ -13,6 +14,14 @@ Row: TypeAlias = dict[str, object]
 Rows: TypeAlias = dict[str, list[Row]]
 Lineups: TypeAlias = tuple[tuple[int, ...], tuple[int, ...]]
 MINUTES_TOLERANCE_MS = 2_000
+# V2 clocks show whole seconds and truncate tenths in a period's final minute, so each of a
+# player's substitutions there can shift that player's minutes by up to one second.
+SUBSECOND_CLOCK_MS = 60_000
+TRUNCATION_ALLOWANCE_MS = 1_000
+# Largest number of same-clock credit changes considered when matching box plus-minus.
+MAX_CREDIT_CHANGES = 3
+# Bound on credit-change combinations evaluated for one game.
+MAX_CREDIT_COMBINATIONS = 200_000
 
 EVENT_KINDS = {
     1: "shot",
@@ -237,12 +246,13 @@ def build_possessions(
     events: list[TimedEvent],
     scope: Row,
     teams: tuple[int, int],
-) -> tuple[list[Row], dict[int, tuple[int, int]]]:
+    unresolved: frozenset[int] = frozenset(),
+) -> tuple[list[Row], dict[int, tuple[int, int, str]]]:
     by_event_num = {item.source.event_num: item for item in events}
-    by_event: dict[int, tuple[int, int]] = {}
+    by_event: dict[int, tuple[int, int, str]] = {}
     rows: list[Row] = []
     prior_end = 1
-    for position in possessions:
+    for index, position in enumerate(possessions):
         items = [by_event_num[event.event_num] for event in position.events]
         first, last = items[0], items[-1]
         if (
@@ -266,6 +276,8 @@ def build_possessions(
         seq = len(rows) + 1
         prior_end = last.seq + 1
         status = "accepted" if last.source.count_as_possession else "excluded"
+        if index in unresolved:
+            status = "unresolved"
         rows.append(
             {
                 **scope,
@@ -279,13 +291,54 @@ def build_possessions(
                 "status": status,
             }
         )
-        by_event.update((item.seq, (seq, offense)) for item in items)
+        by_event.update((item.seq, (seq, offense, status)) for item in items)
     if not rows or any(
         item.seq not in by_event and item.remaining_ms > 0 and item.source.event_type != 12
         for item in events
     ):
         raise GameIssue("missing_possession_events", "Live-clock events have no possession")
     return rows, by_event
+
+
+@dataclass(frozen=True)
+class CreditChoice:
+    """Lineup states that existed at a scoring event's clock and could carry its credit."""
+
+    allocation: int
+    side: int
+    delta: int
+    current: TimedEvent
+    options: tuple[TimedEvent, ...]
+
+
+def same_clock_states(
+    events: list[TimedEvent], index: int, side: int, shooter: int | None
+) -> tuple[TimedEvent, ...]:
+    """Return one event per distinct lineup state at this event's clock.
+
+    The pool is every event at the same period and elapsed time, plus the next event, which
+    carries the state after a substitution that ends the clock group. Only states with the
+    shooter on court for the scoring side qualify.
+    """
+    item = events[index]
+
+    def same(other: TimedEvent) -> bool:
+        return other.source.period == item.source.period and other.elapsed_ms == item.elapsed_ms
+
+    low = index
+    while low > 0 and same(events[low - 1]):
+        low -= 1
+    high = index
+    while high + 1 < len(events) and same(events[high + 1]):
+        high += 1
+    pool = events[low : high + 1]
+    if high + 1 < len(events) and events[high + 1].source.period == item.source.period:
+        pool.append(events[high + 1])
+    states: dict[Lineups, TimedEvent] = {}
+    for other in pool:
+        if shooter in other.lineups[side]:
+            states.setdefault(other.lineups, other)
+    return tuple(states.values())
 
 
 def located(artifact_id: str, line: int) -> dict[str, str]:
@@ -299,17 +352,19 @@ def score_and_events(
     game: GameBox,
     roster: dict[int, PlayerBox],
     by_stint: dict[int, int],
-    by_possession: dict[int, tuple[int, int]],
+    by_possession: dict[int, tuple[int, int, str]],
     artifact_id: str,
-) -> tuple[list[Row], list[Row], list[Row], Counter[int]]:
+) -> tuple[list[Row], list[Row], list[Row], Counter[int], set[int], list[CreditChoice]]:
     teams = game.home_id, game.away_id
+    conflicts: set[int] = set()
+    choices: list[CreditChoice] = []
     points = [0, 0]
     canonical: list[Row] = []
     actors: list[Row] = []
     allocations: list[Row] = []
     pm: Counter[int] = Counter()
     by_num = {item.source.event_num: item for item in events}
-    for item in events:
+    for index, item in enumerate(events):
         event = item.source
         row = raw[event.event_num]
         fields = row.fields
@@ -382,12 +437,21 @@ def score_and_events(
                 getattr(event, "is_technical_ft", False) or getattr(event, "is_flagrant_ft", False)
             )
             poss = by_possession.get(item.seq)
-            if not exempt and (poss is None or poss[1] != team):
-                raise GameIssue(
-                    "unresolved_score_allocation",
-                    "Scoring team lacks control support",
-                    event.event_num,
-                )
+            # Points inside a possession whose offense is unresolved stay in the ledger
+            # without a possession, as the contract's unresolved reason requires.
+            unsure = not exempt and poss is not None and poss[2] == "unresolved"
+            if unsure:
+                poss = None
+            if not exempt and not unsure and (poss is None or poss[1] != team):
+                if poss is None:
+                    raise GameIssue(
+                        "unresolved_score_allocation",
+                        "Scoring event lies outside every possession",
+                        event.event_num,
+                    )
+                # The parser gave this possession to the other team. Leave its offense
+                # unresolved rather than credit points against the recorded control.
+                conflicts.add(poss[0])
             credit = item
             if event.event_type == 3:
                 trigger = getattr(event, "event_for_efficiency_stats", event)
@@ -405,33 +469,134 @@ def score_and_events(
                     "seq": item.seq,
                     "scoring_team_id": str(team),
                     "points_delta": delta,
-                    "possession_seq": None if exempt else poss[0] if poss is not None else None,
+                    "possession_seq": poss[0] if poss is not None and not exempt else None,
                     "credited_stint_seq": by_stint[credit.seq],
-                    "possession_reason": "unassigned_dead_ball" if exempt else "control_possession",
+                    "possession_reason": (
+                        "unassigned_dead_ball"
+                        if exempt
+                        else "unresolved"
+                        if unsure
+                        else "control_possession"
+                    ),
                     "attribution_rule": (
                         "scoring_event_lineup" if credit is item else "free_throw_trigger_lineup"
                     ),
                 }
             )
+            options = same_clock_states(events, index, side, shooter)
+            if len(options) > 1 and credit.lineups in {option.lineups for option in options}:
+                choices.append(CreditChoice(len(allocations) - 1, side, delta, credit, options))
             for player in credit.lineups[side]:
                 pm[player] += delta
             for player in credit.lineups[1 - side]:
                 pm[player] -= delta
     if points != [game.home_points, game.away_points]:
         raise GameIssue("final_score_mismatch", "Parsed scoring does not match the game box")
-    return canonical, actors, allocations, pm
+    return canonical, actors, allocations, pm, conflicts, choices
 
 
-def reconcile_player_boxes(
-    minutes: Counter[int], pm: Counter[int], roster: dict[int, PlayerBox]
+def truncated_boundaries(events: list[TimedEvent], raw: dict[int, RawEvent]) -> Counter[int]:
+    """Count each player's substitutions at a truncated sub-minute clock."""
+    counts: Counter[int] = Counter()
+    for item in events:
+        if item.source.event_type == 8 and 0 < item.remaining_ms < SUBSECOND_CLOCK_MS:
+            fields = raw[item.source.event_num].fields
+            for key in ("PLAYER1_ID", "PLAYER2_ID"):
+                counts[int(fields[key])] += 1
+    return counts
+
+
+def reconcile_minutes(
+    minutes: Counter[int], roster: dict[int, PlayerBox], truncated: Counter[int] | None = None
 ) -> None:
-    errors = [abs(minutes[player] - box.minutes_ms) for player, box in roster.items()]
-    differing = sum(error > MINUTES_TOLERANCE_MS for error in errors)
+    """Compare minutes within 2,000 ms plus one second per truncated substitution clock."""
+    counts = truncated or Counter()
+    errors = {player: abs(minutes[player] - box.minutes_ms) for player, box in roster.items()}
+    differing = sum(
+        error > MINUTES_TOLERANCE_MS + TRUNCATION_ALLOWANCE_MS * counts[player]
+        for player, error in errors.items()
+    )
     if differing:
-        raise GameIssue("player_minutes_mismatch", f"{differing} players; max {max(errors)} ms")
-    pm_differing = sum(pm[player] != box.plus_minus for player, box in roster.items())
-    if pm_differing:
-        raise GameIssue("player_plus_minus_mismatch", f"{pm_differing} players")
+        raise GameIssue(
+            "player_minutes_mismatch", f"{differing} players; max {max(errors.values())} ms"
+        )
+
+
+def _credit_change(choice: CreditChoice, option: TimedEvent) -> Counter[int]:
+    change: Counter[int] = Counter()
+    for sign, state in ((1, option), (-1, choice.current)):
+        for player in state.lineups[choice.side]:
+            change[player] += sign * choice.delta
+        for player in state.lineups[1 - choice.side]:
+            change[player] -= sign * choice.delta
+    return change
+
+
+def choose_box_credits(
+    pm: Counter[int], roster: dict[int, PlayerBox], choices: list[CreditChoice]
+) -> list[tuple[CreditChoice, TimedEvent]]:
+    """Find the unique smallest set of same-clock credit changes that matches box plus-minus.
+
+    Actual lineups and minutes are unchanged. Only which same-clock lineup state carries a
+    scoring event's official plus-minus credit may change. Raise when no set or several
+    sets of the smallest size reproduce every player's box value.
+    """
+    gap = {player: box.plus_minus - pm[player] for player, box in roster.items()}
+    gap = {player: value for player, value in gap.items() if value}
+    if not gap:
+        return []
+    moves = [
+        (choice, option, _credit_change(choice, option))
+        for choice in choices
+        for option in choice.options
+        if option.lineups != choice.current.lineups
+    ]
+    by_choice: dict[int, list[tuple[CreditChoice, TimedEvent, Counter[int]]]] = {}
+    for move in moves:
+        by_choice.setdefault(move[0].allocation, []).append(move)
+    groups = list(by_choice.values())
+    evaluated = 0
+    for size in range(1, MAX_CREDIT_CHANGES + 1):
+        found = []
+        for chosen in combinations(groups, size):
+            for picked in product(*chosen):
+                evaluated += 1
+                if evaluated > MAX_CREDIT_COMBINATIONS:
+                    raise GameIssue(
+                        "player_plus_minus_mismatch",
+                        f"{len(gap)} players; credit search exceeded "
+                        f"{MAX_CREDIT_COMBINATIONS} combinations",
+                    )
+                total: Counter[int] = Counter()
+                for _, _, change in picked:
+                    total.update(change)
+                if {player: value for player, value in total.items() if value} == gap:
+                    found.append([(choice, option) for choice, option, _ in picked])
+        # Solutions that move credit between scores at the same clock, for the same side and
+        # points, to the same lineup state cannot be told apart. Accept the earliest of them.
+        signatures = {
+            tuple(
+                sorted(
+                    (
+                        choice.current.source.period,
+                        choice.current.elapsed_ms,
+                        choice.side,
+                        choice.delta,
+                        option.lineups,
+                    )
+                    for choice, option in solution
+                )
+            )
+            for solution in found
+        }
+        if len(signatures) == 1:
+            return min(found, key=lambda solution: sorted(c.allocation for c, _ in solution))
+        if found:
+            raise GameIssue(
+                "player_plus_minus_mismatch",
+                f"{len(gap)} players; {len(found)} same-clock credit sets match the box",
+            )
+    raise GameIssue("player_plus_minus_mismatch", f"{len(gap)} players")
 
 
 def normalize_game(
@@ -441,16 +606,34 @@ def normalize_game(
     parsed_events: list[ParserEvent],
     parsed_possessions: list[ParserPossession],
     artifact_id: str,
+    unresolved_possessions: frozenset[int] = frozenset(),
 ) -> Rows:
     scope: Row = {"game_id": game.game_id, "stream_revision": 1}
     teams = game.home_id, game.away_id
     events = timed_events(parsed_events, raw, game, roster)
     lineups, stints, by_stint, minutes = build_stints(events, scope, teams)
-    possessions, by_poss = build_possessions(parsed_possessions, events, scope, teams)
-    canonical, actors, allocations, pm = score_and_events(
+    possessions, by_poss = build_possessions(
+        parsed_possessions, events, scope, teams, unresolved_possessions
+    )
+    canonical, actors, allocations, pm, conflicts, choices = score_and_events(
         events, raw, scope, game, roster, by_stint, by_poss, artifact_id
     )
-    reconcile_player_boxes(minutes, pm, roster)
+    if conflicts:
+        # Possession sequence numbers are one-based parser possession indices.
+        unresolved_possessions |= {seq - 1 for seq in conflicts}
+        possessions, by_poss = build_possessions(
+            parsed_possessions, events, scope, teams, unresolved_possessions
+        )
+        canonical, actors, allocations, pm, conflicts, choices = score_and_events(
+            events, raw, scope, game, roster, by_stint, by_poss, artifact_id
+        )
+        if conflicts:
+            raise GameIssue("unresolved_score_allocation", "Possession conflicts persist")
+    reconcile_minutes(minutes, roster, truncated_boundaries(events, raw))
+    for choice, option in choose_box_credits(pm, roster, choices):
+        allocation = allocations[choice.allocation]
+        allocation["credited_stint_seq"] = by_stint[option.seq]
+        allocation["attribution_rule"] = "same_clock_box_credit"
     return {
         "event": canonical,
         "event_actor": actors,

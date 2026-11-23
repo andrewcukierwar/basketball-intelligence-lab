@@ -39,3 +39,24 @@ No model experiments completed yet. Initial priority is data provenance and synt
   - Used as the primary order, V3 recovered 4 of 22 `parser_error` games and 2 of 4 `unsupported_reorder` games. Not adopted.
 - **Limitations / interpretation:** V3 order is a stand-in for data.nba.com order. Same-clock ties that change no reconciled quantity cannot be verified.
 - **Next decision:** Keep the fallback (ADR-0008). Next, investigate period-starter evidence for the 33 `unresolved_starters` games.
+
+### EXP-0002 — Narrow-scope resolution of the remaining 2022–23 pilot quarantines
+- **Status:** Completed
+- **Date:** 2026-11-23
+- **Research question/hypothesis:** Can local anomalies be resolved at event, possession or credit level without relaxing whole-game lineup, score and box checks?
+- **Category:** Original (data pipeline, not a model)
+- **Code SHA / run ID:** Branch `claude/issue-5-remaining-quarantines`. Steps were measured on targeted builds of the quarantined games.
+- **Datasets/checksums and cutoff:** Pinned issue #5 snapshot. Retrospective capture.
+- **Train / validation / test periods:** Not applicable.
+- **Model and configuration:** pbpstats 1.3.11 offline. Parser version `pbpstats-1.3.11-bil-v5`.
+- **Baselines:** Build `issue-5-v3-order-v2` with 1,201 accepted games and 113 quarantined.
+- **Metrics and uncertainty:** Recovered games under unchanged whole-game checks, and violations from the independent output check.
+- **Results:** Cumulative recovery of the 113 quarantined games, in the order applied:
+  1. Starter search: 29 of 33 `unresolved_starters` games. Two more were "immaterial", because the parser discarded the early choice.
+  2. Unresolved possessions: 60 of 113 cumulative. This also recovered the two remaining starter games and every back-to-back parser error except one.
+  3. Same-clock credit search: 78 cumulative. Eighteen games used it, and four plus-minus games stayed ambiguous or unsolved.
+  4. V3-primary retry: 85 cumulative.
+  5. Truncation-aware minutes tolerance: 89 cumulative.
+  6. Negative result: treating V3 substitution disagreements as non-blocking recovered none of the 8 games, because their V2 reconstruction also failed. It was reverted.
+- **Limitations / interpretation:** Box values were selection evidence for 49 games. The unresolved possessions are concentrated around held-ball jump balls and flagrant fouls.
+- **Next decision:** Accept the pilot at M1 level with the remaining 24 quarantines documented (ADR-0009).
