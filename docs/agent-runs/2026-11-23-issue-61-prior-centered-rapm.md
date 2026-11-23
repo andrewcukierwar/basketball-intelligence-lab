@@ -7,7 +7,7 @@
 
 ## Scope and decisions
 
-Added `fit_prior_rapm` using the existing sparse possession design and the same solver as `fit_rapm`. The new call accepts separate positive role penalties and prior maps in points per 100 possessions, with positive defensive values lowering opponent scoring. Missing entries use zero. A player absent from all fit rows has no output coefficient. A player unobserved in one role retains that role's aligned prior. The free intercept and role-centered deviations give the minimum penalty solution within the set of prediction-equivalent effects. The implementation keeps extreme penalties in one role from dominating the numerical scale of the other role. [Estimator contract and evidence](../research/rapm-prior-centered.md) · [ADR-0013](../DECISIONS.md#adr-0013--center-rapm-deviations-on-the-supplied-role-priors)
+Added `fit_prior_rapm` using the existing sparse possession design and the same solver as `fit_rapm`. The new call accepts separate positive role penalties and prior maps in points per 100 possessions, with positive defensive values lowering opponent scoring. Missing entries use zero. A player absent from all fit rows has no output coefficient. A player unobserved in one role retains that role's aligned prior. The free intercept and role-centered deviations give the minimum penalty solution within the set of prediction-equivalent effects. The implementation keeps extreme penalties in one role from dominating the numerical scale of the other role. [Estimator contract and evidence](../research/rapm-prior-centered.md) · [ADR-0014](../decisions/0014-prior-centered-rapm.md)
 
 ## Verification
 
