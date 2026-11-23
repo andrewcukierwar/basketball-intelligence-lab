@@ -19,6 +19,7 @@ from pbpstats.data_loader.stats_nba.possessions.loader import (  # type: ignore[
 )
 from pbpstats.resources.enhanced_pbp.rebound import (  # type: ignore[import-untyped]
     EventOrderError,
+    Rebound,
 )
 from pbpstats.resources.enhanced_pbp.stats_nba.start_of_period import (  # type: ignore[import-untyped]
     StatsStartOfPeriod,
@@ -128,7 +129,8 @@ def parse_game(
             # recheck rebound order after its fallback reorder, so check it here.
             for event in events:
                 try:
-                    getattr(event, "missed_shot", None)
+                    if isinstance(event, Rebound):
+                        event.missed_shot
                 except EventOrderError as error:
                     raise GameIssue(
                         "unresolved_event_order",

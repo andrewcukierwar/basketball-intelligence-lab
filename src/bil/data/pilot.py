@@ -201,7 +201,8 @@ def _build_game(
             if v3_order:
                 labels.append("v3_event_order")
                 warning = GameIssue(
-                    "v3_event_order_applied", "Archived V3 action order replaced V2 file order"
+                    "v3_event_order_applied",
+                    "Parser rebound repairs failed; archived V3 action order replaced V2 order",
                 )
                 issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
             periods_match, periods_reconciled = compare_periods(parsed, game, periods)
