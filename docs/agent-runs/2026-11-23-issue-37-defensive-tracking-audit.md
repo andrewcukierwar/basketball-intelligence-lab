@@ -1,7 +1,7 @@
 # Issue #37 public defensive tracking audit
 
 - **Date** 2026-11-23
-- **Status** Awaiting independent review
+- **Status** Independently reviewed
 - **Issue** [#37](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/37)
 - **Branch** `codex/issue-37-defensive-tracking-audit`, based on `d3d01f3`
 
@@ -24,6 +24,8 @@ Audited public NBA defensive tracking and hustle for regular season and playoffs
 | Linkage and opportunities | Positive-minute opponents joined on game and player IDs. No duplicate matchup keys. All 1,412,492 SportsDataverse rows passed audited numeric opportunity checks. |
 | Confirmatory isolation | The downloaded filenames and profiler are limited to the six audit seasons. |
 | Repository checks | `pytest -q` passed all 43 tests. Ruff lint and format, mypy on `src` and the profiler, and `git diff --check` passed. |
+
+The independent reviewer verified all 42 pins and reproduced the 2019–20 regular and 2022–23 playoff partition results exactly. No acceptance blockers remained. The #37 and #51 changes to the source ledger combine cleanly in a local integration checkout.
 
 ## Next actions
 
