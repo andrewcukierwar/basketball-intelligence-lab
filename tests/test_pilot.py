@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import tarfile
 from collections import Counter
 from collections.abc import Callable
@@ -430,3 +431,85 @@ def test_minutes_tolerance_grows_with_truncated_substitution_clocks() -> None:
     with pytest.raises(GameIssue):
         reconcile_minutes(minutes, roster, Counter({7: 1}))
     reconcile_minutes(minutes, roster, Counter({7: 2}))
+
+
+def test_check_build_passes_synthetic_output_and_catches_defects(tmp_path: Path) -> None:
+    from bil.data.pilot_check import check_build
+
+    game, roster, events, possessions = synthetic_game()
+    raw = {
+        event.event_num: RawEvent(
+            {"PLAYER1_TEAM_ID": "200", "PLAYER1_ID": "21", "PLAYER2_ID": "26"}
+            if event.event_type == 8
+            else {},
+            [event.event_num + 1],
+        )
+        for event in events
+    }
+    rows = normalize_game(game, roster, raw, events, possessions, "synthetic")
+    source: pilot_sources.Artifact = {  # type: ignore[typeddict-item]
+        "artifact_id": "box",
+        "retrieved_at": "2026-11-23T00:00:00+00:00",
+    }
+    when = "2026-11-23T00:00:00+00:00"
+    rows["game"] = [pilot._game_row(game, "regular", source, when)]
+    rows["game_stream"] = [
+        {
+            "game_id": game.game_id,
+            **pilot._version(when, [source], []),
+            "official_game_revision": 1,
+            "parser_version": "synthetic",
+            "reconciliation_view_id": "synthetic",
+            "observed_date": game.played_date.isoformat(),
+            "complete": True,
+            "quality": "accepted",
+            "event_count": len(rows["event"]),
+        }
+    ]
+    rows["game_review"] = [
+        {
+            "game_id": game.game_id,
+            "season_type": "regular",
+            "accepted": True,
+            "reason": None,
+            "strata": [],
+            "v3_periods_reconciled": 4,
+            "v3_box_final_match": True,
+            "v3_periods_match": True,
+            "v3_substitutions_match": True,
+        }
+    ]
+    rows["quality_issue"] = []
+
+    def build(box: dict[int, PlayerBox], name: str) -> Path:
+        output, snapshot = tmp_path / name, tmp_path / f"{name}-snapshot"
+        staging = tmp_path / f"{name}-staging"
+        for folder in (output, snapshot, staging):
+            folder.mkdir()
+        with duckdb.connect() as connection:
+            artifacts = write_tables(connection, [rows], staging, output)
+            connection.execute(
+                "CREATE TABLE logs (game_id VARCHAR, player_id BIGINT, min DOUBLE, plus_minus BIGINT)"
+            )
+            for player, entry in box.items():
+                connection.execute(
+                    "INSERT INTO logs VALUES (?, ?, ?, ?)",
+                    [game.game_id, player, entry.minutes_ms / 60_000, entry.plus_minus],
+                )
+            connection.execute(
+                "COPY logs TO ? (FORMAT PARQUET)", [str(snapshot / "player_game_logs.parquet")]
+            )
+        (output / "manifest.json").write_text(
+            json.dumps({"output_artifacts": artifacts}), encoding="utf-8"
+        )
+        return output
+
+    output = build(roster, "valid")
+    assert not any(check_build(output, tmp_path / "valid-snapshot").values())
+
+    altered = dict(roster)
+    altered[26] = PlayerBox(game.away_id, 2_870_000, -1)
+    failed = check_build(build(altered, "altered"), tmp_path / "altered-snapshot")
+    assert failed["player_plus_minus_exact"] == 1
+    assert failed["player_minutes_within_tolerance"] == 1
+    assert sum(failed.values()) == 2

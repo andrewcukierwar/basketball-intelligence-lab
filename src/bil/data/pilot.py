@@ -16,6 +16,7 @@ from typing import cast
 
 import duckdb
 
+from bil.data.pilot_check import check_build
 from bil.data.pilot_inputs import (
     GAME_PREFIXES,
     GameBox,
@@ -500,8 +501,19 @@ def main() -> None:
     build.add_argument("output_dir", type=Path)
     build.add_argument("--code-commit", required=True)
     build.add_argument("--game-id", action="append", type=nba_game_id)
+    check = subcommands.add_parser("check", help="check an exported build's invariants")
+    check.add_argument("output_dir", type=Path)
+    check.add_argument("snapshot_dir", type=Path)
     args = cli.parse_args()
-    if args.action == "capture":
+    if args.action == "check":
+        results = check_build(args.output_dir, args.snapshot_dir)
+        failed = {name: count for name, count in results.items() if count}
+        for name, count in results.items():
+            print(f"{'FAIL' if count else 'ok  '} {name}: {count}")
+        print(f"{len(results) - len(failed)} of {len(results)} checks passed.")
+        if failed:
+            raise SystemExit(1)
+    elif args.action == "capture":
         snapshot = capture_snapshot(args.snapshot_dir)
         print(f"Verified {len(snapshot['artifacts'])} private inputs. {ATTRIBUTION}.")
     else:
