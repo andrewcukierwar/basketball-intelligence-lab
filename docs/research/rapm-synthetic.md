@@ -26,6 +26,8 @@ The five-on-five design admits two uniform shifts. Adding $a$ to every offense c
 
 Positive ridge makes the objective strictly convex with at least one positive-weight row and a free intercept. The data can still leave player contrasts unidentified. Identical player columns within either block receive equal coefficients under this penalty. Near-identical columns and small exposures can make individual estimates sensitive to the penalty.
 
+The [prior-centered extension](rapm-prior-centered.md) retains the possession design and supports separate role penalties.
+
 ## Verification and sensitivity
 
 Run the tests and reproduce the generated experiment with the locked dependencies.
