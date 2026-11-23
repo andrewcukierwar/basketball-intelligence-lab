@@ -5,7 +5,7 @@
 - **Related issues:** None; scoped repository policy setup
 - **Branch:** `chore/add-agent-operating-policy`
 - **Commit reference:** `cfdebeab7316ef0623948cee82e5eb70afd0a0c8` (initial AGENTS.md addition)
-- **PR:** To be linked after creation
+- **PR:** https://github.com/andrewcukierwar/basketball-intelligence-lab/pull/7
 
 ## Objective and authorized scope
 
