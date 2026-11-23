@@ -1,7 +1,7 @@
 # Issue #51 historical feed coverage audit
 
 - **Date** 2026-11-23
-- **Status** Awaiting independent review
+- **Status** Independently reviewed
 - **Issue** [#51](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/51)
 - **Branch** `codex/issue-51-feed-coverage`, based on `d3d01f3`
 
@@ -29,6 +29,8 @@ The private local capture is in `data/raw/historical-feed-audit/2026-11-23`. It 
 | Holdout isolation | The acquisition queue and scanner excluded payloads for starting years 2025 and 2026. Verified no matching payload files in the capture. |
 | Repository checks | `pytest -q`: 43 passed. `ruff check .`, `ruff format --check .`, `mypy src scripts/audit_feed_coverage.py` and `git diff --check` all passed. |
 
+The independent reviewer confirmed the holdout inventory boundary and all 412 measured local assets. A targeted 2016–17 replay reproduced each of the four register slices exactly. No acceptance blockers remained.
+
 ## Next actions
 
-Review and land #51, then use the pinned captures and era-specific coverage gates for [#25](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/25) and [#52](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/52). Split [#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53) into the proposed historical batches before implementation. Any season build must run the game-level checks and record accepted, quarantined, and evidence-limited games. [#42](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/42) governs confirmatory outcome access.
+Land #51, then use the pinned captures and era-specific coverage gates for [#25](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/25) and [#52](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/52). Split [#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53) into the proposed historical batches before implementation. Any season build must run the game-level checks and record accepted, quarantined, and evidence-limited games. [#42](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/42) governs confirmatory outcome access.
