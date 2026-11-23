@@ -79,13 +79,23 @@ def test_matches_independent_dense_weighted_reference() -> None:
     np.testing.assert_allclose(indicators @ actual, indicators @ expected, rtol=0, atol=1e-8)
 
 
-def test_ridge_leaves_intercept_unpenalized() -> None:
+@pytest.mark.parametrize("ridge", [1e4, 1e28])
+def test_ridge_leaves_intercept_unpenalized(ridge: float) -> None:
     rows = [replace(ROW, points=0, weight=1), replace(ROW, points=2, weight=3)]
-    fit = fit_rapm(rows, ridge=1e4)
+    fit = fit_rapm(rows, ridge=ridge)
     assert fit.intercept == pytest.approx(150, rel=0, abs=1e-8)
     np.testing.assert_allclose(
         list(fit.offense.values()) + list(fit.defense.values()), 0, atol=1e-8
     )
+
+
+def test_rescaling_loss_and_penalty_preserves_the_fit() -> None:
+    rows = generate_possessions(64, seed=721, noisy=True)
+    fit = fit_rapm(rows, ridge=7.5)
+    scaled = fit_rapm([replace(row, weight=1e-280) for row in rows], ridge=7.5e-280)
+    assert scaled.intercept == pytest.approx(fit.intercept, rel=0, abs=1e-8)
+    assert scaled.offense == pytest.approx(fit.offense, rel=0, abs=1e-8)
+    assert scaled.defense == pytest.approx(fit.defense, rel=0, abs=1e-8)
 
 
 def test_aliased_players_share_each_ridge_coefficient() -> None:

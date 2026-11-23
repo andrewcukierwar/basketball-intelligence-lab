@@ -8,8 +8,8 @@ from math import isfinite, sqrt
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.sparse import csr_matrix, eye, hstack, vstack  # type: ignore[import-untyped]
-from scipy.sparse.linalg import lsqr  # type: ignore[import-untyped]
+from scipy.sparse import csr_matrix  # type: ignore[import-untyped]
+from scipy.sparse.linalg import LinearOperator, lsqr  # type: ignore[import-untyped]
 
 _LINEUP_SIZE = 5
 _ROW_WIDTH = 1 + 2 * _LINEUP_SIZE
@@ -94,33 +94,61 @@ def fit_rapm(possessions: Sequence[Possession], *, ridge: float) -> RAPMFit:
     if not isfinite(ridge) or ridge <= 0:
         raise ValueError("ridge must be positive and finite")
     design = build_design(possessions)
+    row_count = len(possessions)
     player_count = len(design.player_ids)
     player_columns = 2 * player_count
     root_weights = np.sqrt(design.weights)
-    data = design.matrix.multiply(root_weights[:, None])
-    penalty = hstack((csr_matrix((player_columns, 1)), eye(player_columns) * sqrt(ridge)))
-    system = vstack((data, penalty), format="csr")
+    # Project out the free intercept without materializing dense centered player columns.
+    max_root_weight = float(root_weights.max())
+    intercept_direction = root_weights / max_root_weight
+    intercept_direction /= np.linalg.norm(intercept_direction)
+    # Common system and response scalings keep LSQR's norms in range.
+    root_penalty = sqrt(ridge)
+    system_scale = max(max_root_weight, root_penalty)
+    root_penalty /= system_scale
+    scaled_weights = root_weights / system_scale
+    players = design.matrix[:, 1:]
+    weighted_players = players.multiply(scaled_weights[:, None]).tocsr()
 
-    # Shift the origin of the response using the free intercept before solving.
-    origin = design.response[0]
-    with np.errstate(over="ignore"):
-        weighted_response = root_weights * (design.response - origin)
-    if not np.all(np.isfinite(weighted_response)):
-        raise ValueError("weighted response must be representable in float64")
-    target = np.concatenate((weighted_response, np.zeros(player_columns)))
+    def project(values: NDArray[np.float64]) -> NDArray[np.float64]:
+        return values - intercept_direction * (intercept_direction @ values)
+
+    def matvec(coefficients: NDArray[np.float64]) -> NDArray[np.float64]:
+        return np.concatenate(
+            (project(weighted_players @ coefficients), root_penalty * coefficients)
+        )
+
+    def rmatvec(values: NDArray[np.float64]) -> NDArray[np.float64]:
+        projected: NDArray[np.float64] = weighted_players.T @ project(values[:row_count])
+        return projected + root_penalty * values[row_count:]
+
+    system = LinearOperator(
+        (row_count + player_columns, player_columns),
+        matvec=matvec,
+        rmatvec=rmatvec,
+        dtype=np.float64,
+    )
+    response_scale = max(1.0, float(np.max(design.response)))
+    normalized_response = design.response / response_scale
+    target = np.concatenate(
+        (project(scaled_weights * normalized_response), np.zeros(player_columns))
+    )
     solution, stop, *_ = lsqr(system, target, atol=1e-12, btol=1e-12)
     if stop not in _CONVERGED or not np.all(np.isfinite(solution)):
         raise RuntimeError(f"sparse RAPM solve failed to converge (LSQR stop {stop})")
 
-    offense = solution[1 : 1 + player_count]
-    defense = solution[1 + player_count :]
-    offense_mean = float(np.mean(offense))
-    defense_mean = float(np.mean(defense))
-    intercept = float(origin + solution[0] + _LINEUP_SIZE * (offense_mean - defense_mean))
-    if not isfinite(intercept):
-        raise RuntimeError("sparse RAPM intercept is not representable in float64")
+    offense = solution[:player_count]
+    defense = solution[player_count:]
+    offense -= np.mean(offense)
+    defense -= np.mean(defense)
+    intercept = float((intercept_direction**2) @ (normalized_response - players @ solution))
+    with np.errstate(over="ignore"):
+        solution *= response_scale
+        intercept *= response_scale
+    if not isfinite(intercept) or not np.all(np.isfinite(solution)):
+        raise RuntimeError("sparse RAPM coefficients are not representable in float64")
     return RAPMFit(
         intercept,
-        dict(zip(design.player_ids, map(float, offense - offense_mean), strict=True)),
-        dict(zip(design.player_ids, map(float, defense - defense_mean), strict=True)),
+        dict(zip(design.player_ids, map(float, offense), strict=True)),
+        dict(zip(design.player_ids, map(float, defense), strict=True)),
     )
