@@ -1,7 +1,7 @@
 # Agent run — OpenRAPM solver benchmark
 
 - **Date:** 2026-11-23
-- **Status:** Implementation and verification complete. Independent review and publication pending.
+- **Status:** Implementation and independent verification complete.
 - **Issue:** [#21](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/21)
 - **Branch and implementation:** `codex/issue-21-open-rapm-benchmark`, base `d3d01f3`, code and results `5feced5`.
 
@@ -18,8 +18,10 @@ Benchmark BIL's sparse zero-prior solver using generated possessions, without ac
 | Run with an altered copy of the reference source | Rejected the file on SHA-256 mismatch. |
 | `python -m pytest -q`, `ruff check`, `ruff format --check`, `mypy src`, `git diff --check` | 43 tests passed with the existing locked environment. All other checks passed. |
 
+An independent reviewer confirmed the upstream blob IDs and repeated all four numerical cases. The rerun reproduced the documented deltas and found no acceptance blockers.
+
 The first offline attempt lacked a cached pandas wheel for Python 3.14. One online dependency resolution made subsequent runs offline. No repository dependency changes were needed.
 
 ## Next action
 
-Review the precise implementation diff and benchmark evidence before marking the issue complete. Use the historical RAPM row contract and rolling-origin evaluation for subsequent real-data fit work.
+Use this benchmark alongside the historical RAPM row contract and rolling-origin evaluation when reviewing subsequent real-data fit work.
