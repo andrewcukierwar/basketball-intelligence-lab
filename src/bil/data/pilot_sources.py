@@ -88,6 +88,59 @@ SOURCES = (
 )
 
 
+BENTES_BASE = "https://github.com/ramirobentes/nba_data/releases/download"
+
+# Independent comparison evidence. These files are never inputs to a pilot build.
+EVIDENCE_SOURCES = (
+    _archive(
+        "datanba_2022.tar.xz",
+        "8be05e5ae4b598b115ecfed8d4c9cef5cd324a21d6383bd8dd185401f2ebbf69",
+        11_310_412,
+    ),
+    _archive(
+        "datanba_po_2022.tar.xz",
+        "b112928125780366f9b4dc40c06d480b64e738d8b3c797a37de91eb87a1540ba",
+        743_948,
+    ),
+    _archive(
+        "cdnnba_2022.tar.xz",
+        "de895e3474365fc14b028f514eb0f8c9c1503b95d3f1a5aef5a408305ddfb41f",
+        18_705_272,
+    ),
+    _archive(
+        "cdnnba_po_2022.tar.xz",
+        "2f20055f6d7d54fdc74fb910ef8db0901166fca3a701a2a4f50448af3a32298c",
+        1_218_416,
+    ),
+    _archive(
+        "pbpstats_2022.tar.xz",
+        "a4847be1f5adeda20453b14cfcd7e67aaffb85398b00bdacd15ae00b3f91d710",
+        15_206_248,
+    ),
+    _archive(
+        "pbpstats_po_2022.tar.xz",
+        "5f7cf15db7978cd553871e884253a6c69d981ad840e9b2261d828c0e514802c3",
+        1_033_288,
+    ),
+    Source(
+        "lineup_stats_regular_2023.parquet",
+        f"{BENTES_BASE}/lineup_stats/lineup_stats_regular_2023.parquet",
+        "e99075847d7748db1ea414b888fc00cfb9ee7bb9727e58794ef2e7fccbe2efb7",
+        1_469_829,
+        "bentes",
+        "github-release-asset-582067188",
+    ),
+    Source(
+        "lineup_stats_playoffs_2023.parquet",
+        f"{BENTES_BASE}/lineup_stats/lineup_stats_playoffs_2023.parquet",
+        "441759669ae9f7afbf39f4e40dc82dc4fe2378148d3e7036ad3f10b89d390260",
+        88_694,
+        "bentes",
+        "github-release-asset-582066033",
+    ),
+)
+
+
 class Artifact(TypedDict):
     artifact_id: str
     name: str
@@ -127,8 +180,9 @@ def verify_artifact(path: Path, source: Source) -> None:
         raise ValueError(f"Source bytes differ from the audited snapshot for {source.name}")
 
 
-def capture_snapshot(directory: Path) -> Snapshot:
+def capture_snapshot(directory: Path, sources: tuple[Source, ...] | None = None) -> Snapshot:
     """Store one complete acquisition in a new, private directory."""
+    sources = SOURCES if sources is None else sources
     directory.mkdir(mode=0o700, parents=True)
     snapshot: Snapshot = {
         "schema_version": 1,
@@ -138,7 +192,7 @@ def capture_snapshot(directory: Path) -> Snapshot:
         "artifacts": [],
     }
     try:
-        for source in SOURCES:
+        for source in sources:
             path = directory / source.name
             with urlopen(source.uri, timeout=45) as response:
                 with path.open("xb") as target:
@@ -169,7 +223,8 @@ def capture_snapshot(directory: Path) -> Snapshot:
     return snapshot
 
 
-def load_snapshot(directory: Path) -> Snapshot:
+def load_snapshot(directory: Path, sources: tuple[Source, ...] | None = None) -> Snapshot:
+    sources = SOURCES if sources is None else sources
     snapshot = cast(Snapshot, json.loads((directory / "snapshot.json").read_text(encoding="utf-8")))
     if (
         snapshot["schema_version"] != 1
@@ -179,9 +234,9 @@ def load_snapshot(directory: Path) -> Snapshot:
     ):
         raise ValueError("Invalid 2022–23 source snapshot")
     records = {row["name"]: row for row in snapshot["artifacts"]}
-    if len(records) != len(snapshot["artifacts"]) or records.keys() != {s.name for s in SOURCES}:
+    if len(records) != len(snapshot["artifacts"]) or records.keys() != {s.name for s in sources}:
         raise ValueError("Snapshot must contain each pinned artifact exactly once")
-    for source in SOURCES:
+    for source in sources:
         record = records[source.name]
         if (
             record["uri"] != source.uri

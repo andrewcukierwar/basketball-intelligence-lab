@@ -148,3 +148,47 @@ The thresholds below were set at this milestone after the results were observed.
 | Exceptions | Every quarantine and resolution rule has a reason, warning or stratum | `quality_issue` and `game_review` |
 
 The dataset is fit for private RAPM development under the recorded strata. It makes no claim of historical point-in-time availability or of broader usage rights.
+
+## External verification
+
+A separate, pinned evidence snapshot holds four further sources. None of them are build inputs.
+- Archived **data.nba.com** play-by-play. It has event order (`ord`) and offense team (`oftid`).
+- Archived **NBA liveData** (cdn.nba.com) play-by-play. It has the possession team, tenth-second clocks and between-period substitutions.
+- **pbpstats.com** possessions, which count possessions with the parser's online fallbacks and override files.
+- **Bentes** lineup stints, a separate lineup reconstruction.
+
+The NBA feeds come from the Shufinskiy revision the pilot already pins. Bentes comes from the release assets in the [source audit](data-sources.md). Every one of these sources derives from the NBA's own event log. Agreement therefore shows consistent archiving and parsing, not external truth, and an error in the official log would be shared by all of them. The data.nba and liveData feeds share order numbers, so treat them as one publication path that is separate from V2 and V3. Bentes reproduces the official box minutes almost everywhere, which suggests it corrects lineups with box-derived data. Its agreement is evidence for BIL's lineups, not for the box.
+
+```sh
+.venv/bin/python -m bil.data.pilot capture-evidence data/raw/2022-23/issue-5-evidence-v1
+.venv/bin/python -m bil.data.pilot evidence \
+  data/processed/2022-23/issue-5-v5 \
+  data/raw/2022-23/issue-5-v1 \
+  data/raw/2022-23/issue-5-evidence-v1
+```
+
+Results for the M1 build `issue-5-v5`:
+
+| Comparison | Result |
+| --- | --- |
+| Lineups against Bentes, time-weighted over all 1,290 accepted games (all covered) | 99.97% of court time agrees, and the lowest game is 99.75%. Only two disagreements last more than 2 seconds. Both are substitutions logged late with an earlier clock, where the official box minutes match BIL to the second and not Bentes. The rest are boundary rounding of 2 s or less. |
+| Lineups in lower-trust strata | The lowest game share is at least 99.75% in every stratum: 99.89% for `inferred_starters`, 99.90% for `same_clock_box_credit`, and 99.75% for `v3_primary_order`. |
+| Inferred starters | All 35 inferred team-periods match the single Bentes stint for that team at the period start. All 33 after period 1 also match BIL's last stint of the previous period plus liveData's between-period substitutions. That second check is conditional on BIL's lineup at the end of the period. |
+| Possession offense on live-ball events (shots, free throws, turnovers) in accepted possessions | 323,324 of 323,358 events agree with data.nba, and liveData gives the same result. 254,954 of 254,979 possessions agree on every such event. These events mostly name the acting team, so this check confirms event attribution and joining more than possession boundaries. Whole-possession comparisons differ only where dead-ball substitutions after a final free throw sit on different sides of the boundary. |
+| Counted possessions against pbpstats.com | Equal in 1,257 of 1,290 games and within two in 1,283. The totals are 256,042 here and 256,062 for pbpstats.com. |
+| Unresolved possessions | Of the 49 with live-ball events, data.nba agrees with the parser's label on 28 and contradicts it on 11. The feed can therefore settle most of them. |
+| Event order against data.nba | All 87 games parsed in V3 order match data.nba's order exactly, which is the order pbpstats would have requested online. This confirms ADR-0008 directly. The 1,203 games parsed in V2 file order have 578 adjacent reversals in 408 games. |
+| Period-end scores, compared per period | liveData and data.nba agree on 5,346 of 5,349 periods. V3 alone differs from the other two in games `0022200107` and `0022200466`. data.nba alone differs in `0022201098`, where its period keys are shifted, so data.nba period labels are not fully reliable. |
+
+### What the evidence says about the 24 quarantines
+
+| Group | Games | Evidence |
+| --- | ---: | --- |
+| V3 period-score defect | 2 | V2, liveData and data.nba agree on every period score, so the V3 check rejected a correct V2 reconstruction. |
+| V2 scoring defect | 1 | V2 carries four phantom away points (`0022201076`). V3, liveData, data.nba and the box agree with each other. |
+| Play-by-play substitution defect | 10 | Seven V3-substitution and three minutes-swap games. V2 and liveData agree on every substitution group and on the between-period substitutions. The official box and Bentes instead place a different player on court for one window of 13 to 127 seconds. |
+| Event coverage | 1 | V3 lacks some V2 events (`0022200704`). |
+| Plus-minus without a unique credit | 4 | Bentes matches the box plus-minus in two of these games and misses it by two players in the other two. |
+| Parser limitations | 6 | Unsupported cross-clock reorders (3), a missing period start, a parser error and a substitution conflict. Bentes reproduces the box minutes and plus-minus in all six, so the data can be reconciled, but not by the pinned parser path. |
+
+The quarantine of the 10 substitution-defect games is correct. Recovering them would make a box-consistent third reconstruction a source of record, which needs a separate decision. The two V3 period-score defects and the 11 resolvable unresolved possessions could be recovered by an explicit three-feed adjudication rule. These are proposals and are not applied. [ADR-0010](DECISIONS.md)

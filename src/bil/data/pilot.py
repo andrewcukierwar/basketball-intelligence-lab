@@ -17,6 +17,7 @@ from typing import cast
 import duckdb
 
 from bil.data.pilot_check import check_build
+from bil.data.pilot_evidence import compare as compare_evidence
 from bil.data.pilot_inputs import (
     GAME_PREFIXES,
     GameBox,
@@ -37,6 +38,7 @@ from bil.data.pilot_output import read_game_reviews, write_tables
 from bil.data.pilot_parser import PARSER_VERSION, ParserEvent, Starters, parse_game
 from bil.data.pilot_sources import (
     ATTRIBUTION,
+    EVIDENCE_SOURCES,
     NBA_TERMS,
     Artifact,
     capture_snapshot,
@@ -501,6 +503,17 @@ def main() -> None:
     build.add_argument("output_dir", type=Path)
     build.add_argument("--code-commit", required=True)
     build.add_argument("--game-id", action="append", type=nba_game_id)
+    evidence = subcommands.add_parser(
+        "capture-evidence", help="capture pinned comparison feeds that never enter a build"
+    )
+    evidence.add_argument("snapshot_dir", type=Path)
+    compare = subcommands.add_parser(
+        "evidence", help="compare an exported build with the pinned evidence feeds"
+    )
+    compare.add_argument("output_dir", type=Path)
+    compare.add_argument("snapshot_dir", type=Path)
+    compare.add_argument("evidence_dir", type=Path)
+    compare.add_argument("--report", type=Path, help="write the full JSON report here")
     check = subcommands.add_parser("check", help="check an exported build's invariants")
     check.add_argument("output_dir", type=Path)
     check.add_argument("snapshot_dir", type=Path)
@@ -513,6 +526,18 @@ def main() -> None:
         print(f"{len(results) - len(failed)} of {len(results)} checks passed.")
         if failed:
             raise SystemExit(1)
+    elif args.action == "evidence":
+        load_snapshot(args.evidence_dir, EVIDENCE_SOURCES)
+        recorded = json.loads((args.output_dir / "manifest.json").read_text(encoding="utf-8"))
+        if recorded["source_snapshot_sha256"] != sha256_file(args.snapshot_dir / "snapshot.json"):
+            raise SystemExit("The build was not made from this source snapshot")
+        report = compare_evidence(args.output_dir, args.snapshot_dir, args.evidence_dir)
+        if args.report:
+            write_json(args.report, report)
+        print(json.dumps(report, indent=2, default=str))
+    elif args.action == "capture-evidence":
+        snapshot = capture_snapshot(args.snapshot_dir, EVIDENCE_SOURCES)
+        print(f"Verified {len(snapshot['artifacts'])} private evidence files. {ATTRIBUTION}.")
     elif args.action == "capture":
         snapshot = capture_snapshot(args.snapshot_dir)
         print(f"Verified {len(snapshot['artifacts'])} private inputs. {ATTRIBUTION}.")

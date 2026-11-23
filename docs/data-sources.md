@@ -53,6 +53,21 @@ Bentes uses the season's **ending** year, so `2023` is 2022–23. Shufinskiy use
 | [SportsDataverse ESPN events](https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_nba_pbp/play_by_play_2023.parquet) | 20,987,371 | SHA-256 `f3fac3a58cf1be8813f1f4332edb7fc8d83936df703892a700095d62f71da886` |
 | [SportsDataverse ESPN player boxes](https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_nba_player_boxscores/player_box_2023.parquet) | 595,949 | SHA-256 `968d835cd04b10533c5b5af8c0e41bf0154a73782e9446c76f765109223e8679` |
 
+## Pilot evidence snapshot
+
+These assets were captured on 2026-11-23 with `python -m bil.data.pilot capture-evidence`. They are used only to verify builds and never enter one. Each Shufinskiy download matched the Git blob ID in the pinned tree, and the Bentes stints matched the SHA-256 values listed above. The rights posture is the same as for the pilot inputs: private, noncommercial comparison with no redistribution. [Verification results](data-pilot.md#external-verification)
+
+| Evidence asset | Bytes | Upstream identifier |
+| --- | ---: | --- |
+| [Shufinskiy regular-season data.nba.com](https://github.com/shufinskiy/nba_data/blob/46488f0f8e1cab58fc1256511ea808166a443a15/datasets/datanba_2022.tar.xz) | 11,310,412 | Git blob `60737ec0f70c052d17002b19102e6358fabf079e`, SHA-256 `8be05e5ae4b598b115ecfed8d4c9cef5cd324a21d6383bd8dd185401f2ebbf69` |
+| [Shufinskiy playoff data.nba.com](https://github.com/shufinskiy/nba_data/blob/46488f0f8e1cab58fc1256511ea808166a443a15/datasets/datanba_po_2022.tar.xz) | 743,948 | Git blob `5685cbd13e6bf0c0475027867bcbebf802b92b67`, SHA-256 `b112928125780366f9b4dc40c06d480b64e738d8b3c797a37de91eb87a1540ba` |
+| [Shufinskiy regular-season NBA liveData](https://github.com/shufinskiy/nba_data/blob/46488f0f8e1cab58fc1256511ea808166a443a15/datasets/cdnnba_2022.tar.xz) | 18,705,272 | Git blob `211957bb00a07465f157ded03b7fe69bb7a66757`, SHA-256 `de895e3474365fc14b028f514eb0f8c9c1503b95d3f1a5aef5a408305ddfb41f` |
+| [Shufinskiy playoff NBA liveData](https://github.com/shufinskiy/nba_data/blob/46488f0f8e1cab58fc1256511ea808166a443a15/datasets/cdnnba_po_2022.tar.xz) | 1,218,416 | Git blob `a8123b8d6f0f1a88c4639e94267169df77b77775`, SHA-256 `2f20055f6d7d54fdc74fb910ef8db0901166fca3a701a2a4f50448af3a32298c` |
+| [Shufinskiy regular-season pbpstats.com](https://github.com/shufinskiy/nba_data/blob/46488f0f8e1cab58fc1256511ea808166a443a15/datasets/pbpstats_2022.tar.xz) | 15,206,248 | Git blob `f8df65d90b9450db4d435d663269e715acb126ed`, SHA-256 `a4847be1f5adeda20453b14cfcd7e67aaffb85398b00bdacd15ae00b3f91d710` |
+| [Shufinskiy playoff pbpstats.com](https://github.com/shufinskiy/nba_data/blob/46488f0f8e1cab58fc1256511ea808166a443a15/datasets/pbpstats_po_2022.tar.xz) | 1,033,288 | Git blob `0036ab5da863c5f4407bba665246629be5cb2bf7`, SHA-256 `5f7cf15db7978cd553871e884253a6c69d981ad840e9b2261d828c0e514802c3` |
+| Bentes regular-season stints (listed above) | 1,469,829 | GitHub asset 582067188 |
+| Bentes playoff stints (listed above) | 88,694 | GitHub asset 582066033 |
+
 ## Pilot acceptance and outstanding evidence
 
 2022–23 is the most recent season in both documented SPM training windows. Its published files span several event feeds and include matching regular-season and playoff assets. This makes it a useful data-quality pilot. Treat 2022–23 as overlapping reference-model training when evaluating historical fidelity. It can serve as an independent BIL holdout only under a separate, earlier BIL model-fit cutoff. [EPM methodology](https://dunksandthrees.com/about/epm)
