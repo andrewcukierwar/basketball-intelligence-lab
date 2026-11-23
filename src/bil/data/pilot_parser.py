@@ -32,10 +32,14 @@ from pbpstats.resources.enhanced_pbp.stats_nba.start_of_period import (  # type:
 
 from bil.data.pilot_inputs import GameBox, GameIssue, RawEvent, event_payload, shot_payload
 
-PARSER_VERSION = "pbpstats-1.3.11-bil-v5"
+PARSER_VERSION = "pbpstats-1.3.11-bil-v6"
 
 # Starter choices for ambiguous periods, keyed by (period, team ID).
 Starters = dict[tuple[int, int], tuple[int, ...]]
+MIN_KNOWN_STARTERS = 3
+# liveData substitutions at each period's starting clock, keyed by (period, team ID), as
+# (outgoing, incoming). An absent key means no such substitution was logged.
+BetweenPeriods = dict[tuple[int, int], tuple[frozenset[int], frozenset[int]]]
 
 
 class StarterGap(GameIssue):
@@ -77,6 +81,8 @@ class ParseResult:
     v3_order: bool
     # Indices into ``possessions`` that the parser would reject as back-to-back possessions.
     unresolved_possessions: frozenset[int]
+    # (period, team ID) pairs whose starters came from liveData between-period substitutions.
+    livedata_starters: frozenset[tuple[int, int]] = frozenset()
 
 
 def _record_back_to_back(flagged: set[int]) -> Callable[[object], None]:
@@ -133,10 +139,46 @@ def _archived_order(event_order: list[int], applied: list[bool]) -> Callable[[ob
     return reorder
 
 
+def _propagated_starters(
+    previous: object | None,
+    team: int,
+    period: int,
+    partial: tuple[int, ...],
+    between: BetweenPeriods,
+) -> tuple[int, ...] | None:
+    """Carry the previous period's closing lineup through liveData between-period substitutions.
+
+    Return the five starters only when they are consistent with the starters the period's own
+    events identify: a short set must be contained in them, and a set of six must contain them.
+    """
+    if period == 1 or previous is None or getattr(previous, "event_type", None) != 13:
+        return None
+    closing = set(cast(dict[int, list[int]], getattr(previous, "current_players")).get(team, []))
+    outgoing, incoming = between.get((period, team), (frozenset(), frozenset()))
+    if not outgoing <= closing or incoming & (closing - outgoing):
+        return None
+    lineup = (closing - outgoing) | incoming
+    known = set(partial)
+    # Require most of the lineup from the period's own events before trusting the feed.
+    if len(known) < MIN_KNOWN_STARTERS:
+        return None
+    if len(lineup) != 5 or not (known <= lineup if len(known) < 5 else lineup <= known):
+        return None
+    return tuple(sorted(lineup))
+
+
 def _chosen_starters(
-    teams: tuple[int, int], starters: Starters
+    teams: tuple[int, int],
+    starters: Starters,
+    between: BetweenPeriods | None = None,
+    used: set[tuple[int, int]] | None = None,
+    items: list[list[object]] | None = None,
 ) -> Callable[[object, object], dict[int, list[int]]]:
-    """Replace the parser's live box-score starter request with explicit choices."""
+    """Replace the parser's live box-score starter request with recorded or explicit choices.
+
+    liveData between-period substitutions take precedence over an explicit choice. ``used``
+    collects the (period, team) pairs they settled.
+    """
 
     def period_starters(
         period_start: object, file_directory: object = None
@@ -151,12 +193,27 @@ def _chosen_starters(
         if set(partial) - set(teams):
             raise GameIssue("unresolved_starters", "Period starters name an unknown team")
         gaps = {team: ids for team, ids in found.items() if len(ids) != 5}
-        missing = {team: ids for team, ids in gaps.items() if (period, team) not in starters}
+        recorded = {}
+        if between is not None:
+            events = items[-1] if items else []
+            position = next((i for i, item in enumerate(events) if item is period_start), 0)
+            previous = events[position - 1] if position > 0 else None
+            for team, ids in gaps.items():
+                lineup = _propagated_starters(previous, team, period, ids, between)
+                if lineup is not None:
+                    recorded[team] = lineup
+        missing = {
+            team: ids
+            for team, ids in gaps.items()
+            if team not in recorded and (period, team) not in starters
+        }
         if missing:
             raise StarterGap(period, missing)
         result = {team: list(ids) for team, ids in found.items()}
         for team in gaps:
-            result[team] = list(starters[(period, team)])
+            result[team] = list(recorded.get(team) or starters[(period, team)])
+        if used is not None:
+            used.update((period, team) for team in recorded)
         return result
 
     return period_starters
@@ -170,6 +227,7 @@ def parse_game(
     event_order: list[int] | None = None,
     starters: Starters | None = None,
     primary_order: list[int] | None = None,
+    between_periods: BetweenPeriods | None = None,
 ) -> ParseResult:
     """Parse one game offline.
 
@@ -179,7 +237,10 @@ def parse_game(
 
     When period events do not identify five starters for a team, the parser would request a
     live box score. Instead, ``starters`` supplies the choice for that period and team, or a
-    ``StarterGap`` reports the partial starters so a caller can search candidates.
+    ``StarterGap`` reports the partial starters so a caller can search candidates. When
+    ``between_periods`` is supplied, a gap after the first period is filled from the previous
+    period's closing lineup and the liveData substitutions logged at the period's starting
+    clock, if those are consistent with the period's events.
 
     ``primary_order`` writes the events in that order instead of V2 file order. It must cover
     exactly the V2 events.
@@ -206,12 +267,30 @@ def parse_game(
 
     applied: list[bool] = []
     flagged: set[int] = set()
+    settled: set[tuple[int, int]] = set()
     if event_order:
         reorder = _archived_order(event_order, applied)
     else:
         reorder = Mock(
             side_effect=GameIssue("unresolved_event_order", "Offline event order is ambiguous")
         )
+
+    # The parser does not link a period start to the previous period's end, so keep its
+    # event list to find that event when starters must be carried across the break.
+    loaded: list[list[object]] = []
+    assign_starters = StatsNbaEnhancedPbpLoader._set_period_start_items
+
+    def remember_items(loader: object) -> None:
+        # Each pass reassigns every period's starters, so keep only the latest pass's record.
+        settled.clear()
+        loaded.append(cast(list[object], getattr(loader, "items")))
+        assign_starters(loader)
+
+    def rebuild(loader: object) -> None:
+        # The parser recomputes starters after reordering, so forget the discarded pass.
+        reorder(loader)
+        settled.clear()
+
     # The pinned file parser may otherwise fall back to two live NBA endpoints.
     with (
         patch.object(
@@ -219,12 +298,15 @@ def parse_game(
             "_get_starters_from_boxscore_request",
             side_effect=GameIssue("unresolved_starters", "Offline period starters are ambiguous"),
         ),
-        patch.object(StatsNbaEnhancedPbpLoader, "_use_data_nba_event_order", reorder),
+        patch.object(StatsNbaEnhancedPbpLoader, "_use_data_nba_event_order", rebuild),
         patch.object(
             StatsStartOfPeriod,
             "get_period_starters",
-            _chosen_starters((game.home_id, game.away_id), starters or {}),
+            _chosen_starters(
+                (game.home_id, game.away_id), starters or {}, between_periods, settled, loaded
+            ),
         ),
+        patch.object(StatsNbaEnhancedPbpLoader, "_set_period_start_items", remember_items),
         patch(
             "pbpstats.data_loader.stats_nba.possessions.loader."
             "StatsNbaPossessionLoader._check_that_possessions_alternate",
@@ -265,4 +347,4 @@ def parse_game(
             if not type(error).__module__.startswith("pbpstats."):
                 raise
             raise GameIssue("parser_error", type(error).__name__) from error
-    return ParseResult(events, possessions, bool(applied), frozenset(flagged))
+    return ParseResult(events, possessions, bool(applied), frozenset(flagged), frozenset(settled))

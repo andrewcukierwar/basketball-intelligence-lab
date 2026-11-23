@@ -8,17 +8,17 @@ Install the pinned optional dependencies and capture the audited source bytes on
 
 ```sh
 uv sync --locked --extra pilot --extra dev
-.venv/bin/python -m bil.data.pilot capture data/raw/2022-23/issue-5-v1
+.venv/bin/python -m bil.data.pilot capture data/raw/2022-23/issue-5-v2
 ```
 
-Capture writes a new private directory and verifies the exact size and SHA-256 of every source file. Reuse that directory for later builds. Capture fails on publisher changes instead of assigning changed bytes to the audited release. The source snapshot records URLs, artifact IDs, rights references and UTC retrieval times.
+Capture writes a new private directory and verifies the exact size and SHA-256 of every source file. Snapshot `issue-5-v2` adds the archived NBA liveData and data.nba.com feeds to the eight inputs of `issue-5-v1`. Earlier builds were made from `issue-5-v1`. Reuse that directory for later builds. Capture fails on publisher changes instead of assigning changed bytes to the audited release. The source snapshot records URLs, artifact IDs, rights references and UTC retrieval times.
 
 Run a build from a clean checkout, with a new output directory for each run. Omit `--game-id` for the full season or repeat it for a targeted run.
 
 ```sh
 .venv/bin/python -m bil.data.pilot build \
-  data/raw/2022-23/issue-5-v1 \
-  data/processed/2022-23/issue-5-v1 \
+  data/raw/2022-23/issue-5-v2 \
+  data/processed/2022-23/issue-5-v6 \
   --code-commit "$(git rev-parse HEAD)"
 ```
 
@@ -26,8 +26,8 @@ Then check the exported tables independently. The check reads only the output ta
 
 ```sh
 .venv/bin/python -m bil.data.pilot check \
-  data/processed/2022-23/issue-5-v1 \
-  data/raw/2022-23/issue-5-v1
+  data/processed/2022-23/issue-5-v6 \
+  data/raw/2022-23/issue-5-v2
 ```
 
 The manifest records output file digests, row counts, the snapshot digest, code commit, parser version, reconciliation tolerances and coverage. Its ingestion timestamps identify this build. Availability for a canonical stream is the latest captured time of the pinned evidence used by that stream. The box feeds have no actual tip or finalization instant in this pilot. These are retrospective snapshots and carry no claim of availability at a 2022–23 forecast origin. DuckDB spills and intermediate rows stay under the private build staging directory and are removed when the build exits. [Canonical availability rules](data-contracts.md#provenance-and-time)
@@ -38,9 +38,9 @@ The manifest records output file digests, row counts, the snapshot digest, code 
 | --- | --- |
 | Game inventory and identity | Use Bill Mill's pinned team and player game logs for expected games, official dates, teams and player IDs. Use NBA IDs as strings in output. Compare the V3 final-period marker with the team boxes. |
 | Source order | Read V2 file order and retain raw CSV record locators. Collapse exact repeats with all their locators. Quarantine conflicting duplicate keys, parser event loss or parser moves across clocks. Record supported same-clock parser reorders. When the parser's own rebound-order repairs fail, it would request data.nba.com event order. The pilot substitutes the pinned V3 action order: V3 `actionNumber` is the V2 `EVENTNUM`, rows are taken in `actionId` order and the first occurrence of each event number is kept. It is used only if V3 covers exactly the V2 events. Rebound order is checked again afterward. Every such game carries a `v3_event_order_applied` warning and a `v3_event_order` stratum, and the existing cross-clock and reconciliation checks still apply. As a last resort, a game that fails acceptance in V2 order is parsed again with its events written in V3 action order (`v3_primary_order`). The cross-clock guard still compares against V2 order. If that also fails, the game keeps its V2 failure. |
-| Lineup state and timing | Run the pinned `pbpstats` parser offline on locally wrapped V2 events and team shot charts. Verify each side has five distinct players in that team's box, that outgoing and incoming IDs explain each state change, and that stints cover every period. A substitution changes the following event's lineup. When period events do not give five starters, the parser would request a live box score. Instead, the pilot tries every candidate: it extends a short set with team players who logged minutes, or trims a set of six to five, and runs each through all acceptance checks. The game is accepted only if exactly one candidate passes (`inferred_starters`), or if every passing candidate gives an identical reconstruction (`immaterial_starters`). Unresolved clock restorations, ambiguous starters and unresolved event order stay quarantined. |
-| Score and credited lineups | Compute scoring deltas from parsed makes and reconcile every period against the archived V3 end marker. Verify the shooter is on court on the correct team for every field goal or free-throw attempt. Each known scoring delta has a ledger row. For a free throw tied to a same-clock foul, use the foul lineup when it contains the shooter. Credit other made shots to the scoring-event lineup. The credited stint is explicit. Compare player plus-minus exactly and minutes to the pinned box log. The minutes tolerance is 2,000 ms per player plus 1,000 ms for each of that player's substitutions at a clock inside a period's final minute. V2 truncates tenths there, while the V3 clocks keep them. This allows for clock precision without changing a source clock or a box value. The official box sometimes credits a score to the lineup on the other side of a substitution logged at the same clock. When only plus-minus differs, the pilot searches the lineup states at that clock with the shooter on court. It accepts the unique smallest set of up to three credit changes that matches every player, or several that differ only between scores at one clock. Such allocations use `same_clock_box_credit`. Actual lineups, stints and minutes do not change. |
-| Possessions | Use the pinned parser's possession segments and countability flag. Check that intervals are ordered, disjoint, within a period and have known offense and defense IDs. A possession can span multiple stints. Technical and flagrant free-throw points are recorded outside the control-possession total and still count for final scoring. The parser rejects games where consecutive possessions share an offense, which usually comes from a held-ball jump ball whose recorded tip contradicts the next action. A score can also contradict its possession's offense, typically when the fouled team keeps the ball after a flagrant. In both cases, mark the affected possessions `unresolved`, exclude them from counted possessions, and allocate their points with the `unresolved` reason and no possession (`unresolved_possessions`). A score outside every possession quarantines the game. |
+| Lineup state and timing | Run the pinned `pbpstats` parser offline on locally wrapped V2 events and team shot charts. Verify each side has five distinct players in that team's box, that outgoing and incoming IDs explain each state change, and that stints cover every period. A substitution changes the following event's lineup. When period events do not give five starters, the parser would request a live box score. After the first period, the pilot instead carries the previous period's closing lineup through the archived liveData substitutions logged at the period's starting clock. It accepts that lineup only if it is consistent with the starters the events identify (`livedata_starters`). Otherwise, and in the first period, the pilot tries every candidate: it extends a short set with team players who logged minutes, or trims a set of six to five, and runs each through all acceptance checks. The game is accepted only if exactly one candidate passes (`inferred_starters`), or if every passing candidate gives an identical reconstruction (`immaterial_starters`). Unresolved clock restorations, ambiguous starters and unresolved event order stay quarantined. |
+| Score and credited lineups | Compute scoring deltas from parsed makes and reconcile every period against the archived V3 end marker. If V3 alone disputes some periods, and both liveData and data.nba agree with V2 on every one of them, accept the game and record the V3 comparison as a mismatch (`v3_period_defect`). Verify the shooter is on court on the correct team for every field goal or free-throw attempt. Each known scoring delta has a ledger row. For a free throw tied to a same-clock foul, use the foul lineup when it contains the shooter. Credit other made shots to the scoring-event lineup. The credited stint is explicit. Compare player plus-minus exactly and minutes to the pinned box log. The minutes tolerance is 2,000 ms per player plus 1,000 ms for each of that player's substitutions at a clock inside a period's final minute. V2 truncates tenths there, while the V3 clocks keep them. This allows for clock precision without changing a source clock or a box value. The official box sometimes credits a score to the lineup on the other side of a substitution logged at the same clock. When only plus-minus differs, the pilot searches the lineup states at that clock with the shooter on court. It accepts the unique smallest set of up to three credit changes that matches every player, or several that differ only between scores at one clock. Such allocations use `same_clock_box_credit`. Actual lineups, stints and minutes do not change. |
+| Possessions | Use the pinned parser's possession segments and countability flag. Check that intervals are ordered, disjoint, within a period and have known offense and defense IDs. A possession can span multiple stints. Technical and flagrant free-throw points are recorded outside the control-possession total and still count for final scoring. The parser rejects games where consecutive possessions share an offense, which usually comes from a held-ball jump ball whose recorded tip contradicts the next action. A score can also contradict its possession's offense, typically when the fouled team keeps the ball after a flagrant. In both cases, mark the affected possessions `unresolved`, exclude them from counted possessions, and allocate their points with the `unresolved` reason and no possession (`unresolved_possessions`). An unresolved possession is counted again only under two conditions. data.nba must give one offense team for all its shots, free throws and turnovers, and that team must differ from the offense of both neighboring possessions in the period. A relabeled possession that a score contradicts stays unresolved (`datanba_possession_labels`). A score outside every possession quarantines the game. |
 | Second-feed checks | Compare each expected game's V2 and V3 substitution multisets by period, team and outgoing player ID. In the pinned V3 sample the substitution `personId` identifies the outgoing player. Compare reconstructed period scores as soon as the parser produces them. Report matched, mismatched and unattempted checks separately from acceptance, by season type and for overtime, technical free throws, same-clock free-throw substitutions and exact source repeats. Both feeds describe NBA events. The checks provide separate feed evidence for outcomes and substitution identity. |
 
 The typed Parquet tables follow the [canonical contract](data-contracts.md) for games, game streams, events, actors, lineups, stints, possessions and scoring allocations. Quarantined games retain a game row, a quarantined stream and a quality issue. Their normalized event, lineup and possession records are excluded from the accepted tables. `game_review.parquet` supplies one row per expected or requested game and points to each game's disposition and comparison strata. Player box rows serve as reconciliation evidence in the pinned inputs.
@@ -148,6 +148,32 @@ The thresholds below were set at this milestone after the results were observed.
 | Exceptions | Every quarantine and resolution rule has a reason, warning or stratum | `quality_issue` and `game_review` |
 
 The dataset is fit for private RAPM development under the recorded strata. It makes no claim of historical point-in-time availability or of broader usage rights.
+
+## Fourth full-season build: archived-feed adjudication
+
+The build at `b1a43ed` on 2026-11-23 used snapshot `issue-5-v2` and parser version `pbpstats-1.3.11-bil-v6`, and wrote to `data/processed/2022-23/issue-5-v6/`. [ADR-0011](DECISIONS.md) [EXP-0004](experiment-log.md)
+
+| Season type | Expected games | Accepted games | Quarantined games | Full V3 period-score checks matched / attempted | V3 substitution checks matched / attempted |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Regular season | 1,230 | 1,208 | 22 | 1,206 / 1,209 | 1,222 / 1,230 |
+| Playoffs | 84 | 84 | 0 | 84 / 84 | 84 / 84 |
+| Total | 1,314 | 1,292 | 22 | 1,290 / 1,293 | 1,306 / 1,314 |
+
+- **Possessions.** There are 256,456 counted possessions, 2,756 parser-excluded intervals and 51 unresolved possessions.
+- **Stratum coverage.** Regular-season overtime coverage is 79 of 79 and regulation is 1,129 of 1,151. Technical-free-throw games are 784 of 800 in the regular season and 39 of 39 in the playoffs. Same-clock substitution games are 1,207 of 1,229 and 84 of 84.
+- **Rules applied.**
+  - `livedata_starters` settled 33 team-periods in 29 games, replacing all but two of the box-chosen starter sets.
+  - `v3_period_defect` accepted two games.
+  - `datanba_possession_labels` relabeled three possessions in two games.
+- **Box as selector.** Box values now choose the reconstruction in 20 games, down from 49: two first-period starter inferences and 18 same-clock credits.
+- **Lower-trust strata.** Add `livedata_starters`, `v3_period_defect` and `datanba_possession_labels` to the strata to drop in sensitivity analyses. For `livedata_starters`, the Bentes comparison is the remaining independent check on the starters, and box minutes and plus-minus are independent checks on the whole game. A `v3_period_defect` game keeps `v3_periods_match = false` in `game_review` even though it is accepted. Relabeled possessions keep no row-level marker; the game's stratum identifies them.
+- **No other changes.** Compared with `issue-5-v5`, every game accepted there has identical event, actor, lineup and stint rows. Only the three relabeled possessions and their two allocation rows differ.
+- **Verification.** `check` passes 25 of 25. `evidence` reports:
+  - lineups agree with Bentes on 99.97% of court time in all 1,292 games;
+  - all 35 starter team-periods chosen from liveData or the box match Bentes;
+  - counted possessions equal pbpstats.com's in 1,260 games.
+
+The 22 remaining quarantines are those described above, less the two V3 period-score defects. This build meets every threshold in the M1 acceptance table.
 
 ## External verification
 

@@ -8,6 +8,7 @@ import re
 import shutil
 from collections import Counter, defaultdict
 from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -20,12 +21,14 @@ from bil.data.pilot_check import check_build
 from bil.data.pilot_evidence import compare as compare_evidence
 from bil.data.pilot_inputs import (
     GAME_PREFIXES,
+    CrossFeed,
     GameBox,
     GameIssue,
     PlayerBox,
     RawEvent,
     V3Game,
     box_scores,
+    cross_feeds,
     deduplicate_events,
     event_games,
     nba_game_id,
@@ -50,6 +53,37 @@ from bil.data.pilot_sources import (
 from bil.data.pilot_starters import StarterChoice, choose_starters
 
 SUFFIXES = {"regular": "", "playoffs": "_po"}
+
+
+@dataclass(frozen=True)
+class Reconstruction:
+    events: list[ParserEvent]
+    rows: Rows
+    v3_order: bool
+    periods_reconciled: int
+    # True when V3 alone disagreed on period scores and liveData and data.nba agreed with V2.
+    v3_period_defect: bool
+    livedata_starters: frozenset[tuple[int, int]]
+    relabeled_possessions: int
+
+
+def period_scores(events: list[ParserEvent], game: GameBox) -> dict[int, tuple[int, int]]:
+    return {
+        event.period: (event.score.get(game.home_id, 0), event.score.get(game.away_id, 0))
+        for event in events
+    }
+
+
+def v3_alone_differs(
+    ours: dict[int, tuple[int, int]], reference: dict[int, tuple[int, int]], cross: CrossFeed
+) -> bool:
+    """True when every period V3 disputes is confirmed by both liveData and data.nba."""
+    disputed = [period for period in reference if ours.get(period) != reference[period]]
+    return bool(disputed) and all(
+        ours.get(period) is not None
+        and ours.get(period) == cross.live_periods.get(period) == cross.datanba_periods.get(period)
+        for period in disputed
+    )
 
 
 class PeriodScoreMismatch(GameIssue):
@@ -171,8 +205,10 @@ def _build_game(
     scratch: Path,
     snapshot_hash: str,
     when: str,
+    cross: CrossFeed | None = None,
 ) -> Rows:
     kind = GAME_PREFIXES[game.game_id[:3]]
+    cross = cross or CrossFeed()
     raw_source = sources[2]
     refs = [_ref(source, f"game_id={game.game_id}") for source in sources]
     issues: list[Row] = []
@@ -208,8 +244,8 @@ def _build_game(
             raise GameIssue("v3_substitution_mismatch", "V2 and V3 substitution signatures differ")
         order = reference.order
 
-        def reconstruct(primary: bool) -> StarterChoice[tuple[list[ParserEvent], Rows, bool, int]]:
-            def attempt(starters: Starters) -> tuple[list[ParserEvent], Rows, bool, int]:
+        def reconstruct(primary: bool) -> StarterChoice[Reconstruction]:
+            def attempt(starters: Starters) -> Reconstruction:
                 with TemporaryDirectory(dir=scratch) as game_directory:
                     result = parse_game(
                         game,
@@ -219,10 +255,15 @@ def _build_game(
                         order,
                         starters,
                         primary_order=order if primary else None,
+                        between_periods=cross.between_periods if cross.has_livedata else None,
                     )
                     match, reconciled = compare_periods(result.events, game, periods)
-                    if not match:
+                    defect = not match and v3_alone_differs(
+                        period_scores(result.events, game), periods, cross
+                    )
+                    if not match and not defect:
                         raise PeriodScoreMismatch(reconciled)
+                    report: dict[str, int] = {}
                     rows = normalize_game(
                         game,
                         roster,
@@ -231,11 +272,21 @@ def _build_game(
                         result.possessions,
                         raw_source["artifact_id"],
                         result.unresolved_possessions,
+                        cross.offense or None,
+                        report,
                     )
-                return result.events, rows, result.v3_order, reconciled
+                return Reconstruction(
+                    result.events,
+                    rows,
+                    result.v3_order,
+                    reconciled,
+                    defect,
+                    result.livedata_starters,
+                    report.get("relabeled_possessions", 0),
+                )
 
             return choose_starters(
-                attempt, roster, lambda result: json.dumps(result[1], sort_keys=True, default=str)
+                attempt, roster, lambda result: json.dumps(result.rows, sort_keys=True, default=str)
             )
 
         v3_primary = False
@@ -251,8 +302,35 @@ def _build_game(
                 if isinstance(first, PeriodScoreMismatch):
                     periods_match, periods_reconciled = False, first.reconciled
                 raise first from None
-        parsed, rows, v3_order, periods_reconciled = choice.result
-        periods_match = True
+        built = choice.result
+        parsed, rows, v3_order = built.events, built.rows, built.v3_order
+        periods_reconciled = built.periods_reconciled
+        periods_match = not built.v3_period_defect
+        if built.v3_period_defect:
+            labels.append("v3_period_defect")
+            warning = GameIssue(
+                "v3_period_defect",
+                "V3 alone disagrees on period scores; liveData and data.nba agree with V2",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if built.livedata_starters:
+            labels.append("livedata_starters")
+            settled = "; ".join(
+                f"period {period} team {team}" for period, team in sorted(built.livedata_starters)
+            )
+            warning = GameIssue(
+                "livedata_starters",
+                f"Starters from liveData between-period substitutions ({settled})",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if built.relabeled_possessions:
+            labels.append("datanba_possession_labels")
+            warning = GameIssue(
+                "datanba_possession_labels",
+                f"{built.relabeled_possessions} unresolved possessions labeled from data.nba "
+                "offense on every shot, free throw and turnover",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
         if v3_primary:
             labels.append("v3_primary_order")
             warning = GameIssue(
@@ -375,8 +453,11 @@ def _season_games(
         raw_name = f"nbastats{suffix}_2022.tar.xz"
         shot_name = f"shotdetail{suffix}_2022.tar.xz"
         v3_name = f"nbastatsv3{suffix}_2022.tar.xz"
+        live_name = f"cdnnba{suffix}_2022.tar.xz"
+        datanba_name = f"datanba{suffix}_2022.tar.xz"
         shots = shot_rows(snapshot_dir / shot_name)
         reference_games = v3_games(snapshot_dir / v3_name)
+        feeds = cross_feeds(snapshot_dir / live_name, snapshot_dir / datanba_name)
         refs = [
             sources[key]
             for key in (
@@ -385,6 +466,8 @@ def _season_games(
                 raw_name,
                 shot_name,
                 v3_name,
+                live_name,
+                datanba_name,
             )
         ]
         remaining = set(wanted)
@@ -402,6 +485,7 @@ def _season_games(
                     scratch,
                     snapshot_hash,
                     when,
+                    feeds.get(game_id),
                 )
                 remaining.remove(game_id)
         for game_id in sorted(remaining):
