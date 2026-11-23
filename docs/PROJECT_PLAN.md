@@ -1,7 +1,8 @@
 # Basketball Intelligence Lab — Project Plan
 
 **Version:** 0.1 (2026-11-22)  
-**Status:** Initial planning / M0  
+**Status (2026-11-23):** M0 and the initial M1 exit gate are complete. The synthetic M2 reference is merged. The archived-feed pilot upgrade is awaiting integration.
+
 **Initial research program:** R1 — Estimated Plus-Minus (EPM) methodology replication  
 **Repository:** andrewcukierwar/basketball-intelligence-lab
 
@@ -247,7 +248,18 @@ Potential outputs: public player-impact dashboards; skill histories and comparis
 
 Initial engineering work should be small, reviewable PRs with hypothesis, evidence tag, test results, measured performance and documented assumptions. Maintain a decisions log and negative experiment log.
 
-See [initial backlog](INITIAL_BACKLOG.md) for issue-ready tasks and dependencies.
+The [GitHub milestones][live-milestones] and [issues][live-issues] track execution. The [initial backlog](INITIAL_BACKLOG.md) retains the original planning IDs. As of the 2026-11-23 reconciliation, [#1–#6][closed-foundation] are closed. The 1,290-game pilot and its external verification are on `main`. The [1,292-game adjudication][pilot-adjudication] was merged into a feature branch. [Issue #19][pilot-merge] tracks bringing it to `main` and verifying the resulting build before constructing the historical RAPM input.
+
+- Use GitHub’s **Blocked by** relationships for direct prerequisites. Start a task once those prerequisites are complete. If an issue closed without delivering its prerequisite, update the affected dependencies before starting that work.
+- Apply one **complexity** label. Low is a bounded task with a straightforward verification path. Medium involves meaningful integration or multiple components. High carries substantial research, data or cross-component uncertainty.
+- Apply one **state** label and update it as work moves from **not yet started** to **in progress**, **in review** or **done**. Dependency readiness is visible separately from progress.
+- **Scope: optional** marks a tracked extension outside the core exit gate. **Scope: roadmap** marks a future-program deliverable that needs separate authorization. Decompose those deliverables further after the relevant feasibility review.
+
+[live-milestones]: https://github.com/andrewcukierwar/basketball-intelligence-lab/milestones
+[live-issues]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues
+[closed-foundation]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues?q=is%3Aissue+is%3Aclosed+label%3A%22state%3A+done%22
+[pilot-adjudication]: https://github.com/andrewcukierwar/basketball-intelligence-lab/pull/17
+[pilot-merge]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/19
 
 ## 10. Definition of success
 
