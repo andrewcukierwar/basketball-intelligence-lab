@@ -221,3 +221,25 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Basketball Intelligence Lab: generated/large/private research data
+/data/raw/
+/data/interim/
+/data/processed/
+/data/external/
+/data/cache/
+/artifacts/
+/reports/generated/
+/mlruns/
+/.mlflow/
+*.parquet
+*.arrow
+*.feather
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
+*.joblib
+*.pkl
+*.pickle
+.DS_Store
