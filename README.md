@@ -37,6 +37,7 @@ M0 establishes the methodology specification, source audit and research contract
 - [Methodology uncertainty register](docs/research/epm-uncertainties.md)
 - [Data-source audit](docs/data-sources.md)
 - [Canonical data contracts](docs/data-contracts.md)
+- [2022–23 possession pilot](docs/data-pilot.md)
 - [Validation strategy](docs/validation-strategy.md)
 - [Evaluation run manifest](docs/run-manifest.md)
 - [Research decisions](docs/DECISIONS.md)
@@ -60,7 +61,7 @@ Requirements: Python 3.11+ (CI uses 3.12). Recommended: [uv](https://docs.astral
     uv run ruff format --check .
     uv run mypy src
 
-The committed `uv.lock` pins the local development environment. CI exercises the package extras with pip on Python 3.12.
+The committed `uv.lock` pins the local development environment. CI installs the development and pilot extras with pip on Python 3.12. To run the pilot tests locally, sync with `uv sync --locked --extra dev --extra pilot` and use the [pilot guide](docs/data-pilot.md).
 
 ## Research standards
 
