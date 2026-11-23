@@ -340,3 +340,56 @@ def test_choose_starters_requires_one_reconstruction() -> None:
         with pytest.raises(GameIssue) as rejected:
             pilot_starters.choose_starters(attempt_with(correct, False), roster, str)
         assert rejected.value.code == code
+
+
+def test_conflicting_score_leaves_possession_unresolved(tmp_path: Path) -> None:
+    game, roster, events, possessions = synthetic_game()
+    raw = {
+        event.event_num: RawEvent(
+            {"PLAYER1_TEAM_ID": "200", "PLAYER1_ID": "21", "PLAYER2_ID": "26"}
+            if event.event_type == 8
+            else {},
+            [event.event_num + 1],
+        )
+        for event in events
+    }
+    # Give the home team's made-shot possession to the away team.
+    possessions[0] = Possession(possessions[0].events, game.away_id)
+    rows = normalize_game(game, roster, raw, events, possessions, "fixture")
+    statuses = [row["status"] for row in rows["possession"]]
+    assert statuses[0] == "unresolved" and statuses.count("unresolved") == 1
+    reasons = [row["possession_reason"] for row in rows["score_allocation"]]
+    assert reasons == ["unassigned_dead_ball", "unresolved"]
+    assert all(row["possession_seq"] is None for row in rows["score_allocation"])
+
+    flagged = normalize_game(game, roster, raw, events, possessions, "fixture", frozenset({1}))
+    assert [row["status"] for row in flagged["possession"]][:2] == ["unresolved", "unresolved"]
+
+
+@dataclass
+class LinkedPossession:
+    offense_team_id: int
+    events: list[object]
+    previous_possession: LinkedPossession | None = None
+    next_possession: LinkedPossession | None = None
+
+
+def test_back_to_back_possessions_are_recorded_not_raised() -> None:
+    chain = [LinkedPossession(team, []) for team in (100, 200, 200, 100, 100)]
+    for before, after in zip(chain, chain[1:], strict=False):
+        before.next_possession, after.previous_possession = after, before
+
+    class FlagrantFoul(pilot_parser.Foul):  # type: ignore[misc]
+        is_flagrant = True
+
+    FlagrantFoul.__abstractmethods__ = frozenset()
+    # pbpstats exempts a pair when the earlier possession or the one before it has a flagrant.
+    chain[1].events.append(object.__new__(FlagrantFoul))
+    flagged: set[int] = set()
+
+    class Loader:
+        items = chain
+
+    pilot_parser._record_back_to_back(flagged)(Loader())
+    # The 200-200 pair is exempt because of the flagrant foul; the 100-100 pair is flagged.
+    assert flagged == {3, 4}

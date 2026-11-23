@@ -207,16 +207,20 @@ def _build_game(
 
         def attempt(starters: Starters) -> tuple[list[ParserEvent], Rows, bool, int]:
             with TemporaryDirectory(dir=scratch) as game_directory:
-                parsed, possessions, v3_order = parse_game(
-                    game, raw, shots, Path(game_directory), order, starters
-                )
-                match, reconciled = compare_periods(parsed, game, periods)
+                result = parse_game(game, raw, shots, Path(game_directory), order, starters)
+                match, reconciled = compare_periods(result.events, game, periods)
                 if not match:
                     raise PeriodScoreMismatch(reconciled)
                 rows = normalize_game(
-                    game, roster, raw, parsed, possessions, raw_source["artifact_id"]
+                    game,
+                    roster,
+                    raw,
+                    result.events,
+                    result.possessions,
+                    raw_source["artifact_id"],
+                    result.unresolved_possessions,
                 )
-            return parsed, rows, v3_order, reconciled
+            return result.events, rows, result.v3_order, reconciled
 
         try:
             choice = choose_starters(
@@ -232,6 +236,15 @@ def _build_game(
             warning = GameIssue(
                 "v3_event_order_applied",
                 "Parser rebound repairs failed; archived V3 action order replaced V2 order",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        unresolved = sum(row["status"] == "unresolved" for row in rows["possession"])
+        if unresolved:
+            labels.append("unresolved_possessions")
+            warning = GameIssue(
+                "unresolved_possessions",
+                f"{unresolved} possessions have unresolved offense: consecutive possessions "
+                "share an offense or a score contradicts the recorded control",
             )
             issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
         if choice.immaterial:

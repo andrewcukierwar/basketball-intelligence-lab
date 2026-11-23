@@ -237,12 +237,13 @@ def build_possessions(
     events: list[TimedEvent],
     scope: Row,
     teams: tuple[int, int],
-) -> tuple[list[Row], dict[int, tuple[int, int]]]:
+    unresolved: frozenset[int] = frozenset(),
+) -> tuple[list[Row], dict[int, tuple[int, int, str]]]:
     by_event_num = {item.source.event_num: item for item in events}
-    by_event: dict[int, tuple[int, int]] = {}
+    by_event: dict[int, tuple[int, int, str]] = {}
     rows: list[Row] = []
     prior_end = 1
-    for position in possessions:
+    for index, position in enumerate(possessions):
         items = [by_event_num[event.event_num] for event in position.events]
         first, last = items[0], items[-1]
         if (
@@ -266,6 +267,8 @@ def build_possessions(
         seq = len(rows) + 1
         prior_end = last.seq + 1
         status = "accepted" if last.source.count_as_possession else "excluded"
+        if index in unresolved:
+            status = "unresolved"
         rows.append(
             {
                 **scope,
@@ -279,7 +282,7 @@ def build_possessions(
                 "status": status,
             }
         )
-        by_event.update((item.seq, (seq, offense)) for item in items)
+        by_event.update((item.seq, (seq, offense, status)) for item in items)
     if not rows or any(
         item.seq not in by_event and item.remaining_ms > 0 and item.source.event_type != 12
         for item in events
@@ -299,10 +302,11 @@ def score_and_events(
     game: GameBox,
     roster: dict[int, PlayerBox],
     by_stint: dict[int, int],
-    by_possession: dict[int, tuple[int, int]],
+    by_possession: dict[int, tuple[int, int, str]],
     artifact_id: str,
-) -> tuple[list[Row], list[Row], list[Row], Counter[int]]:
+) -> tuple[list[Row], list[Row], list[Row], Counter[int], set[int]]:
     teams = game.home_id, game.away_id
+    conflicts: set[int] = set()
     points = [0, 0]
     canonical: list[Row] = []
     actors: list[Row] = []
@@ -382,12 +386,21 @@ def score_and_events(
                 getattr(event, "is_technical_ft", False) or getattr(event, "is_flagrant_ft", False)
             )
             poss = by_possession.get(item.seq)
-            if not exempt and (poss is None or poss[1] != team):
-                raise GameIssue(
-                    "unresolved_score_allocation",
-                    "Scoring team lacks control support",
-                    event.event_num,
-                )
+            # Points inside a possession whose offense is unresolved stay in the ledger
+            # without a possession, as the contract's unresolved reason requires.
+            unsure = not exempt and poss is not None and poss[2] == "unresolved"
+            if unsure:
+                poss = None
+            if not exempt and not unsure and (poss is None or poss[1] != team):
+                if poss is None:
+                    raise GameIssue(
+                        "unresolved_score_allocation",
+                        "Scoring event lies outside every possession",
+                        event.event_num,
+                    )
+                # The parser gave this possession to the other team. Leave its offense
+                # unresolved rather than credit points against the recorded control.
+                conflicts.add(poss[0])
             credit = item
             if event.event_type == 3:
                 trigger = getattr(event, "event_for_efficiency_stats", event)
@@ -405,9 +418,15 @@ def score_and_events(
                     "seq": item.seq,
                     "scoring_team_id": str(team),
                     "points_delta": delta,
-                    "possession_seq": None if exempt else poss[0] if poss is not None else None,
+                    "possession_seq": poss[0] if poss is not None and not exempt else None,
                     "credited_stint_seq": by_stint[credit.seq],
-                    "possession_reason": "unassigned_dead_ball" if exempt else "control_possession",
+                    "possession_reason": (
+                        "unassigned_dead_ball"
+                        if exempt
+                        else "unresolved"
+                        if unsure
+                        else "control_possession"
+                    ),
                     "attribution_rule": (
                         "scoring_event_lineup" if credit is item else "free_throw_trigger_lineup"
                     ),
@@ -419,7 +438,7 @@ def score_and_events(
                 pm[player] -= delta
     if points != [game.home_points, game.away_points]:
         raise GameIssue("final_score_mismatch", "Parsed scoring does not match the game box")
-    return canonical, actors, allocations, pm
+    return canonical, actors, allocations, pm, conflicts
 
 
 def reconcile_player_boxes(
@@ -441,15 +460,29 @@ def normalize_game(
     parsed_events: list[ParserEvent],
     parsed_possessions: list[ParserPossession],
     artifact_id: str,
+    unresolved_possessions: frozenset[int] = frozenset(),
 ) -> Rows:
     scope: Row = {"game_id": game.game_id, "stream_revision": 1}
     teams = game.home_id, game.away_id
     events = timed_events(parsed_events, raw, game, roster)
     lineups, stints, by_stint, minutes = build_stints(events, scope, teams)
-    possessions, by_poss = build_possessions(parsed_possessions, events, scope, teams)
-    canonical, actors, allocations, pm = score_and_events(
+    possessions, by_poss = build_possessions(
+        parsed_possessions, events, scope, teams, unresolved_possessions
+    )
+    canonical, actors, allocations, pm, conflicts = score_and_events(
         events, raw, scope, game, roster, by_stint, by_poss, artifact_id
     )
+    if conflicts:
+        # Possession sequence numbers are one-based parser possession indices.
+        unresolved_possessions |= {seq - 1 for seq in conflicts}
+        possessions, by_poss = build_possessions(
+            parsed_possessions, events, scope, teams, unresolved_possessions
+        )
+        canonical, actors, allocations, pm, conflicts = score_and_events(
+            events, raw, scope, game, roster, by_stint, by_poss, artifact_id
+        )
+        if conflicts:
+            raise GameIssue("unresolved_score_allocation", "Possession conflicts persist")
     reconcile_player_boxes(minutes, pm, roster)
     return {
         "event": canonical,
