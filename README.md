@@ -40,6 +40,12 @@ The first milestone is a reliable historical NBA data foundation and a mathemati
 - [Research decisions](docs/DECISIONS.md)
 - [Experiment log](docs/experiment-log.md)
 
+## AI-assisted development
+
+Repository-wide instructions for coding agents are in [AGENTS.md](AGENTS.md). Agents should follow the current [project plan](docs/PROJECT_PLAN.md), relevant GitHub Issues and PR review gates.
+
+Agent session handoffs live in [docs/agent-runs/](docs/agent-runs/README.md); use its [handoff template](docs/agent-runs/TEMPLATE.md) to preserve tested progress and next steps. Architecture decisions continue in the existing [docs/DECISIONS.md](docs/DECISIONS.md), rather than a second decisions directory.
+
 ## Development setup
 
 The repository begins as a lightweight Python research scaffold; modeling and ingestion dependencies will be added based on verified requirements.
