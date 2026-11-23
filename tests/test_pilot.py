@@ -6,6 +6,7 @@ import csv
 import io
 import tarfile
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from hashlib import sha256
@@ -19,7 +20,7 @@ pytest.importorskip("pbpstats")
 import duckdb  # noqa: E402
 import requests  # noqa: E402
 
-from bil.data import pilot, pilot_parser, pilot_sources  # noqa: E402
+from bil.data import pilot, pilot_parser, pilot_sources, pilot_starters  # noqa: E402
 from bil.data.pilot import compare_periods, summarize_reviews  # noqa: E402
 from bil.data.pilot_inputs import (  # noqa: E402
     GameBox,
@@ -302,3 +303,40 @@ def test_archived_order_replaces_live_reorder_only_for_identical_events() -> Non
         with pytest.raises(GameIssue) as rejected:
             pilot_parser._archived_order(order, blocked)(FakeLoader([1, 2, 3]))
         assert rejected.value.code == "unresolved_event_order" and not blocked
+
+
+def test_starter_candidates_extend_or_trim_partial_sets() -> None:
+    roster = {player: PlayerBox(100, 60_000, 0) for player in range(1, 9)}
+    roster[9] = PlayerBox(100, 0, 0)
+    roster[21] = PlayerBox(200, 60_000, 0)
+    assert pilot_starters.candidate_starters(100, (1, 2, 3, 4), roster) == [
+        (1, 2, 3, 4, player) for player in (5, 6, 7, 8)
+    ]
+    assert len(pilot_starters.candidate_starters(100, (1, 2, 3), roster)) == 10
+    assert pilot_starters.candidate_starters(100, (1, 2, 3, 4, 5, 6), roster)[0] == (1, 2, 3, 4, 5)
+    assert len(pilot_starters.candidate_starters(100, (1, 2, 3, 4, 5, 6), roster)) == 6
+
+
+def test_choose_starters_requires_one_reconstruction() -> None:
+    roster = {player: PlayerBox(100, 60_000, 0) for player in range(1, 8)}
+    gap = pilot_parser.StarterGap(5, {100: (1, 2, 3, 4)})
+
+    def attempt_with(correct: set[int], same: bool) -> Callable[[pilot_parser.Starters], str]:
+        def attempt(starters: pilot_parser.Starters) -> str:
+            if not starters:
+                raise gap
+            chosen = starters[(5, 100)]
+            if chosen[-1] not in correct:
+                raise GameIssue("player_minutes_mismatch", "wrong starter")
+            return "same" if same else str(chosen)
+
+        return attempt
+
+    choice = pilot_starters.choose_starters(attempt_with({6}, False), roster, str)
+    assert choice.starters == {(5, 100): (1, 2, 3, 4, 6)} and choice.candidates_tried == 3
+    assert not choice.immaterial
+    assert pilot_starters.choose_starters(attempt_with({5, 7}, True), roster, str).immaterial
+    for correct, code in ((set(), "unresolved_starters"), ({5, 7}, "ambiguous_starters")):
+        with pytest.raises(GameIssue) as rejected:
+            pilot_starters.choose_starters(attempt_with(correct, False), roster, str)
+        assert rejected.value.code == code

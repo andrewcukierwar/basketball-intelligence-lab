@@ -33,7 +33,7 @@ from bil.data.pilot_inputs import (
 )
 from bil.data.pilot_normalize import MINUTES_TOLERANCE_MS, Row, Rows, located, normalize_game
 from bil.data.pilot_output import read_game_reviews, write_tables
-from bil.data.pilot_parser import PARSER_VERSION, ParserEvent, parse_game
+from bil.data.pilot_parser import PARSER_VERSION, ParserEvent, Starters, parse_game
 from bil.data.pilot_sources import (
     ATTRIBUTION,
     NBA_TERMS,
@@ -44,8 +44,17 @@ from bil.data.pilot_sources import (
     utc_now,
     write_json,
 )
+from bil.data.pilot_starters import choose_starters
 
 SUFFIXES = {"regular": "", "playoffs": "_po"}
+
+
+class PeriodScoreMismatch(GameIssue):
+    def __init__(self, reconciled: int) -> None:
+        super().__init__(
+            "v3_period_score_mismatch", "V2 reconstructed period scores differ from V3"
+        )
+        self.reconciled = reconciled
 
 
 def _ref(artifact: Artifact, locator: str) -> dict[str, str]:
@@ -194,23 +203,55 @@ def _build_game(
         substitutions_match = v2_substitutions(raw) == reference.substitutions
         if not substitutions_match:
             raise GameIssue("v3_substitution_mismatch", "V2 and V3 substitution signatures differ")
-        with TemporaryDirectory(dir=scratch) as game_directory:
-            parsed, possessions, v3_order = parse_game(
-                game, raw, shots, Path(game_directory), reference.order
+        order = reference.order
+
+        def attempt(starters: Starters) -> tuple[list[ParserEvent], Rows, bool, int]:
+            with TemporaryDirectory(dir=scratch) as game_directory:
+                parsed, possessions, v3_order = parse_game(
+                    game, raw, shots, Path(game_directory), order, starters
+                )
+                match, reconciled = compare_periods(parsed, game, periods)
+                if not match:
+                    raise PeriodScoreMismatch(reconciled)
+                rows = normalize_game(
+                    game, roster, raw, parsed, possessions, raw_source["artifact_id"]
+                )
+            return parsed, rows, v3_order, reconciled
+
+        try:
+            choice = choose_starters(
+                attempt, roster, lambda result: json.dumps(result[1], sort_keys=True, default=str)
             )
-            if v3_order:
-                labels.append("v3_event_order")
-                warning = GameIssue(
-                    "v3_event_order_applied",
-                    "Parser rebound repairs failed; archived V3 action order replaced V2 order",
-                )
-                issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
-            periods_match, periods_reconciled = compare_periods(parsed, game, periods)
-            if not periods_match:
-                raise GameIssue(
-                    "v3_period_score_mismatch", "V2 reconstructed period scores differ from V3"
-                )
-            rows = normalize_game(game, roster, raw, parsed, possessions, raw_source["artifact_id"])
+        except PeriodScoreMismatch as mismatch:
+            periods_match, periods_reconciled = False, mismatch.reconciled
+            raise
+        parsed, rows, v3_order, periods_reconciled = choice.result
+        periods_match = True
+        if v3_order:
+            labels.append("v3_event_order")
+            warning = GameIssue(
+                "v3_event_order_applied",
+                "Parser rebound repairs failed; archived V3 action order replaced V2 order",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if choice.immaterial:
+            labels.append("immaterial_starters")
+            warning = GameIssue(
+                "immaterial_starters",
+                f"All {choice.candidates_tried} candidate starter sets gave one reconstruction",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        elif choice.starters:
+            labels.append("inferred_starters")
+            chosen = "; ".join(
+                f"period {period} team {team}: {','.join(map(str, ids))}"
+                for (period, team), ids in sorted(choice.starters.items())
+            )
+            warning = GameIssue(
+                "inferred_starters",
+                f"Only one of {choice.candidates_tried} candidate starter sets reconciled ({chosen})",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
         if [event.event_num for event in parsed] != list(raw):
             warning = GameIssue(
                 "same_clock_parser_reorder", "Pinned parser reordered same-clock events"
