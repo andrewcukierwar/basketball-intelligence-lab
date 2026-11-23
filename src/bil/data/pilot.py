@@ -33,7 +33,7 @@ from bil.data.pilot_inputs import (
 )
 from bil.data.pilot_normalize import MINUTES_TOLERANCE_MS, Row, Rows, located, normalize_game
 from bil.data.pilot_output import read_game_reviews, write_tables
-from bil.data.pilot_parser import PARSER_VERSION, parse_game
+from bil.data.pilot_parser import PARSER_VERSION, ParserEvent, parse_game
 from bil.data.pilot_sources import (
     ATTRIBUTION,
     NBA_TERMS,
@@ -87,15 +87,16 @@ def _game_row(game: GameBox, kind: str, source: Artifact, when: str) -> Row:
     }
 
 
-def reconcile_periods(events: list[Row], reference: dict[int, tuple[int, int]]) -> None:
-    scores: dict[int, tuple[int, int]] = {}
-    home = away = 0
-    for row in events:
-        home += cast(int, row["home_delta"])
-        away += cast(int, row["away_delta"])
-        scores[cast(int, row["period"])] = home, away
-    if scores != reference:
-        raise GameIssue("v3_period_score_mismatch", "V2 reconstructed period scores differ from V3")
+def compare_periods(
+    events: list[ParserEvent], game: GameBox, reference: dict[int, tuple[int, int]]
+) -> tuple[bool, int]:
+    scores = {
+        event.period: (event.score.get(game.home_id, 0), event.score.get(game.away_id, 0))
+        for event in events
+    }
+    return scores == reference, sum(
+        scores.get(period) == score for period, score in reference.items()
+    )
 
 
 def _strata(events: list[RawEvent], periods: dict[int, tuple[int, int]]) -> list[str]:
@@ -167,17 +168,15 @@ def _build_game(
     rows: Rows = {}
     failure = None
     periods_reconciled = 0
+    periods_match = None
     substitutions_match = None
     periods = reference.periods if reference is not None else {}
+    final_match = periods[max(periods)] == (game.home_points, game.away_points) if periods else None
     labels = _strata(events, periods)
     try:
         if not events:
             raise GameIssue("missing_v2_game", "Expected game is absent from V2 events")
-        if (
-            reference is None
-            or not periods
-            or periods[max(periods)] != (game.home_points, game.away_points)
-        ):
+        if reference is None or final_match is not True:
             raise GameIssue("v3_box_final_mismatch", "V3 terminal score differs from the team box")
         raw = deduplicate_events(events)
         if len(raw) != len(events):
@@ -197,9 +196,12 @@ def _build_game(
             raise GameIssue("v3_substitution_mismatch", "V2 and V3 substitution signatures differ")
         with TemporaryDirectory(dir=scratch) as game_directory:
             parsed, possessions = parse_game(game, raw, shots, Path(game_directory))
+            periods_match, periods_reconciled = compare_periods(parsed, game, periods)
+            if not periods_match:
+                raise GameIssue(
+                    "v3_period_score_mismatch", "V2 reconstructed period scores differ from V3"
+                )
             rows = normalize_game(game, roster, raw, parsed, possessions, raw_source["artifact_id"])
-            reconcile_periods(rows["event"], periods)
-        periods_reconciled = len(periods)
         if [event.event_num for event in parsed] != list(raw):
             warning = GameIssue(
                 "same_clock_parser_reorder", "Pinned parser reordered same-clock events"
@@ -240,6 +242,8 @@ def _build_game(
                 "reason": failure,
                 "strata": labels,
                 "v3_periods_reconciled": periods_reconciled,
+                "v3_box_final_match": final_match,
+                "v3_periods_match": periods_match,
                 "v3_substitutions_match": substitutions_match,
             }
         ],
@@ -311,24 +315,30 @@ def _season_games(
             )
 
 
+def _tally_review(counts: Counter[str], row: Row) -> None:
+    counts["expected"] += 1
+    counts["accepted"] += int(row["accepted"] is True)
+    counts["quarantined"] += int(row["accepted"] is False)
+    counts["v3_periods_reconciled"] += cast(int, row["v3_periods_reconciled"])
+    for name in ("v3_box_final", "v3_periods", "v3_substitutions"):
+        match = row[f"{name}_match"]
+        counts[f"{name}_checked"] += int(match is not None)
+        counts[f"{name}_matched"] += int(match is True)
+        counts[f"{name}_mismatched"] += int(match is False)
+        counts[f"{name}_not_checked"] += int(match is None)
+
+
 def summarize_reviews(reviews: list[Row]) -> dict[str, object]:
     coverage: dict[str, Counter[str]] = defaultdict(Counter)
     strata: dict[str, Counter[str]] = defaultdict(Counter)
     reasons: Counter[str] = Counter()
     for row in reviews:
-        kind, status = str(row["season_type"]), "accepted" if row["accepted"] else "quarantined"
-        coverage[kind]["expected"] += 1
-        coverage[kind][status] += 1
-        if status == "quarantined":
+        kind = str(row["season_type"])
+        _tally_review(coverage[kind], row)
+        if not row["accepted"]:
             reasons[str(row["reason"])] += 1
         for label in cast(list[str], row["strata"]):
-            strata[f"{kind}:{label}"]["expected"] += 1
-            strata[f"{kind}:{label}"][status] += 1
-            if row["v3_substitutions_match"]:
-                strata[f"{kind}:{label}"]["v3_substitutions_match"] += 1
-        coverage[kind]["v3_periods_reconciled"] += cast(int, row["v3_periods_reconciled"])
-        if row["v3_substitutions_match"]:
-            coverage[kind]["v3_substitutions_match"] += 1
+            _tally_review(strata[f"{kind}:{label}"], row)
     return {
         "coverage": dict(coverage),
         "comparison_strata": dict(strata),

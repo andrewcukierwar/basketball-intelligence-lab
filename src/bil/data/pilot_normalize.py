@@ -314,6 +314,15 @@ def score_and_events(
         row = raw[event.event_num]
         fields = row.fields
         team = getattr(event, "team_id", None)
+        shooter = getattr(event, "player1_id", None)
+        if event.event_type in (1, 2, 3) and (
+            team not in teams or shooter not in item.lineups[teams.index(team)]
+        ):
+            raise GameIssue(
+                "shooter_outside_lineup",
+                "Shot or free-throw shooter is unresolved or not on court",
+                event.event_num,
+            )
         totals = [event.score.get(side, 0) for side in teams]
         deltas = [totals[i] - points[i] for i in range(2)]
         points = totals
@@ -367,13 +376,6 @@ def score_and_events(
                 raise GameIssue(
                     "unresolved_score_event",
                     "Score delta lacks a supported made shot",
-                    event.event_num,
-                )
-            shooter = getattr(event, "player1_id", None)
-            if shooter not in item.lineups[side]:
-                raise GameIssue(
-                    "scorer_outside_lineup",
-                    "Resolved scoring player is not on court",
                     event.event_num,
                 )
             exempt = event.event_type == 3 and (

@@ -17,7 +17,7 @@ import duckdb  # noqa: E402
 import requests  # noqa: E402
 
 from bil.data import pilot_parser, pilot_sources  # noqa: E402
-from bil.data.pilot import reconcile_periods  # noqa: E402
+from bil.data.pilot import compare_periods, summarize_reviews  # noqa: E402
 from bil.data.pilot_inputs import (  # noqa: E402
     GameBox,
     GameIssue,
@@ -109,7 +109,8 @@ def synthetic_game() -> tuple[GameBox, dict[int, PlayerBox], list[Event], list[P
         Event(3, 8, 1, 718, after, {}, away, 21),
         Event(4, 3, 1, 718, after, {home: 1}, home, 11, True, foul),
         Event(5, 1, 1, 701, after, {home: 3}, home, 11),
-        Event(6, 13, 1, 0, after, {home: 3}),
+        Event(6, 2, 1, 690, after, {home: 3}, away, 22),
+        Event(7, 13, 1, 0, after, {home: 3}),
     ]
     possessions = [Possession(events[:5], home), Possession(events[5:], away)]
     for period in range(2, 5):
@@ -139,9 +140,11 @@ def test_reconstruct_and_export_substitution_and_technical_point(tmp_path: Path)
         for event in events
     }
     result = normalize_game(game, roster, raw, events, possessions, "synthetic")
-    reconcile_periods(result["event"], dict.fromkeys(range(1, 5), (3, 0)))
-    with pytest.raises(GameIssue, match="V2 reconstructed period scores"):
-        reconcile_periods(result["event"], {1: (2, 0), 2: (3, 0), 3: (3, 0), 4: (3, 0)})
+    assert compare_periods(events, game, dict.fromkeys(range(1, 5), (3, 0))) == (True, 4)
+    assert compare_periods(events, game, {1: (2, 0), 2: (3, 0), 3: (3, 0), 4: (3, 0)}) == (
+        False,
+        3,
+    )
     first, second = result["score_allocation"]
     assert first["possession_seq"] is None and first["credited_stint_seq"] == 1
     assert first["attribution_rule"] == "free_throw_trigger_lineup"
@@ -169,10 +172,42 @@ def test_reconstruct_and_export_substitution_and_technical_point(tmp_path: Path)
         normalize_game(game, altered, raw, events, possessions, "synthetic")
     assert rejected.value.code == "player_plus_minus_mismatch"
 
+    events[5].player1_id = 21
+    with pytest.raises(GameIssue) as off_court:
+        normalize_game(game, roster, raw, events, possessions, "synthetic")
+    assert off_court.value.code == "shooter_outside_lineup"
+    events[5].player1_id = 22
+
     events[2].seconds_remaining = 719
     with pytest.raises(GameIssue) as unresolved:
         normalize_game(game, roster, raw, events, possessions, "synthetic")
     assert unresolved.value.code == "unresolved_clock_reset"
+
+
+def test_strata_distinguish_comparison_from_game_acceptance() -> None:
+    base = {
+        "season_type": "regular",
+        "accepted": False,
+        "reason": "player_plus_minus_mismatch",
+        "strata": ["overtime"],
+        "v3_periods_reconciled": 5,
+        "v3_box_final_match": True,
+        "v3_periods_match": True,
+        "v3_substitutions_match": True,
+    }
+    report = summarize_reviews(
+        [
+            base,
+            {**base, "v3_periods_match": False},
+            {**base, "v3_periods_match": None, "v3_periods_reconciled": 0},
+        ]
+    )
+    strata = report["comparison_strata"]
+    assert isinstance(strata, dict)
+    overtime = strata["regular:overtime"]
+    assert overtime["quarantined"] == 3 and overtime["v3_periods_checked"] == 2
+    assert overtime["v3_periods_matched"] == overtime["v3_periods_mismatched"] == 1
+    assert overtime["v3_periods_not_checked"] == 1
 
 
 def test_offline_parser_blocks_library_network_fallback(

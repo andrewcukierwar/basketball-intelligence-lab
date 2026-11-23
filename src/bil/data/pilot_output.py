@@ -134,6 +134,8 @@ TABLES = {
         "reason": "VARCHAR",
         "strata": "VARCHAR[]",
         "v3_periods_reconciled": "INTEGER",
+        "v3_box_final_match": "BOOLEAN",
+        "v3_periods_match": "BOOLEAN",
         "v3_substitutions_match": "BOOLEAN",
     },
 }
