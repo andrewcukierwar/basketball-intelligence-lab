@@ -1,0 +1,59 @@
+name: Research or engineering task
+description: Research question, data contract, experiment, or implementation with explicit evidence and validation
+title: "[BIL] "
+body:
+  - type: dropdown
+    id: workstream
+    attributes:
+      label: Workstream
+      options:
+        - M0 Research foundation
+        - M1 Data infrastructure
+        - M2 RAPM
+        - M3 SPM
+        - M4 Estimated Skills
+        - M5 EPM Integration
+        - M6 Defensive Tracking
+        - M7 Benchmarking
+        - M8 Daily Production
+        - R2 Frontier Replication
+        - R3 Comparative Research
+        - R4 Original Model
+        - R5 Platform
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Objective or hypothesis
+      description: State what we are trying to establish or implement.
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Methodology classification
+      options:
+        - Documented
+        - Inferred
+        - Experimental
+        - Original
+        - Not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources and relevant design decisions
+      description: Link primary references and any uncertainty-register entries.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria and validation
+      description: Specify tests, datasets, baselines, evaluation windows and objective exit criteria.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies, exclusions and risks
