@@ -71,6 +71,26 @@ SOURCES = (
         "9e3137fd28b590d8c7a446c286500fc01d786e483b51fcc85f461d5a89cdbe37",
         193_132,
     ),
+    _archive(
+        "cdnnba_2022.tar.xz",
+        "de895e3474365fc14b028f514eb0f8c9c1503b95d3f1a5aef5a408305ddfb41f",
+        18_705_272,
+    ),
+    _archive(
+        "cdnnba_po_2022.tar.xz",
+        "2f20055f6d7d54fdc74fb910ef8db0901166fca3a701a2a4f50448af3a32298c",
+        1_218_416,
+    ),
+    _archive(
+        "datanba_2022.tar.xz",
+        "8be05e5ae4b598b115ecfed8d4c9cef5cd324a21d6383bd8dd185401f2ebbf69",
+        11_310_412,
+    ),
+    _archive(
+        "datanba_po_2022.tar.xz",
+        "b112928125780366f9b4dc40c06d480b64e738d8b3c797a37de91eb87a1540ba",
+        743_948,
+    ),
     Source(
         "team_game_logs.parquet",
         f"{BOX_BASE}/team_game_logs/season=2023/data.parquet",

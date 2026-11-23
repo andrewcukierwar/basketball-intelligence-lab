@@ -75,6 +75,6 @@ The committed `uv.lock` pins the local development environment. CI installs the 
 
 ## Status
 
-**M0 — Research foundation:** complete. **M1 — Historical NBA dataset:** the 2022–23 pilot accepts 1,290 of 1,314 games under documented invariants and tolerances. **M2 — RAPM baseline:** synthetic reference verified. See the [pilot guide](docs/data-pilot.md) and [project milestones](docs/PROJECT_PLAN.md#9-project-management).
+**M0 — Research foundation:** complete. **M1 — Historical NBA dataset:** the 2022–23 pilot accepts 1,292 of 1,314 games under documented invariants and tolerances, with archived-feed adjudication (ADR-0011). **M2 — RAPM baseline:** synthetic reference verified. See the [pilot guide](docs/data-pilot.md) and [project milestones](docs/PROJECT_PLAN.md#9-project-management).
 
 This is an independent research project and is not affiliated with Dunks & Threes, DARKO, BBall Index or the NBA.

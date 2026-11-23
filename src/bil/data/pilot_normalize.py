@@ -38,6 +38,8 @@ EVENT_KINDS = {
     13: "period_end",
     18: "replay",
 }
+# Shots, free throws and turnovers: events a feed's offense team describes directly.
+LIVE_BALL_TYPES = (1, 2, 3, 5)
 END_REASONS = {
     1: "made_shot",
     3: "final_free_throw",
@@ -247,13 +249,26 @@ def build_possessions(
     scope: Row,
     teams: tuple[int, int],
     unresolved: frozenset[int] = frozenset(),
-) -> tuple[list[Row], dict[int, tuple[int, int, str]]]:
+    offense_evidence: dict[int, int] | None = None,
+    keep_unresolved: frozenset[int] = frozenset(),
+) -> tuple[list[Row], dict[int, tuple[int, int, str]], set[int]]:
+    """Build possession rows and map each event sequence to (possession, offense, status).
+
+    An unresolved possession takes the offense that ``offense_evidence`` (a feed's offense
+    team by source event number) gives unanimously for its shots, free throws and turnovers,
+    unless that would give it the same offense as an adjacent possession in the period or the
+    index is in ``keep_unresolved``. Possessions are relabeled in order, so an earlier relabel
+    can block a later neighbor; that keeps the result free of repeated offenses. Returns the
+    indices relabeled this way.
+    """
     by_event_num = {item.source.event_num: item for item in events}
     by_event: dict[int, tuple[int, int, str]] = {}
     rows: list[Row] = []
+    members: list[list[TimedEvent]] = []
     prior_end = 1
     for index, position in enumerate(possessions):
         items = [by_event_num[event.event_num] for event in position.events]
+        members.append(items)
         first, last = items[0], items[-1]
         if (
             any(item.source.period != first.source.period for item in items)
@@ -297,7 +312,38 @@ def build_possessions(
         for item in events
     ):
         raise GameIssue("missing_possession_events", "Live-clock events have no possession")
-    return rows, by_event
+    relabeled: set[int] = set()
+    for index in sorted(unresolved - keep_unresolved):
+        votes = (
+            {
+                offense_evidence.get(item.source.event_num)
+                for item in members[index]
+                if item.source.event_type in LIVE_BALL_TYPES
+            }
+            if offense_evidence
+            else set()
+        )
+        if len(votes) != 1:
+            continue
+        team = votes.pop()
+        if team not in teams:
+            continue
+        row = rows[index]
+        if any(
+            0 <= other < len(rows)
+            and rows[other]["period"] == row["period"]
+            and rows[other]["offense_team_id"] == str(team)
+            for other in (index - 1, index + 1)
+        ):
+            continue
+        row.update(
+            offense_team_id=str(team),
+            defense_team_id=str(teams[1 - teams.index(team)]),
+            status="accepted",
+        )
+        by_event.update((item.seq, (index + 1, team, "accepted")) for item in members[index])
+        relabeled.add(index)
+    return rows, by_event, relabeled
 
 
 @dataclass(frozen=True)
@@ -607,28 +653,38 @@ def normalize_game(
     parsed_possessions: list[ParserPossession],
     artifact_id: str,
     unresolved_possessions: frozenset[int] = frozenset(),
+    offense_evidence: dict[int, int] | None = None,
+    report: dict[str, int] | None = None,
 ) -> Rows:
     scope: Row = {"game_id": game.game_id, "stream_revision": 1}
     teams = game.home_id, game.away_id
     events = timed_events(parsed_events, raw, game, roster)
     lineups, stints, by_stint, minutes = build_stints(events, scope, teams)
-    possessions, by_poss = build_possessions(
-        parsed_possessions, events, scope, teams, unresolved_possessions
-    )
-    canonical, actors, allocations, pm, conflicts, choices = score_and_events(
-        events, raw, scope, game, roster, by_stint, by_poss, artifact_id
-    )
-    if conflicts:
-        # Possession sequence numbers are one-based parser possession indices.
-        unresolved_possessions |= {seq - 1 for seq in conflicts}
-        possessions, by_poss = build_possessions(
-            parsed_possessions, events, scope, teams, unresolved_possessions
+    unresolved, keep = set(unresolved_possessions), set[int]()
+    for _ in range(4):
+        possessions, by_poss, relabeled = build_possessions(
+            parsed_possessions,
+            events,
+            scope,
+            teams,
+            frozenset(unresolved),
+            offense_evidence,
+            frozenset(keep),
         )
         canonical, actors, allocations, pm, conflicts, choices = score_and_events(
             events, raw, scope, game, roster, by_stint, by_poss, artifact_id
         )
-        if conflicts:
-            raise GameIssue("unresolved_score_allocation", "Possession conflicts persist")
+        if not conflicts:
+            break
+        # Possession sequence numbers are one-based parser possession indices. A relabeled
+        # possession that a score contradicts stays unresolved.
+        indices = {seq - 1 for seq in conflicts}
+        keep |= indices & relabeled
+        unresolved |= indices
+    else:
+        raise GameIssue("unresolved_score_allocation", "Possession conflicts persist")
+    if report is not None:
+        report["relabeled_possessions"] = len(relabeled)
     reconcile_minutes(minutes, roster, truncated_boundaries(events, raw))
     for choice, option in choose_box_credits(pm, roster, choices):
         allocation = allocations[choice.allocation]
