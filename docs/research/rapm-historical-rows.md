@@ -55,7 +55,7 @@ Verify these identities for every game before summing across games.
 2. Sum of modeled points equals the eligible disposition's assigned control points, by scoring team. That category plus all other assigned control points, unassigned dead-ball points and unresolved points equals the signed score-allocation total. It reconciles to the final score independently on each side.
 3. Modeled team offensive exposure sums to the eligible possession count. Player-role exposure sums to five times that count in each role. Quarantined games enter only the expected-game and quarantine denominators.
 
-The first extractor emits per-possession rows. If a later fit groups rows, only identical complete design vectors may share a group. Let their observation weights sum to $W$ and their weighted response mean be $\\bar y$. The group's loss at prediction $f$ is $W(\\bar y-f)^2$ plus $\\sum_i w_i(y_i-\\bar y)^2$. The latter is independent of coefficients. Keep raw total weights and the same penalty to preserve the minimizer. Include that constant if comparing objective values. Context columns and cutoff assignment must also match. Forecast evaluation retains the original row grain.
+The extractor retains NBA player IDs as canonical decimal strings. Convert them to positive integers at the #6 estimator boundary, where the solver builds its numeric player universe. The first extractor emits per-possession rows. If a later fit groups rows, only identical complete design vectors may share a group. Let their observation weights sum to $W$ and their weighted response mean be $\bar y$. The group's loss at prediction $f$ is $W(\bar y-f)^2$ plus $\sum_i w_i(y_i-\bar y)^2$. The latter is independent of coefficients. Keep raw total weights and the same penalty to preserve the minimizer. Include that constant if comparing objective values. Context columns and cutoff assignment must also match. Forecast evaluation retains the original row grain.
 
 ## Initial pilot exposure profile
 
@@ -71,4 +71,4 @@ The excluded group accounts for 12.64% of pilot-accepted possessions and scores 
 
 ## Synthetic example
 
-The [hand-adjudicated sequence fixture](../../tests/fixtures/rapm/historical_rows.json) includes a same-clock lineup credit, an interior zero-duration lineup, retained-ball scoring, parser exclusions, unresolved offense and a zero-point possession. It uses fictitious game and player IDs.
+The [hand-adjudicated sequence fixture](../../tests/fixtures/rapm/historical_rows.json) includes an official credit to a different stint, an interior zero-duration lineup, retained-ball scoring, parser exclusions, unresolved offense and a zero-point possession. It supplies pre-adjudicated score and lineup inputs with fictitious IDs. The example tests downstream assignment.

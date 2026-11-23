@@ -19,9 +19,9 @@
     {"stint_seq": 3, "period": 1, "start_seq": 6, "end_seq": 15, "start_elapsed_ms": 30000, "end_elapsed_ms": 720000, "home_lineup_id": "h3", "away_lineup_id": "a1"}
   ],
   "possessions": [
-    {"possession_seq": 1, "period": 1, "start_seq": 1, "end_seq": 3, "offense_team_id": "100", "defense_team_id": "200", "status": "accepted"},
-    {"possession_seq": 2, "period": 1, "start_seq": 3, "end_seq": 6, "offense_team_id": "200", "defense_team_id": "100", "status": "accepted"},
-    {"possession_seq": 3, "period": 1, "start_seq": 6, "end_seq": 8, "offense_team_id": "100", "defense_team_id": "200", "status": "excluded"},
+    {"possession_seq": 1, "period": 1, "start_seq": 1, "end_seq": 4, "offense_team_id": "100", "defense_team_id": "200", "status": "accepted"},
+    {"possession_seq": 2, "period": 1, "start_seq": 4, "end_seq": 7, "offense_team_id": "200", "defense_team_id": "100", "status": "accepted"},
+    {"possession_seq": 3, "period": 1, "start_seq": 7, "end_seq": 8, "offense_team_id": "100", "defense_team_id": "200", "status": "excluded"},
     {"possession_seq": 4, "period": 1, "start_seq": 8, "end_seq": 10, "offense_team_id": "200", "defense_team_id": "100", "status": "unresolved"},
     {"possession_seq": 5, "period": 1, "start_seq": 10, "end_seq": 13, "offense_team_id": "100", "defense_team_id": "200", "status": "accepted"},
     {"possession_seq": 6, "period": 1, "start_seq": 13, "end_seq": 15, "offense_team_id": "200", "defense_team_id": "100", "status": "accepted"}
