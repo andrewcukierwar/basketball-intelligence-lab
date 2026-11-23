@@ -272,6 +272,28 @@ def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object
     ).fetchall():
         for period, team, ids in re.findall(r"period (\d+) team (\d+): ([\d,]+)", detail):
             inferred.append((game_id, int(period), team, sorted(ids.split(","))))
+    # Starters taken from liveData are checked against Bentes only; a liveData check would
+    # repeat the input.
+    recorded = []
+    for game_id, detail in connection.execute(
+        "select game_id, detail from quality_issue where code = 'livedata_starters'"
+    ).fetchall():
+        for period, team in re.findall(r"period (\d+) team (\d+)", detail):
+            first = connection.execute(
+                """select ids from ours where game_id = ? and team = ? and period = ?
+                   order by stint_seq limit 1""",
+                [game_id, team, int(period)],
+            ).fetchall()
+            if first:
+                recorded.append((game_id, int(period), team, list(first[0][0])))
+    recorded_agree = 0
+    for game_id, period, team, ids in recorded:
+        start_ms = (period - 1) * 720_000 if period <= 4 else 2_880_000 + (period - 5) * 300_000
+        match = connection.execute(
+            "select ids from bentes_team where game_id = ? and t0 = ? and team = ?",
+            [game_id, start_ms // 1000, team],
+        ).fetchall()
+        recorded_agree += int(len(match) == 1 and match[0][0] == ids)
     bentes_agree = live_agree = live_checked = 0
     disagreements: list[list[str]] = []
     for game_id, period, team, ids in inferred:
@@ -308,6 +330,8 @@ def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object
         else:
             disagreements.append(["liveData", game_id, str(period), team])
     return {
+        "livedata_team_periods": len(recorded),
+        "livedata_bentes_agree": recorded_agree,
         "inferred_team_periods": len(inferred),
         "livedata_not_applicable_period_1": sum(period == 1 for _, period, _, _ in inferred),
         "bentes_agree": bentes_agree,
