@@ -3,7 +3,7 @@
 - **Date:** 2026-11-23
 - **Status:** Awaiting review. Issue #5 stays open for the remaining quarantine groups.
 - **Related issues:** [#5](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/5)
-- **Branch / commit / PR:** `claude/issue-5-v3-event-order` from `4c14f22`. Code is in `e098dca` and `4bbf68e`. The PR is linked from issue #5.
+- **Branch / commit / PR:** `claude/issue-5-v3-event-order` from `4c14f22`. Code is in `e098dca` and `4bbf68e`. [PR #14](https://github.com/andrewcukierwar/basketball-intelligence-lab/pull/14).
 
 ## Objective and authorized scope
 
@@ -34,7 +34,7 @@ Continue issue #5 from the [previous handoff](2026-11-23-issue-5-possession-pilo
 | Separate DuckDB checker that does not import pipeline code, 26 checks | Pass on both new builds and on the earlier `issue-5-final-v1`. Covers manifest digests and row counts, five distinct players, lineup sides, stints tiling each period, half-open possession intervals, final scores from events and from allocations, shooters on court, minutes within 2,000 ms and exact plus-minus. |
 | Previously accepted games, old vs new build | 0 row differences across the event, actor, lineup, stint, possession and allocation tables for the 1,131 games. No game was newly quarantined. |
 | Independent review of `e098dca` (fresh-context Claude Sonnet subagent) | No blockers. Two suggestions applied in `4bbf68e`. The suggested integration fixture for the fallback path was not added. |
-| CI | See the PR. |
+| CI | Runs on [PR #14](https://github.com/andrewcukierwar/basketball-intelligence-lab/pull/14). Not yet observed when this handoff was written. |
 
 ## Blockers and remaining risks
 
