@@ -16,7 +16,7 @@ Our first objective is to reproduce the published methodology behind Taylor Snar
 
 **We will not train a model using EPM ratings as labels.** Dunks & Threes ratings, where their use is permitted, serve only as independent external diagnostics—not a loss function, training target, or hyperparameter optimization objective.
 
-The first milestone is a reliable historical NBA data foundation and a mathematically validated RAPM baseline. No production ratings have been implemented yet.
+M0 establishes the methodology specification, source audit and research contracts. The validated historical dataset and RAPM baseline follow in M1 and M2. No production ratings have been implemented yet.
 
 ## Long-term research
 
@@ -52,13 +52,13 @@ The repository begins as a lightweight Python research scaffold; modeling and in
 
 Requirements: Python 3.11+ (CI uses 3.12). Recommended: [uv](https://docs.astral.sh/uv/).
 
-    uv sync --extra dev
+    uv sync --locked --extra dev
     uv run pytest
     uv run ruff check .
     uv run ruff format --check .
     uv run mypy src
 
-The uv lockfile should be generated and committed when the first dependency resolution is performed.
+The committed `uv.lock` pins the local development environment. CI exercises the package extras with pip on Python 3.12.
 
 ## Research standards
 
