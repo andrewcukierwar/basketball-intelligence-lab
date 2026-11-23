@@ -55,7 +55,7 @@ Bentes uses the season's **ending** year, so `2023` is 2022–23. Shufinskiy use
 
 ## Pilot evidence snapshot
 
-These assets were captured on 2026-11-23 with `python -m bil.data.pilot capture-evidence`. They are used only to verify builds and never enter one. Each Shufinskiy download matched the Git blob ID in the pinned tree, and the Bentes stints matched the SHA-256 values listed above. The rights posture is the same as for the pilot inputs: private, noncommercial comparison with no redistribution. [Verification results](data-pilot.md#external-verification)
+These assets were captured on 2026-11-23 with `python -m bil.data.pilot capture-evidence` to verify builds. Under ADR-0011, the liveData and data.nba files also became pilot inputs in snapshot `issue-5-v2`, for three narrow decisions. The pbpstats.com and Bentes files remain verification-only. Each Shufinskiy download matched the Git blob ID in the pinned tree, and the Bentes stints matched the SHA-256 values listed above. The rights posture is the same as for the pilot inputs: private, noncommercial comparison with no redistribution. [Verification results](data-pilot.md#external-verification)
 
 | Evidence asset | Bytes | Upstream identifier |
 | --- | ---: | --- |

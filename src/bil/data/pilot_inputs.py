@@ -236,3 +236,78 @@ def box_scores(
     if games.keys() != players.keys():
         raise ValueError("Player and team box-score game sets differ")
     return games, dict(players)
+
+
+@dataclass
+class CrossFeed:
+    """Evidence from the archived NBA liveData and data.nba.com feeds for one game."""
+
+    live_periods: dict[int, tuple[int, int]] = field(default_factory=dict)
+    datanba_periods: dict[int, tuple[int, int]] = field(default_factory=dict)
+    # Substitutions logged at a period's starting clock, keyed by (period, team ID), as
+    # (outgoing players, incoming players). Present only for games with liveData actions.
+    between_periods: dict[tuple[int, int], tuple[frozenset[int], frozenset[int]]] = field(
+        default_factory=dict
+    )
+    has_livedata: bool = False
+    # data.nba.com offense team for each V2 event number that names one.
+    offense: dict[int, int] = field(default_factory=dict)
+
+
+def _period_start_clock(period: int) -> str:
+    return "PT12M00.00S" if period <= 4 else "PT05M00.00S"
+
+
+def cross_feeds(livedata: Path, datanba: Path) -> dict[str, CrossFeed]:
+    games: dict[str, CrossFeed] = defaultdict(CrossFeed)
+    live_ends: dict[tuple[str, int], tuple[int, tuple[int, int]]] = {}
+    moves: dict[tuple[str, int, int], tuple[set[int], set[int]]] = defaultdict(
+        lambda: (set(), set())
+    )
+    for row in archive_rows(livedata):
+        game_id = nba_game_id(row["gameId"])
+        games[game_id].has_livedata = True
+        if not row["period"].isdigit() or not row["orderNumber"].isdigit():
+            continue
+        period = int(row["period"])
+        order = int(row["orderNumber"])
+        if row["actionType"] == "period" and row["subType"] == "end":
+            if row["scoreHome"].isdigit() and row["scoreAway"].isdigit():
+                score = int(row["scoreHome"]), int(row["scoreAway"])
+                key = game_id, period
+                if key not in live_ends or order > live_ends[key][0]:
+                    live_ends[key] = order, score
+        elif (
+            row["actionType"] == "substitution"
+            and row["clock"] == _period_start_clock(period)
+            and row["teamId"].isdigit()
+            and row["personId"].isdigit()
+        ):
+            side = 0 if row["subType"] == "out" else 1 if row["subType"] == "in" else None
+            if side is None:
+                raise ValueError(f"Unknown liveData substitution type in {game_id}")
+            moves[(game_id, period, int(row["teamId"]))][side].add(int(row["personId"]))
+    for (game_id, period), (_, score) in live_ends.items():
+        games[game_id].live_periods[period] = score
+    for (game_id, period, team), (outgoing, incoming) in moves.items():
+        games[game_id].between_periods[(period, team)] = (frozenset(outgoing), frozenset(incoming))
+
+    nba_ends: dict[tuple[str, int], tuple[int, tuple[int, int]]] = {}
+    for row in archive_rows(datanba):
+        game_id = nba_game_id(row["GAME_ID"])
+        feed = games[game_id]
+        if row["oftid"].isdigit() and int(row["oftid"]) and row["evt"].isdigit():
+            feed.offense[int(row["evt"])] = int(row["oftid"])
+        if (
+            row["hs"].isdigit()
+            and row["vs"].isdigit()
+            and row["ord"].isdigit()
+            and row["PERIOD"].isdigit()
+        ):
+            key = game_id, int(row["PERIOD"])
+            order = int(row["ord"])
+            if key not in nba_ends or order > nba_ends[key][0]:
+                nba_ends[key] = order, (int(row["hs"]), int(row["vs"]))
+    for (game_id, period), (_, score) in nba_ends.items():
+        games[game_id].datanba_periods[period] = score
+    return dict(games)

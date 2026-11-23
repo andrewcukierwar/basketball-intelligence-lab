@@ -653,3 +653,104 @@ def test_evidence_comparisons_count_agreement_on_synthetic_tables(tmp_path: Path
         assert scores["games_where_v3_alone_differs"] == ["0022200001"]
         assert scores["games_where_datanba_alone_differs"] == ["0022200001"]
         assert scores["periods_compared"] == 2
+
+
+def _csv_archive(path: Path, header: list[str], rows: list[list[str]]) -> None:
+    text = io.StringIO()
+    writer = csv.writer(text)
+    writer.writerow(header)
+    writer.writerows(rows)
+    data = text.getvalue().encode()
+    with tarfile.open(path, "w:xz") as bundle:
+        member = tarfile.TarInfo("feed.csv")
+        member.size = len(data)
+        bundle.addfile(member, io.BytesIO(data))
+
+
+def test_cross_feeds_read_period_scores_starter_moves_and_offense(tmp_path: Path) -> None:
+    from bil.data.pilot_inputs import cross_feeds
+
+    live_header = ["gameId", "period", "orderNumber", "actionType", "subType", "clock"]
+    live_header += ["teamId", "personId", "scoreHome", "scoreAway"]
+    _csv_archive(
+        tmp_path / "live.tar.xz",
+        live_header,
+        [
+            ["22200001", "1", "10", "period", "end", "PT00M00.00S", "", "", "30", "20"],
+            ["22200001", "2", "20", "substitution", "out", "PT12M00.00S", "100", "6", "", ""],
+            ["22200001", "2", "21", "substitution", "in", "PT12M00.00S", "100", "5", "", ""],
+            ["22200001", "2", "30", "substitution", "out", "PT11M00.00S", "100", "5", "", ""],
+        ],
+    )
+    _csv_archive(
+        tmp_path / "datanba.tar.xz",
+        ["GAME_ID", "evt", "oftid", "ord", "PERIOD", "hs", "vs"],
+        [
+            ["22200001", "7", "100", "70", "1", "30", "20"],
+            ["22200001", "8", "0", "80", "1", "", ""],
+        ],
+    )
+    feed = cross_feeds(tmp_path / "live.tar.xz", tmp_path / "datanba.tar.xz")["0022200001"]
+    assert feed.has_livedata and feed.live_periods == {1: (30, 20)}
+    assert feed.datanba_periods == {1: (30, 20)} and feed.offense == {7: 100}
+    # Only substitutions at the period's starting clock count as between-period moves.
+    assert feed.between_periods == {(2, 100): (frozenset({6}), frozenset({5}))}
+
+
+def test_livedata_starters_require_consistency_with_period_events() -> None:
+    @dataclass
+    class PeriodEnd:
+        current_players: dict[int, list[int]]
+        event_type: int = 13
+
+    closing = PeriodEnd({100: [1, 2, 3, 4, 6]})
+    moves = {(2, 100): (frozenset({6}), frozenset({5}))}
+    propagate = pilot_parser._propagated_starters
+    assert propagate(closing, 100, 2, (1, 2, 3, 4), moves) == (1, 2, 3, 4, 5)
+    assert propagate(closing, 100, 2, (1, 2, 3, 4, 5, 9), moves) == (1, 2, 3, 4, 5)
+    # Events naming a player the substitutions remove, or the first period, are not settled.
+    assert propagate(closing, 100, 2, (1, 2, 3, 6), moves) is None
+    assert propagate(closing, 100, 1, (1, 2, 3, 4), moves) is None
+    assert propagate(PeriodEnd({100: [1, 2, 3, 4, 6]}, 12), 100, 2, (1, 2, 3, 4), moves) is None
+    # Too few event-identified starters to trust the feed.
+    assert propagate(closing, 100, 2, (1, 2), moves) is None
+    # A set of six that lacks the substituted player cannot contain the feed's lineup.
+    assert propagate(closing, 100, 2, (1, 2, 3, 4, 7, 8), moves) is None
+
+
+def test_period_defect_needs_both_feeds_to_confirm_every_disputed_period() -> None:
+    from bil.data.pilot import v3_alone_differs
+    from bil.data.pilot_inputs import CrossFeed
+
+    ours = {1: (30, 20), 2: (50, 40)}
+    v3 = {1: (31, 20), 2: (50, 40)}
+    both = CrossFeed(live_periods=dict(ours), datanba_periods=dict(ours))
+    assert v3_alone_differs(ours, v3, both)
+    assert not v3_alone_differs(ours, v3, CrossFeed(live_periods=dict(ours)))
+    assert not v3_alone_differs(ours, dict(ours), both)
+    # A period missing from V2 and from both feeds is not evidence of a V3 defect.
+    assert not v3_alone_differs({1: (30, 20)}, {1: (30, 20), 2: (50, 40)}, CrossFeed())
+
+
+def test_unresolved_possession_takes_unanimous_feed_offense_without_repeating() -> None:
+    game, roster, events, possessions = synthetic_game()
+    raw = {
+        event.event_num: RawEvent(
+            {"PLAYER1_TEAM_ID": "200", "PLAYER1_ID": "21", "PLAYER2_ID": "26"}
+            if event.event_type == 8
+            else {},
+            [event.event_num + 1],
+        )
+        for event in events
+    }
+    # The second possession holds the away team's missed shot (event 6).
+    report: dict[str, int] = {}
+    rows = normalize_game(
+        game, roster, raw, events, possessions, "fixture", frozenset({1}), {6: 200}, report
+    )
+    assert rows["possession"][1]["status"] == "accepted" and report["relabeled_possessions"] == 1
+    # A label that repeats the previous possession's offense stays unresolved.
+    rows = normalize_game(
+        game, roster, raw, events, possessions, "fixture", frozenset({1}), {6: 100}, report
+    )
+    assert rows["possession"][1]["status"] == "unresolved" and report["relabeled_possessions"] == 0
