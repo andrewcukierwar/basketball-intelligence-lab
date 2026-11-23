@@ -20,6 +20,10 @@ pilot = [
     "duckdb==2.0.1",
     "pbpstats==1.3.11",
 ]
+rapm = [
+    "numpy>=1.26,<3",
+    "scipy>=1.15,<2",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bil"]
