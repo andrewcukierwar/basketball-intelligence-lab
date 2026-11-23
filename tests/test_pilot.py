@@ -550,3 +550,60 @@ def test_check_build_passes_synthetic_output_and_catches_defects(tmp_path: Path)
     moved = check_build(build(roster, "moved"), tmp_path / "moved-snapshot")
     assert moved["credited_lineup_contains_shooter"] == 1
     assert moved["shooters_on_court"] == 1
+
+
+def test_evidence_comparisons_count_agreement_on_synthetic_tables() -> None:
+    from bil.data import pilot_evidence
+
+    with duckdb.connect() as connection:
+        connection.execute(
+            """
+            create table game_review as select '0022200001' as game_id,
+              ['inferred_starters'] as strata;
+            create table ours as select * from (values
+              ('0022200001', 2, '100', 720.0, 750.0, 720000, 750000, ['1','2','3','4','5']),
+              ('0022200001', 1, '100', 0.0, 720.0, 0, 720000, ['1','2','3','4','6']))
+              t(game_id, period, team, t0, t1, start_elapsed_ms, end_elapsed_ms, ids);
+            create table bentes as select * from (values
+              ('0022200001', 720, 740, ['1','2','3','4','5']),
+              ('0022200001', 740, 750, ['1','2','3','4','7']),
+              ('0022200001', 0, 720, ['1','2','3','4','6'])) t(game_id, t0, t1, ids);
+            create table quality_issue as select '0022200001' as game_id,
+              'inferred_starters' as code, 'period 2 team 100: 1,2,3,4,5' as detail;
+            create table cdnnba as select * from (values
+              ('0022200001', 'substitution', 'out', '6', '100', '2', 'PT12M00.00S'),
+              ('0022200001', 'substitution', 'in', '5', '100', '2', 'PT12M00.00S'))
+              t(gameId, actionType, subType, personId, teamId, period, clock);
+            create table event as select * from (values
+              ('0022200001', 1, 'shot', '10'), ('0022200001', 2, 'turnover', '12'),
+              ('0022200001', 3, 'shot', '11'))
+              t(game_id, seq, kind, source_event_id);
+            create table possession as select * from (values
+              ('0022200001', 1, 1, 3, '100', 'accepted'),
+              ('0022200001', 2, 3, 4, '200', 'unresolved'))
+              t(game_id, possession_seq, start_seq, end_seq, offense_team_id, status);
+            create table datanba as select * from (values
+              ('0022200001', '10', '100', '1'), ('0022200001', '12', '200', '3'),
+              ('0022200001', '11', '100', '2'))
+              t(GAME_ID, evt, oftid, ord);
+            """
+        )
+        lineups = pilot_evidence.lineup_agreement(connection)
+        assert lineups["games"] == 1 and lineups["disagreements_over_2s"] != []
+        assert abs(float(str(lineups["time_share"])) - 740 / 750) < 1e-9
+
+        starters = pilot_evidence.starter_agreement(connection)
+        assert starters["bentes_agree"] == 1 and starters["livedata_agree"] == 1
+
+        connection.execute("alter table cdnnba add column actionNumber varchar default '0'")
+        connection.execute("alter table cdnnba add column possession varchar default '0'")
+        offense = pilot_evidence.possession_agreement(connection)
+        # The turnover's feed offense contradicts possession 1; possession 2 is contradicted.
+        assert offense["datanba"] == {
+            "accepted": {"events": 2, "agree": 1},
+            "unresolved": {"events": 1, "agree": 0},
+        }
+        assert offense["cdnnba"] == {}
+
+        order = pilot_evidence.order_agreement(connection)
+        assert order["v2_file_order"] == {"games": 1, "games_with_descents": 1, "descents": 1}
