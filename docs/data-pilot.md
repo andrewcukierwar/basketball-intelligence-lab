@@ -30,6 +30,8 @@ Then check the exported tables independently. The check reads the output tables,
   data/raw/2022-23/issue-5-v2
 ```
 
+The same commands build other pinned seasons. Seasons are keyed by starting year, and `build`, `check` and `evidence` read the season recorded in the snapshot or manifest. `capture` and `capture-evidence` take `--season` (default `2022`). `--from-local DIR` copies already captured bytes instead of downloading them and checks every pin. Pins exist for 2022–23 through 2024–25 only. The 2025–26 holdout and later seasons are refused under [#42](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/42). See [the outer-validation seasons](#outer-validation-seasons-202324-and-202425).
+
 The possession check examines consecutive possession rows within each period, including parser-excluded rows. If they share an offense, both rows must be unresolved unless a flagrant foul occurred in the earlier possession or the possession immediately before it. The check looks up flagrant fouls in the pinned V2 archive by game and source event ID. This is the same within-period exception used by the pinned parser.
 
 To run the real parser integration tests for the starter search and V3-primary retry, point pytest at your existing private snapshot. The fixtures select two archived games and keep the underlying source rows outside Git.
@@ -45,7 +47,7 @@ The manifest records output file digests, row counts, the snapshot digest, code 
 
 | Check | Implementation |
 | --- | --- |
-| Game inventory and identity | Use Bill Mill's pinned team and player game logs for expected games, official dates, teams and player IDs. Use NBA IDs as strings in output. Compare the V3 final-period marker with the team boxes. |
+| Game inventory and identity | Use Bill Mill's pinned team and player game logs for expected games, official dates, teams and player IDs. Use NBA IDs as strings in output. Compare the V3 final-period marker with the team boxes. When the box leaves the home flag null for both teams, V2 designates the home team. Every event with a team and only one of the home or visitor descriptions must agree. The V3 final check then confirms the designation against the box points (`v2_home_designation`, ADR-0014). Otherwise the game is quarantined as `unresolved_home_designation`. |
 | Source order | Read V2 file order and retain raw CSV record locators. Collapse exact repeats with all their locators. Quarantine conflicting duplicate keys, parser event loss or parser moves across clocks. Record supported same-clock parser reorders. When the parser's own rebound-order repairs fail, it would request data.nba.com event order. The pilot substitutes the pinned V3 action order: V3 `actionNumber` is the V2 `EVENTNUM`, rows are taken in `actionId` order and the first occurrence of each event number is kept. It is used only if V3 covers exactly the V2 events. Rebound order is checked again afterward. Every such game carries a `v3_event_order_applied` warning and a `v3_event_order` stratum, and the existing cross-clock and reconciliation checks still apply. As a last resort, a game that fails acceptance in V2 order is parsed again with its events written in V3 action order (`v3_primary_order`). The cross-clock guard still compares against V2 order. If that also fails, the game keeps its V2 failure. |
 | Lineup state and timing | Run the pinned `pbpstats` parser offline on locally wrapped V2 events and team shot charts. Verify each side has five distinct players in that team's box, that outgoing and incoming IDs explain each state change, and that stints cover every period. A substitution changes the following event's lineup. When period events do not give five starters, the parser would request a live box score. After the first period, the pilot instead carries the previous period's closing lineup through the archived liveData substitutions logged at the period's starting clock. It accepts that lineup only if it is consistent with the starters the events identify (`livedata_starters`). Otherwise, and in the first period, the pilot tries every candidate: it extends a short set with team players who logged minutes, or trims a set of six to five, and runs each through all acceptance checks. The game is accepted only if exactly one candidate passes (`inferred_starters`), or if every passing candidate gives an identical reconstruction (`immaterial_starters`). Unresolved clock restorations, ambiguous starters and unresolved event order stay quarantined. |
 | Score and credited lineups | Compute scoring deltas from parsed makes and reconcile every period against the archived V3 end marker. If V3 alone disputes some periods, and both liveData and data.nba agree with V2 on every one of them, accept the game and record the V3 comparison as a mismatch (`v3_period_defect`). Verify the shooter is on court on the correct team for every field goal or free-throw attempt. Each known scoring delta has a ledger row. For a free throw tied to a same-clock foul, use the foul lineup when it contains the shooter. Credit other made shots to the scoring-event lineup. The credited stint is explicit. Compare player plus-minus exactly and minutes to the pinned box log. The minutes tolerance is 2,000 ms per player plus 1,000 ms for each of that player's substitutions at a clock inside a period's final minute. V2 truncates tenths there, while the V3 clocks keep them. This allows for clock precision without changing a source clock or a box value. The official box sometimes credits a score to the lineup on the other side of a substitution logged at the same clock. When only plus-minus differs, the pilot searches the lineup states at that clock with the shooter on court. It accepts the unique smallest set of up to three credit changes that matches every player, or several that differ only between scores at one clock. Such allocations use `same_clock_box_credit`. Actual lineups, stints and minutes do not change. |
@@ -272,3 +274,110 @@ uv run python -m bil.features.skill_build \
 ```
 
 Outputs: `appearance_opportunities` (per appearance: source row digest, earlier-appearance counts, New York cutoff, strict-cohort count and status), `skill_baselines` (per player-game and statistic: realized target, target and history status, covered-game counts and career or season sums, and the career, season, last-10, 30- and 90-day decay and league predictions from strictly earlier dates), `baseline_scores` (exposure-weighted MSE and log loss by season type, cohort, month and history bucket) and `manifest.json` with a `content_id`, snapshot IDs, opportunity and appearance digests, coverage and reconciliation. The build recomputes every baseline, target and headline score with independent DuckDB SQL over the raw logs. Any mismatch, a nonempty strict history, a player-day duplicate, career differing from season while one season is loaded, or a #62 mismatch fails the build, removes the output and exits nonzero. The run takes about 20 seconds.
+
+## Outer-validation seasons: 2023–24 and 2024–25
+
+[Issue #52](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/52) builds the two outer folds of the [evaluation contract](validation-strategy.md) with the pilot rules and acceptance thresholds unchanged. All three builds used commit `9395ce1` and parser version `pbpstats-1.3.11-bil-v6` on 2026-11-23. The 2025–26 holdout was not built, and its payloads were not read.
+
+### Snapshots and commands
+
+Each season's inputs and evidence feeds were copied from the [#51 audit](research/nba-feed-coverage.md) capture with no network requests. The copies were verified against the size and SHA-256 recorded in the audit registers, and those pins are now in `pilot_sources.py`. A copied artifact's `retrieved_at` is the modification time of the audit file, which is when it was downloaded. The snapshot's `local_capture` field names the source directory.
+
+```sh
+A=data/raw/historical-feed-audit/2026-11-23
+.venv/bin/python -m bil.data.pilot capture data/raw/2023-24/issue-52-v1 --season 2023 --from-local "$A"
+.venv/bin/python -m bil.data.pilot capture-evidence data/raw/2023-24/issue-52-evidence-v1 --season 2023 --from-local "$A"
+.venv/bin/python -m bil.data.pilot build data/raw/2023-24/issue-52-v1 \
+  data/processed/2023-24/issue-52-v1 --code-commit "$(git rev-parse HEAD)"
+.venv/bin/python -m bil.data.pilot check data/processed/2023-24/issue-52-v1 data/raw/2023-24/issue-52-v1
+.venv/bin/python -m bil.data.pilot evidence data/processed/2023-24/issue-52-v1 \
+  data/raw/2023-24/issue-52-v1 data/raw/2023-24/issue-52-evidence-v1
+```
+
+2024–25 uses `--season 2024` and the `2024-25` directories. Each build took 61 to 66 seconds, with a peak resident set of 0.80 to 0.82 GB on the maintainer's Apple-silicon Mac.
+
+### Coverage
+
+| Season and type | Expected | Accepted | Quarantined | V3 period scores matched / checked | V3 substitutions matched / checked | V3 final matches box |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2022–23 regular (reference) | 1,230 | 1,208 (98.2%) | 22 | 1,206 / 1,209 | 1,222 / 1,230 | 1,230 / 1,230 |
+| 2022–23 playoffs (reference) | 84 | 84 (100%) | 0 | 84 / 84 | 84 / 84 | 84 / 84 |
+| 2023–24 regular | 1,230 | 1,218 (99.0%) | 12 | 1,217 / 1,218 | 1,226 / 1,229 | 1,229 / 1,230 |
+| 2023–24 playoffs | 82 | 81 (98.8%) | 1 | 81 / 81 | 82 / 82 | 82 / 82 |
+| 2024–25 regular | 1,230 | 1,205 (98.0%) | 25 | 1,205 / 1,205 | 1,230 / 1,230 | 1,230 / 1,230 |
+| 2024–25 playoffs | 84 | 84 (100%) | 0 | 84 / 84 | 84 / 84 | 84 / 84 |
+
+| Season | Counted possessions | Parser-excluded | Unresolved possessions: regular / playoffs (share of possessions) | Points outside control / in unresolved possessions |
+| --- | ---: | ---: | --- | ---: |
+| 2022–23 | 256,456 | 2,756 | 51 in 30 games (0.021%) / 0 | 1,511 / 47 |
+| 2023–24 | 255,337 | 2,662 | 86 in 42 games (0.035%) / 14 in 6 games (0.092%) | 1,474 / 44 |
+| 2024–25 | 254,727 | 2,636 | 158 in 76 games (0.065%) / 22 in 10 games (0.135%) | 1,154 / 41 |
+
+Accepted games by stratum:
+
+| Stratum | 2023–24 regular | 2023–24 playoffs | 2024–25 regular | 2024–25 playoffs |
+| --- | ---: | ---: | ---: | ---: |
+| Overtime | 57 / 59 | 3 / 3 | 58 / 60 | 5 / 5 |
+| Regulation | 1,161 / 1,171 | 78 / 79 | 1,147 / 1,170 | 79 / 79 |
+| Technical free throw | 784 / 794 | 45 / 45 | 644 / 660 | 36 / 36 |
+| Same-clock free-throw substitution | 1,218 / 1,230 | 81 / 82 | 1,205 / 1,230 | 84 / 84 |
+
+Games accepted under each rule. Every game in these strata was accepted.
+
+| Rule | 2023–24 | 2024–25 |
+| --- | ---: | ---: |
+| `v3_event_order` | 61 | 92 |
+| `v3_primary_order` | 10 | 7 |
+| `inferred_starters` / `immaterial_starters` | 0 / 0 | 3 / 0 |
+| `livedata_starters` (team-periods) | 17 (20) | 15 (17) |
+| `v3_period_defect` | 1 | 0 |
+| `datanba_possession_labels` | 1 | 3 |
+| `unresolved_possessions` | 48 | 86 |
+| `same_clock_box_credit` | 20 | 18 |
+| `v2_home_designation` | 0 | 5 |
+
+Against the [M1 thresholds](#m1-acceptance-for-the-202223-pilot), both seasons pass all 26 `check` invariants and the game coverage floor of 97% for each season type. Stratum coverage is at least 96.6% for every stratum against the 95% floor. The unresolved-possession share is 0.039% for 2023–24 and 0.070% for 2024–25, inside the 0.1% season limit. The 2024–25 playoffs alone are at 0.135%. The M1 table sets that limit for the whole season, so this is reported here and not treated as a failure. The share of unresolved possessions has risen from 0.02% in 2022–23. The thresholds were not changed.
+
+### Quarantines
+
+| Season and type | Games | Cause |
+| --- | ---: | --- |
+| 2023–24 regular | 3 | V2 and V3 substitution signatures differ. |
+| 2023–24 regular | 3 | Player plus-minus differs from the box. In two games several same-clock credit sets match, so no credit is unique. In the third, 6 players differ. |
+| 2023–24 regular | 2 | Period start not established. |
+| 2023–24 regular | 2 | Parser error (`EventOrderError`). |
+| 2023–24 regular | 1 | Parser moved events across clocks. |
+| 2023–24 regular | 1 | V3 final differs from the box (`0022301202`). V2 and V3 both end 119–112. liveData, data.nba and the box agree on 122–112, so the two primary feeds share a missing home score. |
+| 2023–24 playoffs | 1 | A parser possession has an offense outside the two teams (`unknown_possession_offense`). |
+| 2024–25 regular | 14 | Player minutes differ from the box. In each game, at least one team's box minutes sum to 15 to 120 seconds away from 240. Every other regulation team-game in the three seasons is within 20 seconds of 240. Every 2022–23 and 2023–24 regulation team-game is within 2 seconds. This points to a box-log defect (Inferred). |
+| 2024–25 regular | 5 | Player minutes differ by 74 to 106 seconds for 2 to 4 players, with consistent box totals. This is the substitution-window pattern seen in 2022–23. |
+| 2024–25 regular | 4 | Player plus-minus differs from the box. Two games have several matching same-clock credit sets. The other two differ for 4 and 8 players. |
+| 2024–25 regular | 1 | A lineup player is absent from the team box. |
+| 2024–25 regular | 1 | Parser error (`EventOrderError`). |
+
+### Pipeline change for these seasons
+
+The 2024–25 Bill Mill team log leaves `home` null for both teams in five regular-season games. By date and teams these are the neutral-site games: Mexico City, two in Paris, and the two Las Vegas NBA Cup semifinals (Inferred). The 2022–23 and 2023–24 logs have no such rows. Without a rule, the build stops. With ADR-0014, V2 designated all five unanimously, and V3 confirmed each against the box final. All five were accepted. `game.neutral_site` stays null because the box flag does not establish it.
+
+The 2022–23 rebuild at `9395ce1` (`data/processed/2022-23/issue-52-rebuild-v1`) matches build `issue-19-v6`. Event, actor, lineup, stint, possession, score-allocation, quality-issue and game-review tables are byte-identical. In `game` and `game_stream`, only `ingested_at` differs. In the manifest, only `code_commit`, `generated_at` and the output digests of those two tables differ. `check` passes 26 of 26, and `evidence` reproduces the recorded results.
+
+### External verification
+
+| Comparison | 2022–23 (rebuild) | 2023–24 | 2024–25 |
+| --- | --- | --- | --- |
+| Lineups vs Bentes, time-weighted | 99.97% over 1,292 of 1,292 games; lowest 99.75% | 99.97% over 1,299 of 1,299; lowest 99.83%; no disagreement over 2 s | 99.97% over 1,288 of 1,289 (Bentes omits one playoff game); lowest 99.83%; none over 2 s |
+| Starters set from liveData or the box, vs Bentes | 35 of 35 team-periods | 20 of 20 | 20 of 20 (17 liveData, 3 box) |
+| Live-ball offense vs data.nba, accepted possessions | 323,336 / 323,370 events | 319,818 / 319,829 | 320,352 / 320,379 |
+| Counted possessions vs pbpstats.com, games equal / within two | 1,260 / 1,286 of 1,292 | 1,249 / 1,292 of 1,299 (1,298 in pbpstats.com) | 1,205 / 1,285 of 1,289 |
+| The same, games without unresolved possessions | 1,249 of 1,262 equal | 1,248 of 1,251 | 1,199 of 1,203 |
+| Period-end scores, liveData vs data.nba | 5,346 / 5,349 | 5,303 / 5,307 | 5,319 / 5,321 |
+| V3 alone differs / data.nba alone differs (games) | 2 / 1 | 2 / 4 | 0 / 0 |
+| V3-ordered games with any data.nba order reversal: `v3_event_order` / `v3_primary_order` | 0 of 80 / 0 of 7 | 1 of 61 / 2 of 10 | 0 of 92 / 3 of 7 |
+
+Verification strength is at least as high as for 2022–23 on lineups, starters, offense and period scores. Lower exact agreement with pbpstats.com is concentrated in games with unresolved possessions, whose boundaries are uncertain. Those games are within two possessions in 47 of 47 and 85 of 86 cases. In games without them, exact agreement is 99.8% and 99.7%. Unlike 2022–23, a few V3-ordered games are not exactly in data.nba's order. They still pass every reconciliation check.
+
+Both 2023–24 V3-alone games are explained. `0022300353` is the accepted `v3_period_defect`, and `0022301202` is the quarantine above. In four late-season 2023–24 games, data.nba alone differs. Three were accepted on V2/V3 evidence, and one is a substitution quarantine. These were not investigated further. data.nba period labels were already known to be unreliable in 2022–23.
+
+The #51 audit expected the evidence gaps: two 2023–24 regular-season games lack data.nba and pbpstats.com, and one 2024–25 playoff game lacks data.nba and Bentes. These games go through the normal build. Their comparisons and any data.nba-based adjudication are unavailable.
+
+Neither fold falls materially below 2022–23 in coverage or verification, so the falsification condition in #52 is not met.

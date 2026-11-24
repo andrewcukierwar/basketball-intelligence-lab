@@ -125,3 +125,25 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Inputs and configuration:** Pinned OpenRAPM commit `8cfb3df786ceb1cd362a67c4683c37a473ee9c2b`, shared generated rows and unpenalized intercept. The four cases cover unequal weights, common rescaling of weights and penalty, and paired players under weak and strong regularization.
 - **Results:** Maximum differences were `3.429e-10` for player coefficients, `1.695e-10` for the intercept and `6.790e-10` for fitted rates, in points per 100 possessions. The absolute limit was `1e-8`.
 - **Scope:** Numerical agreement for a shared objective. NBA row construction, model calibration and published ratings require separate evidence. [Full results and command](research/rapm-open-benchmark.md)
+
+### EXP-0007 — 2023–24 and 2024–25 outer-validation season builds
+
+- **Status:** Completed.
+- **Date:** 2026-11-23.
+- **Research question:** Do the unchanged pilot rules and M1 thresholds hold for the two outer folds, at verification strength comparable to 2022–23?
+- **Category:** Original (data pipeline, not a model).
+- **Code SHA / run ID:** `9395ce1`, builds `issue-52-v1` for each season and `issue-52-rebuild-v1` for 2022–23.
+- **Datasets/checksums and cutoff:** Snapshots `issue-52-v1` and `issue-52-evidence-v1` for each season, copied from the #51 audit capture and checked against its register pins. Retrospective capture with no availability claim. The 2025–26 holdout was not built.
+- **Train / validation / test periods:** Not applicable.
+- **Baselines:** 2022–23 build `issue-19-v6` and the M1 thresholds.
+- **Results:**
+  - 2023–24 accepted 1,218 of 1,230 regular-season and 81 of 82 playoff games.
+  - 2024–25 accepted 1,205 of 1,230 regular-season and 84 of 84 playoff games.
+  - Both pass 26 of 26 checks and every M1 threshold.
+  - Bentes lineup agreement is 99.97% for both seasons.
+  - Five 2024–25 games needed ADR-0014's V2 home designation.
+  - The 2022–23 rebuild is row-identical.
+  - The unresolved-possession share rose to 0.039% and 0.070%. The 2024–25 playoffs alone reach 0.135%.
+  - 14 of 25 quarantines in 2024–25 trace to box-log minute totals that do not sum to the game length. [Full results](data-pilot.md#outer-validation-seasons-202324-and-202425)
+- **Limitations / interpretation:** The box log remains the reference, so box defects quarantine games rather than being corrected. Thresholds were set after 2022–23 was observed and were not changed here.
+- **Next decision:** The maintainer decides whether the 0.1% unresolved-possession limit should also apply to each season type. Unresolved-possession boundaries are the main remaining verification gap before #26.
