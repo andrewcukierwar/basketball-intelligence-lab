@@ -3,7 +3,7 @@
 - **Date:** 2026-11-23
 - **Status:** Awaiting review
 - **Related issues:** #62, parent #29, contract #63
-- **Branch / commit / PR:** `claude/issue-62-box-feature-views`, builder commit `00bfd677b2c7425d49f2fe19ce99642a4c5ccb65`, no PR (lead integrates)
+- **Branch / commit / PR:** `claude/issue-62-box-feature-views`, builder commit `00bfd677b2c7425d49f2fe19ce99642a4c5ccb65`, review fixes `3527ec57869fdf206c225729ca268a877d246b92`, no PR (lead integrates)
 
 ## Objective and authorized scope
 
@@ -15,7 +15,8 @@ Build same-window (retrospective) and eligible as-of box-score feature views for
 - `src/bil/features/box_build.py`: loader and validator, view builder, DuckDB reconciliation, manifest, CLI (`python -m bil.features.box_build`).
 - `tests/test_box_features.py`: replays all five #63 fixture cases, same-day and future exclusion, season-type separation, missing-component isolation, strict boundary cases, and a synthetic end-to-end build.
 - `docs/data-pilot.md`: command and output description.
-- Private output (not in Git): `data/processed/2022-23/issue-62-v1/` with `appearances`, `same_window_features`, `asof_retrospective_features`, `asof_strict_features` and `manifest.json`.
+- Review fixes (commit `3527ec5`): reconciliation now reads the written Parquet and checks all 13 features in both as-of and same-window views against independent SQL. Any SQL mismatch, group-versus-row gap, nonempty strict history or profile difference fails the build and removes the output (tests seed a mismatch in each view). The manifest gains per-view, per-season-type `coverage` (rows, cold starts, players, per-feature eligible, covered and null counts), per-view `snapshot_ids` bound to the snapshot digest, cohort mode and history policy, `source_pins_verified`, and window start and end dates.
+- Private output (not in Git): `data/processed/2022-23/issue-62-v2/` (supersedes v1) with `appearances`, `same_window_features`, `asof_retrospective_features`, `asof_strict_features` and `manifest.json`.
 
 ## Key decisions and discoveries
 
@@ -29,18 +30,20 @@ Build same-window (retrospective) and eligible as-of box-score feature views for
 
 | Check | Actual result |
 | --- | --- |
-| Real build | Pass. 27,622 appearances (25,894 regular, 1,728 playoff), 1,314 games, 539 and 217 players, 71 multi-team players, 1,378 / 6,016 / 12,102 zero FGA / 3PA / FTA, 2 zero-minute rows. All equal the #63 profile, zero mismatched expectations. |
-| Same-window vs independent SQL totals | 756 player and season-type groups, 0 mismatches (minutes, points, 2P, 3P, FT, assists). |
-| As-of prior-appearance counts vs SQL self-join | 27,622 rows, 0 mismatches. |
+| Real build (v2, code commit `3527ec5`) | Pass, exit 0, `failed_checks` and `mismatched_expectations` empty. 27,622 appearances (25,894 regular, 1,728 playoff), 1,314 games, 539 and 217 players, 71 multi-team players, 1,378 / 6,016 / 12,102 zero FGA / 3PA / FTA, 2 zero-minute rows. All equal the #63 profile, zero mismatched expectations. |
+| Same-window vs independent SQL, all 13 features, from written Parquet | 9,828 feature rows (756 groups x 13), group count equals row count, 0 mismatches. |
+| As-of vs SQL self-join, all 13 features, from written Parquet | 359,086 feature rows checked, 0 mismatches; strict view has 0 rows with history. |
+| Coverage in manifest | Retrospective as-of cold-start rows 539 regular + 217 playoff = 756; players with history 530 regular, 202 playoff. |
 | Output rows | appearances 27,622; as-of retrospective 359,086; as-of strict 359,086 (max eligible 0); same-window 9,828. |
-| `uv run pytest -q` | 100 passed, 2 skipped (before the handoff commit) |
-| `ruff check .`, `ruff format --check .`, `mypy src` | Pass (format run before commit; `format --check` rerun below) |
+| `uv run pytest -q` | 102 passed, 2 skipped |
+| `ruff check .`, `ruff format --check .`, `mypy src` | Pass |
 | Independent review | Not run. |
 
 ## Blockers and remaining risks
 
 - Retrospective as-of features carry an unrecorded historical-revision gap; they are not forecast-origin evidence.
-- `reconcile` and the SQL checks share the scope filter with the loader, so they test the aggregation, not source completeness; completeness rests on the #63 profile counts.
+- The SQL checks share the scope filter with the loader, so they test aggregation, not source completeness; completeness rests on the #63 profile counts.
+- Open SPM decision: because as-of history is per season type, every player's first playoff game has empty history (217 rows). Pooling regular-season history for playoff games needs an explicit registered convention.
 - Independent review is required before acceptance.
 
 ## Next actions
