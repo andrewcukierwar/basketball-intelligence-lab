@@ -364,8 +364,10 @@ V2 remains the event source of record.
     - The target objective, weighting, regularization and reliability are specified separately from ADR-0025's two-season predictive configuration.
     - Historical gaps, real elapsed time, player exposure, era differences, roster changes and verification strata are handled explicitly. A missing season never counts as time not elapsed.
     - Earlier targets never use future games or revisions.
-    - Offensive and defensive targets stay separate.
+    - Offensive and defensive targets stay separate, and their reliability, stability and exposure effects are quantified.
+    - Chronological evaluation and common comparison cohorts are registered.
     - Every artifact is labelled a **partial-history methodology replication**, not a full historical EPM replication.
+  - **Same-clock rule ([#111](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/111)).** A bounded investigation and implementation of a generalized same-clock shot, tip and rebound ordering rule is authorized. The rule is derived from basketball event semantics and source evidence, never from permutation search to satisfy reconciliation. It is validated with hand-adjudicated examples, synthetic edge cases, deterministic reconstruction, regression on previously valid seasons and independent verification. Ambiguous sequences are quarantined. The rule is applied to 2008–09 through 2011–12 and other relevant seasons, and eligibility is reassessed under ADR-0022.
   - **#53.** SPM development does not wait for #53. Newly eligible seasons enter through versioned datasets and controlled incremental experiments, and existing targets are never silently changed.
   - **Holdout.** The 2025–26 confirmatory holdout is not accessed or scored. It stays reserved for the registered R1 release protocol.
   - **Autonomy.** Agents may make reversible, bounded engineering and experimental decisions within the existing research standards. They escalate changes to:
