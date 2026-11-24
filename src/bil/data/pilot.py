@@ -38,6 +38,7 @@ from bil.data.pilot_inputs import (
     v3_games,
 )
 from bil.data.pilot_normalize import MINUTES_TOLERANCE_MS, Row, Rows, located, normalize_game
+from bil.data.pilot_order import OrderRepair, repair_order
 from bil.data.pilot_output import read_game_reviews, write_tables
 from bil.data.pilot_parser import PARSER_VERSION, ParserEvent, Starters, parse_game
 from bil.data.pilot_sources import (
@@ -213,6 +214,7 @@ def _build_game(
     when: str,
     cross: CrossFeed | None = None,
     season_start_year: int = 2022,
+    order_repair: bool = False,
 ) -> Rows:
     kind = GAME_PREFIXES[game.game_id[:3]]
     cross = cross or CrossFeed()
@@ -275,17 +277,21 @@ def _build_game(
             raise GameIssue("v3_substitution_mismatch", "V2 and V3 substitution signatures differ")
         order = reference.order
 
-        def reconstruct(primary: bool) -> StarterChoice[Reconstruction]:
+        def reconstruct(
+            primary: bool,
+            stream: dict[int, RawEvent] = raw,
+            archived: list[int] = order,
+        ) -> StarterChoice[Reconstruction]:
             def attempt(starters: Starters) -> Reconstruction:
                 with TemporaryDirectory(dir=scratch) as game_directory:
                     result = parse_game(
                         game,
-                        raw,
+                        stream,
                         shots,
                         Path(game_directory),
-                        order,
+                        archived,
                         starters,
-                        primary_order=order if primary else None,
+                        primary_order=archived if primary else None,
                         between_periods=cross.between_periods if cross.has_livedata else None,
                     )
                     match, reconciled = compare_periods(result.events, game, periods)
@@ -298,7 +304,7 @@ def _build_game(
                     rows = normalize_game(
                         game,
                         roster,
-                        raw,
+                        stream,
                         result.events,
                         result.possessions,
                         raw_source["artifact_id"],
@@ -321,6 +327,7 @@ def _build_game(
             )
 
         v3_primary = False
+        reordered: OrderRepair | None = None
         try:
             choice = reconstruct(primary=False)
         except GameIssue as first:
@@ -330,9 +337,20 @@ def _build_game(
                 choice = reconstruct(primary=True)
                 v3_primary = True
             except GameIssue:
-                if isinstance(first, PeriodScoreMismatch):
-                    periods_match, periods_reconciled = False, first.reconciled
-                raise first from None
+                # Opt-in last resort (ADR-0023, proposed): follow data.nba's entry order and
+                # re-clock late-entered events. Every check still applies to the new stream.
+                repaired = repair_order(raw, cross.order) if order_repair else None
+                if repaired is not None:
+                    try:
+                        choice = reconstruct(False, repaired.events, list(repaired.events))
+                        raw = repaired.events
+                        reordered = repaired
+                    except GameIssue:
+                        repaired = None
+                if repaired is None:
+                    if isinstance(first, PeriodScoreMismatch):
+                        periods_match, periods_reconciled = False, first.reconciled
+                    raise first from None
         built = choice.result
         parsed, rows, v3_order = built.events, built.rows, built.v3_order
         periods_reconciled = built.periods_reconciled
@@ -360,6 +378,16 @@ def _build_game(
                 "datanba_possession_labels",
                 f"{built.relabeled_possessions} unresolved possessions labeled from data.nba "
                 "offense on every shot, free throw and turnover",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if reordered is not None:
+            labels.append("datanba_event_order")
+            shifts = [abs(shift) for _, _, shift in reordered.clamped.values()]
+            warning = GameIssue(
+                "datanba_event_order",
+                f"{reordered.repositioned} events placed in data.nba entry order; "
+                f"{len(shifts)} late-entered events took their predecessor's clock "
+                f"(largest shift {max(shifts, default=0):g} s)",
             )
             issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
         if v3_primary:
@@ -477,6 +505,7 @@ def _season_games(
     snapshot_hash: str,
     when: str,
     season_start_year: int = 2022,
+    order_repair: bool = False,
 ) -> Iterator[Rows]:
     games, players = box_scores(connection, snapshot_dir)
     expected = chosen or set(games)
@@ -531,6 +560,7 @@ def _season_games(
                     when,
                     feeds.get(game_id),
                     year,
+                    order_repair,
                 )
                 remaining.remove(game_id)
         for game_id in sorted(remaining):
@@ -546,6 +576,7 @@ def _season_games(
                 when,
                 feeds.get(game_id),
                 year,
+                order_repair,
             )
 
 
@@ -581,7 +612,11 @@ def summarize_reviews(reviews: list[Row]) -> dict[str, object]:
 
 
 def build_pilot(
-    snapshot_dir: Path, output: Path, code_commit: str, chosen: set[str] | None = None
+    snapshot_dir: Path,
+    output: Path,
+    code_commit: str,
+    chosen: set[str] | None = None,
+    order_repair: bool = False,
 ) -> dict[str, object]:
     if re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
         raise ValueError("Record a full Git commit for the pilot build")
@@ -605,6 +640,7 @@ def build_pilot(
                 snapshot_hash,
                 when,
                 year,
+                order_repair=order_repair,
             )
             artifacts = write_tables(connection, games, staging, output)
             results = summarize_reviews(read_game_reviews(connection, output))
@@ -616,6 +652,7 @@ def build_pilot(
             "generated_at": when,
             "parser": PARSER_VERSION,
             "duckdb_version": version("duckdb"),
+            **({"order_repair": True} if order_repair else {}),
             "source_snapshot_sha256": snapshot_hash,
             "source_artifacts": snapshot["artifacts"],
             "output_artifacts": artifacts,
@@ -641,6 +678,11 @@ def main() -> None:
     build.add_argument("output_dir", type=Path)
     build.add_argument("--code-commit", required=True)
     build.add_argument("--game-id", action="append", type=nba_game_id)
+    build.add_argument(
+        "--order-repair",
+        action="store_true",
+        help="experimental: retry failed games in data.nba entry order (ADR-0023, proposed)",
+    )
     evidence = subcommands.add_parser(
         "capture-evidence", help="capture pinned comparison feeds that never enter a build"
     )
@@ -714,7 +756,11 @@ def main() -> None:
         print(f"Verified {len(snapshot['artifacts'])} private inputs. {ATTRIBUTION}.")
     else:
         manifest = build_pilot(
-            args.snapshot_dir, args.output_dir, args.code_commit, set(args.game_id or [])
+            args.snapshot_dir,
+            args.output_dir,
+            args.code_commit,
+            set(args.game_id or []),
+            args.order_repair,
         )
         print(json.dumps(manifest["coverage"], sort_keys=True))
 

@@ -230,14 +230,16 @@ def test_build_routes_duckdb_spills_to_private_staging(
     (tmp_path / "snapshot.json").write_text("{}", encoding="utf-8")
     output = tmp_path / "output"
 
-    def games(connection: duckdb.DuckDBPyConnection, *args: object) -> list[object]:
+    def games(
+        connection: duckdb.DuckDBPyConnection, *args: object, **options: object
+    ) -> list[object]:
         staging = args[3]
         assert isinstance(staging, Path)
         assert staging.parent == output.parent
         assert connection.execute("SELECT current_setting('temp_directory')").fetchone() == (
             str(staging / "duckdb-spill"),
         )
-        assert args[-1] == 2023
+        assert args[-1] == 2023 and options == {"order_repair": False}
         return []
 
     monkeypatch.setattr(
