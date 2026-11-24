@@ -202,3 +202,21 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Results:** All 962 accepted `period_end`-first possessions begin after a change of control with 3 to 24 s left, while the pilot's 1,567 excluded ones all have under 3 s, so the canonical set stays the pilot-eligible set and the #23 and #24 results stand. Sensitivity: RAPM vs league −14.09 canonical, −13.16 `period_end_start`, −13.17 `no_action`. `T_fit` −25.69 against about −5. On canonical held-out rows, fits on the sensitivity rows score 1.74 (1.01 to 2.42) and 1.86 (1.10 to 2.57) MSE better. [Report](research/rapm-no-action-2022-23.md)
 - **Limitations / interpretation:** One season. A first audit that used possession-internal duration was invalid and led to a withdrawn v2 protocol. A residual end-of-period effect remains unexplained.
 - **Next decision:** Whether game-final possessions need a treatment, and how to read the canonical time effect in later reports.
+
+### EXP-0012 — M1 quality policy revision and season missingness diagnostic, 2017–18 through 2024–25
+
+- **Status:** Completed. Independent review not yet run.
+- **Date:** 2026-11-24.
+- **Research question:** Under the revised M1 policy (ADR-0022), which seasons meet the hard limits, and are quarantined games and unresolved possessions missing systematically by team, date, player, exposure, game state or cause? How much does the primary cohort (2018–19 through 2022–23) depend on the conditionally authorized seasons, overtime periods and weaker-verification strata?
+- **Category:** Original (data-quality diagnostic, no model).
+- **Code SHA / run ID:** `scripts/season_quality.py` and `bil.data.season_quality` on branch `claude/issue-89-m1-policy`; private output `data/processed/quality/issue-89-v1`. Seed 20261123, 5,000 permutations, 1,000 bootstrap replicates, `--run-checks`.
+- **Datasets/checksums and cutoff:** The existing builds `issue-25-v1` (2017–18 to 2021–22), `issue-19-v6` (2022–23, snapshot `issue-5-v2`) and `issue-52-v1` (2023–24, 2024–25), opened read-only. No 2025–26 file was read.
+- **Train / validation / test periods:** Not applicable. No model was fitted or scored, and no model result exists for 2023–24 or 2024–25.
+- **Baselines:** The original M1 table results in EXP-0007 and EXP-0009, which the script reproduces. Those results are preserved.
+- **Results:**
+  - Revised classification: 2017–18 fails two hard limits; 2018–19 and 2021–22 meet them with an overtime-stratum warning; 2019–20, 2020–21, 2022–23 and 2023–24 meet; 2024–25 meets with a playoff unresolved-share warning (0.135%). All 26 invariants pass in every build.
+  - Four systematic flags among 83 testable tests: 2017–18 early-season quarantines and player minutes; 2018–19 quarantines concentrated in overtime games (9 of 67 against 15 of 1,163 regulation games) and in November 2018 (11 of 219 games). Five watch flags, including 2021–22 overtime (3 of 58).
+  - 2024–25 playoff unresolved possessions (22 in 10 of 84 games) show no testable pattern by team, month, period or score margin, and the interval (0.056–0.226%) includes 0.1%.
+  - Cohort sensitivity (baseline 6,164 games, 1,223,735 possessions, 970 players): excluding 2018–19 changes games by −20.9% and players by −107; excluding 2021–22, −21.2% and −46; both, −42.1% and −163; overtime periods, −0.6% of possessions; overtime games, −5.4% of games; weaker-verification games, −39.1% of games. [Full results](research/season-quality-2017-2025.md)
+- **Limitations / interpretation:** Quarantined games lack events, so their game state is box and final-score only. The permutation tests have low power at 3 to 25 quarantines a season. Lost exposure is a box-log estimate. Flags describe association, not mechanism.
+- **Next decision:** The maintainer decides whether the 2018–19 overtime and November concentration is material for primary training use. The 2021–22 and 2024–25 findings need no action beyond the recorded conditions.
