@@ -12,7 +12,7 @@ from bil.data.pilot_inputs import GameBox, PlayerBox, RawEvent
 RULE_VERSION = "free-throw-miss-v1"
 TRIPS = {"10": (1, 1), "11": (1, 2), "12": (2, 2), "13": (1, 3), "14": (2, 3), "15": (3, 3)}
 DESCRIPTIONS = ("HOMEDESCRIPTION", "VISITORDESCRIPTION", "NEUTRALDESCRIPTION")
-SCORE = re.compile(r"[0-9]+ - [0-9]+")
+SCORE = re.compile(r"([0-9]+) - ([0-9]+)")
 
 
 @dataclass(frozen=True)
@@ -48,8 +48,21 @@ def infer_missing_misses(
     teams = {str(game.home_id), str(game.away_id)}
     attempts: dict[int, list[tuple[int, dict[str, str]]]] = defaultdict(list)
     candidates: dict[int, list[Miss]] = defaultdict(list)
+    made_free_throws: set[int] = set()
+    previous_score: tuple[int, int] | None = (0, 0)
     for index, (number, event) in enumerate(sequence):
-        if event["EVENTMSGTYPE"] != "3" or not event["PLAYER1_ID"].isdigit():
+        kind = event["EVENTMSGTYPE"]
+        team = event["PLAYER1_TEAM_ID"]
+        if value := event["SCORE"]:
+            match = SCORE.fullmatch(value)
+            score = (int(match[1]), int(match[2])) if match is not None else None
+            if kind == "3" and team in teams and previous_score is not None:
+                away, home = previous_score
+                expected = (away + 1, home) if team == str(game.away_id) else (away, home + 1)
+                if score == expected:
+                    made_free_throws.add(number)
+            previous_score = score
+        if kind != "3" or not event["PLAYER1_ID"].isdigit():
             continue
         shooter = int(event["PLAYER1_ID"])
         attempts[shooter].append((number, event))
@@ -57,7 +70,6 @@ def infer_missing_misses(
         if slot is None or event["SCORE"] or index + 1 == len(sequence):
             continue
         attempt, total = slot
-        team = event["PLAYER1_TEAM_ID"]
         if team not in teams or not event["PCTIMESTRING"]:
             continue
         field = "HOMEDESCRIPTION" if team == str(game.home_id) else "VISITORDESCRIPTION"
@@ -113,7 +125,7 @@ def infer_missing_misses(
             score = event["SCORE"]
             if not score and (marker or number in patched):
                 continue
-            if not marker and SCORE.fullmatch(score):
+            if not marker and number in made_free_throws:
                 makes += 1
             else:
                 return None

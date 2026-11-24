@@ -41,6 +41,7 @@ def event(
 
 def final_attempt() -> dict[int, RawEvent]:
     return {
+        0: event(0, "1", "1", "12", "100", "Made shot", "34 - 40"),
         1: event(1, "3", "11", "11", "100", "Player Free Throw 1 of 2 (5 PTS)", "34 - 41"),
         2: event(2, "3", "12", "11", "100", "Free Throw 2 of 2"),
         3: event(3, "4", "1", "200", "", ""),
@@ -88,8 +89,16 @@ def test_unknown_or_inconsistent_box_counts_are_declined(box: PlayerBox) -> None
     assert infer_missing_misses(final_attempt(), GAME, {11: box}) is None
 
 
+@pytest.mark.parametrize("score", ["34 - 40", "35 - 40", "34 - 42", "bad"])
+def test_shooters_other_make_needs_exactly_one_point_on_its_side(score: str) -> None:
+    raw = final_attempt()
+    raw[1].fields["SCORE"] = score
+    assert infer_missing_misses(raw, GAME, {11: PlayerBox(100, 1000, 1, 1, 2)}) is None
+
+
 def test_intermediate_attempt_needs_same_team_and_continuing_trip() -> None:
     raw = {
+        0: event(0, "1", "1", "12", "100", "Made shot", "34 - 40"),
         1: event(1, "3", "11", "11", "100", "Free Throw 1 of 2"),
         2: event(2, "4", "1", "100", "", ""),
         3: event(3, "3", "12", "11", "100", "Player Free Throw 2 of 2 (5 PTS)", "34 - 41"),
