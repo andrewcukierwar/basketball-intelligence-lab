@@ -20,7 +20,14 @@ from typing import cast
 
 import duckdb
 
-from bil.data.pilot_sources import ATTRIBUTION, NBA_TERMS, sha256_file, utc_now, write_json
+from bil.data.pilot_sources import (
+    ATTRIBUTION,
+    NBA_TERMS,
+    pinned_season,
+    sha256_file,
+    utc_now,
+    write_json,
+)
 
 CONTRACT_REVISION = "rapm-historical-rows-issue-82-v2"
 PILOT_TABLES = (
@@ -239,7 +246,7 @@ CHECKS = {
     "stream_status_matches_review": """
         select count(*) from games
         where accepted <> (stream_complete and stream_quality = 'accepted')
-           or season_type <> game_season_type or season_start_year <> 2022""",
+           or season_type <> game_season_type or season_start_year <> {season}""",
     "pilot_rows_only_in_accepted_game_streams": """
         select
           (select count(*) from possession p left join games g
@@ -403,6 +410,11 @@ def _pilot_inputs(pilot: Path, pin: str) -> dict[str, object]:
     if sha256_file(manifest_path) != pin:
         raise ValueError("The pilot manifest differs from the pinned digest")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    # The season comes from the pinned manifest and must be a pinned, non-holdout season.
+    season = manifest.get("season_start_year")
+    if isinstance(season, bool) or not isinstance(season, int):
+        raise ValueError("The pilot manifest does not name its season_start_year")
+    pinned_season(season)
     listed = {row["filename"]: row for row in manifest["output_artifacts"]}
     for name in PILOT_TABLES:
         row = listed[f"{name}.parquet"]
@@ -456,9 +468,13 @@ def _tally(connection: duckdb.DuckDBPyConnection) -> dict[str, dict[str, int]]:
     return {key: dict(sorted(result[key].items())) for key in sorted(result)}
 
 
-def _violations(connection: duckdb.DuckDBPyConnection, variant: str) -> dict[str, int]:
+def _violations(connection: duckdb.DuckDBPyConnection, variant: str, season: int) -> dict[str, int]:
     return {
-        name: int(cast(tuple[int], connection.execute(sql).fetchone())[0])
+        name: int(
+            cast(
+                tuple[int], connection.execute(sql.replace("{season}", str(int(season)))).fetchone()
+            )[0]
+        )
         for name, sql in {**CHECKS, **VARIANT_CHECKS[variant]}.items()
     }
 
@@ -476,6 +492,7 @@ def build_rows(
     if re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
         raise ValueError("Record a full Git commit for the row build")
     pilot = _pilot_inputs(pilot_dir, pilot_manifest_sha256)
+    season = cast(int, pilot["season_start_year"])
     when = utc_now()
     output.mkdir(mode=0o700, parents=True)
     try:
@@ -500,7 +517,7 @@ def build_rows(
                 _game_reconciliation_sql(),
             ):
                 connection.execute(sql)
-            counts = _violations(connection, variant)
+            counts = _violations(connection, variant, season)
             failed = {name: count for name, count in counts.items() if count}
             if failed:
                 raise ValueError(f"Row-set identities failed against the pilot ledgers: {failed}")
@@ -556,6 +573,7 @@ def build_rows(
             "build_id": build_id,
             "contract_revision": CONTRACT_REVISION,
             "variant": variant,
+            "season_start_year": season,
             "code_commit": code_commit,
             "generated_at": when,
             "duckdb_version": version("duckdb"),

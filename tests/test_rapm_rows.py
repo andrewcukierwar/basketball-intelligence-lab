@@ -63,7 +63,7 @@ def _game_tables(data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
                 "game_id": game["game_id"],
                 **VERSION,
                 "league": "NBA",
-                "season_start_year": 2022,
+                "season_start_year": data.get("season_start_year", 2022),
                 "season_type": "regular",
                 "game_date": "2022-10-18",
                 "date_basis": "played",
@@ -113,9 +113,11 @@ def _game_tables(data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     }
 
 
-def _quarantined_game() -> dict[str, list[dict[str, Any]]]:
+def _quarantined_game(season: int = 2022) -> dict[str, list[dict[str, Any]]]:
     base = _game_tables(json.loads(FIXTURE.read_text(encoding="utf-8")))
     game = {**base["game"][0], "game_id": "0022200002", "home_final": 0, "away_final": 0}
+    game["season_start_year"] = season
+    game["home_team_id"] = game["away_team_id"] = None  # ADR-0017: quarantined, no home flag
     stream = {**base["game_stream"][0], "game_id": "0022200002", "complete": False}
     stream["quality"] = "quarantined"
     review = {**base["game_review"][0], "game_id": "0022200002", "accepted": False}
@@ -124,7 +126,9 @@ def _quarantined_game() -> dict[str, list[dict[str, Any]]]:
     return {"game": [game], "game_stream": [stream], "game_review": [review]}
 
 
-def _pilot(tmp_path: Path, mutate: Mutation | None = None) -> tuple[Path, str]:
+def _pilot(
+    tmp_path: Path, mutate: Mutation | None = None, season: int | None = 2022
+) -> tuple[Path, str]:
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
     if mutate:
         mutate(data)
@@ -135,7 +139,10 @@ def _pilot(tmp_path: Path, mutate: Mutation | None = None) -> tuple[Path, str]:
     with duckdb.connect() as connection:
         connection.execute("SET TimeZone = 'UTC'")
         artifacts = write_tables(
-            connection, [_game_tables(data), _quarantined_game()], staging, pilot
+            connection,
+            [_game_tables(data), _quarantined_game(data.get("season_start_year", 2022))],
+            staging,
+            pilot,
         )
     manifest = {
         "code_commit": COMMIT,
@@ -144,6 +151,8 @@ def _pilot(tmp_path: Path, mutate: Mutation | None = None) -> tuple[Path, str]:
         "source_snapshot_sha256": "b" * 64,
         "output_artifacts": artifacts,
     }
+    if season is not None:
+        manifest["season_start_year"] = season
     (pilot / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     return pilot, sha256_file(pilot / "manifest.json")
 
@@ -448,3 +457,41 @@ def test_canonical_is_the_default_and_keeps_every_pilot_eligible_possession(tmp_
     assert shifted["build_id"] != default["build_id"]
     with pytest.raises(ValueError, match="variant"):
         build_rows(pilot, tmp_path / "x", COMMIT, pin, "Z")
+
+
+@pytest.mark.parametrize("season", [2018, 2021, 2023, 2024])
+def test_any_pinned_season_builds_from_its_manifest(tmp_path: Path, season: int) -> None:
+    def set_season(data: dict[str, Any]) -> None:
+        data["season_start_year"] = season
+
+    pilot, pin = _pilot(tmp_path, set_season, season)
+    manifest = build_rows(pilot, tmp_path / "out", COMMIT, pin)
+    assert manifest["season_start_year"] == season
+    assert manifest["reconciliation"]["all|all"]["eligible_possessions"] == 3  # type: ignore[index]
+
+
+def test_manifest_season_must_match_the_game_ledger(tmp_path: Path) -> None:
+    pilot, pin = _pilot(tmp_path, season=2019)
+    with pytest.raises(ValueError, match="stream_status_matches_review"):
+        build_rows(pilot, tmp_path / "out", COMMIT, pin)
+    assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("season", [2025, 2026, 2005, 1999])
+def test_holdout_and_unpinned_seasons_are_refused(tmp_path: Path, season: int) -> None:
+    pilot, pin = _pilot(tmp_path, season=season)
+    with pytest.raises(ValueError, match="holdout|No pinned sources"):
+        build_rows(pilot, tmp_path / "out", COMMIT, pin)
+    assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("season", [None, "2022", True])
+def test_manifest_must_name_an_integer_season(tmp_path: Path, season: object) -> None:
+    pilot, _ = _pilot(tmp_path, season=None)
+    path = pilot / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if season is not None:
+        manifest["season_start_year"] = season
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="season_start_year"):
+        build_rows(pilot, tmp_path / "out", COMMIT, sha256_file(path))
