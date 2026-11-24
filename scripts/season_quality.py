@@ -30,7 +30,7 @@ def main() -> None:
     )
     parser.add_argument("--seed", type=int, default=20261123)
     parser.add_argument("--permutations", type=int, default=5000)
-    parser.add_argument("--bootstrap", type=int, default=1000)
+    parser.add_argument("--bootstrap", type=int, default=20_000)
     parser.add_argument(
         "--primary-years",
         type=int,

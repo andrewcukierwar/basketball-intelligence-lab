@@ -26,26 +26,30 @@ def build_season(
     weak: bool = False,
     unresolved: dict[int, int] | None = None,
     repeats: int = 4,
+    playoff_games: int = 0,
 ) -> tuple[Path, Path]:
     """Write a tiny build and snapshot: round-robin games, 4 possessions each, 5 players a side."""
     unresolved = unresolved or {}
     build, snapshot = root / f"build-{year}", root / f"snap-{year}"
     build.mkdir(parents=True)
     snapshot.mkdir(parents=True)
-    pairs = list(itertools.permutations(TEAMS, 2)) * repeats
+    regular = list(itertools.permutations(TEAMS, 2)) * repeats
+    pairs = regular + [("A", "B")] * playoff_games
     games, review, poss, events, stints, lineups, box = [], [], [], [], [], [], []
     yy = year % 100
-    for i, (home, away) in enumerate(pairs):
-        gid = f"002{yy:02d}{i:07d}"
-        month = 10 + (i * 4) // len(pairs)  # four months, October to January
-        day = date(year + (month > 12), month if month <= 12 else month - 12, 1 + i % 27)
+    for position, (home, away) in enumerate(pairs):
+        playoff = position >= len(regular)
+        i = 1000 + position - len(regular) if playoff else position
+        gid = f"{'004' if playoff else '002'}{yy:02d}{i:07d}"
+        month = 10 + (position * 4) // len(regular) if not playoff else 5
+        day = date(year + (month > 12 or playoff), month if month <= 12 else month - 12, 1 + i % 27)
         ok = i not in quarantined
         strata = ["same_clock_free_throw_substitution"]
         if i in overtime:
             strata.append("overtime")
         if weak:
             strata.append("no_livedata")
-        games.append((gid, "regular", day, home, away, 100 + i % 3, 98))
+        games.append((gid, "playoffs" if playoff else "regular", day, home, away, 100 + i % 3, 98))
         review.append((gid, ok, None if ok else "parser_error", strata))
         for team in (home, away):
             for k in range(5):
@@ -176,16 +180,28 @@ def test_m1_classification_separates_hard_limits_from_warnings(tmp_path: Path) -
     assert sq.m1_classification(clean, invariants_failed=1).revised_status == "fails_hard_limit"
 
 
-def test_unresolved_rate_above_limit_by_season_type_is_only_a_warning(tmp_path: Path) -> None:
-    # Playoff-style: one season type above 0.1% while the whole season stays within it needs
-    # two season types, so check the whole-season rate with a rate that is only a warning.
+def test_season_wide_unresolved_share_above_limit_is_a_hard_failure(tmp_path: Path) -> None:
     build, snap = build_season(tmp_path, 2022, unresolved={5: 1})
     result = sq.m1_classification(sq.load_season(build, snap))
     by_type = {u["season_type"]: u for u in result.unresolved}
     assert by_type["regular"]["unresolved"] == 1
     assert by_type["season"]["possessions"] == by_type["regular"]["possessions"]
-    # 1 of 480 possessions is 0.21%, above 0.1% for the season, so a hard failure.
+    # 1 of 480 possessions is 0.21%, above 0.1% for the whole season.
     assert result.revised_status == "fails_hard_limit"
+
+
+def test_season_type_above_limit_with_season_within_limit_is_only_a_warning(
+    tmp_path: Path,
+) -> None:
+    # The 2024-25 case: playoffs 1 of 16 possessions, the full season 1 of 4,816 (0.02%).
+    build, snap = build_season(tmp_path, 2024, repeats=40, playoff_games=4, unresolved={1000: 1})
+    result = sq.m1_classification(sq.load_season(build, snap))
+    by_type = {u["season_type"]: u for u in result.unresolved}
+    assert by_type["playoffs"]["above_limit"] and not by_type["season"]["above_limit"]
+    assert result.hard_failures == []
+    assert result.revised_status == "meets_with_warnings"
+    assert any("playoffs: unresolved" in w for w in result.warnings)
+    assert result.original_status == "pass"
 
 
 def test_quarantine_concentration_is_flagged_and_uniform_is_not(tmp_path: Path) -> None:
@@ -216,7 +232,7 @@ def test_unresolved_rate_ratio_flags_the_period(tmp_path: Path) -> None:
         tmp_path, 2018, repeats=8, overtime=overtime, unresolved={i: 1 for i in overtime}
     )
     season = sq.load_season(build, snap)
-    _cells, tests, _conc = sq.unresolved_missingness(season, seed=1, replicates=300)
+    _cells, tests, _conc = sq.unresolved_missingness(season, seed=1, replicates=2000)
     period = next(t for t in tests if t["dimension"] == "unresolved_period")
     assert period["max_lift_cell"] == "OT"
     assert period["flag"] == "systematic"
@@ -251,7 +267,7 @@ def test_run_writes_deterministic_aggregates_and_refuses_to_overwrite(tmp_path: 
     ]
     first, second = tmp_path / "out1", tmp_path / "out2"
     for target in (first, second):
-        sq.run(builds, target, permutations=200, replicates=100, primary_years=(2018, 2019))
+        sq.run(builds, target, permutations=200, replicates=2000, primary_years=(2018, 2019))
     names = sorted(p.name for p in first.iterdir())
     assert "m1_classification.csv" in names and "sensitivity.csv" in names
     assert "summary.json" in names
@@ -262,3 +278,29 @@ def test_run_writes_deterministic_aggregates_and_refuses_to_overwrite(tmp_path: 
     assert [r["season"] for r in rows] == ["2018-19", "2019-20"]
     with pytest.raises(FileExistsError):
         sq.run(builds, first)
+
+
+def test_bootstrap_flag_is_reachable_with_several_cells_and_refused_when_not(
+    tmp_path: Path,
+) -> None:
+    # Team A's home games lose all 4 possessions, every other home team loses 1 in 4 games, so
+    # six cells have 5 or more events. Bonferroni then needs 2 * 6 / replicates < 0.01.
+    pairs = list(itertools.permutations(TEAMS, 2)) * 8
+    bad = {
+        i: 4 if home == "A" else 1
+        for i, (home, _away) in enumerate(pairs)
+        if home == "A" or i % 4 == 0
+    }
+    build, snap = build_season(tmp_path, 2018, repeats=8, unresolved=bad)
+    season = sq.load_season(build, snap)
+    _cells, tests, _conc = sq.unresolved_missingness(season, seed=1, replicates=3000)
+    team = next(
+        t
+        for t in tests
+        if t["dimension"] == "unresolved_offense_team" and t["season_type"] == "regular"
+    )
+    assert team["max_lift_cell"] == "A"
+    assert team["flag"] == "systematic"
+    assert team["p_value"] < sq.SYSTEMATIC_ALPHA
+    with pytest.raises(ValueError, match="cannot reach"):
+        sq.unresolved_missingness(season, seed=1, replicates=1000)

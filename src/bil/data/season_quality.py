@@ -42,6 +42,8 @@ SYSTEMATIC_ALPHA = 0.01
 WATCH_ALPHA = 0.05
 MIN_LIFT = 2.0
 MIN_CELL_EVENTS = 5
+DIMENSIONS = ("all", "month", "offense_team", "period", "margin")
+BOOTSTRAP_CHUNK = 2000
 MIN_TESTABLE_QUARANTINES = 5
 MIN_PLAYER_MINUTES = 500.0
 MARGIN_EDGES = (5, 10, 20)  # score margin bands: 0-5, 6-10, 11-20, 21+
@@ -667,6 +669,12 @@ def player_missingness(
             }
         )
         lift = observed_max / rate if rate and rate > 0 else 0.0
+        # The events behind the maximum are the lost appearances of the player who holds it.
+        top_events = (
+            float(lost_appearances[eligible][int(np.argmax(shares[eligible]))])
+            if eligible.any()
+            else 0.0
+        )
         tests.append(
             {
                 "season": season.label,
@@ -678,12 +686,8 @@ def player_missingness(
                 "p_value": p_value,
                 "max_lift": lift,
                 "max_lift_cell": "max player share",
-                "max_lift_events": float(lost_appearances[eligible].max())
-                if eligible.any()
-                else 0.0,
-                "flag": flag(p_value, lift, MIN_CELL_EVENTS)
-                if p_value == p_value
-                else "not_testable",
+                "max_lift_events": top_events,
+                "flag": flag(p_value, lift, top_events) if p_value == p_value else "not_testable",
             }
         )
     return summary, tests
@@ -700,6 +704,12 @@ def unresolved_missingness(
 
     Each cell is compared with all other cells of the same dimension: the ratio of its rate to
     the rate elsewhere, with a percentile interval from resampling games with replacement.
+
+    The reported p-value is approximate: twice the smaller tail share of the bootstrap ratios
+    around 1, with one added replicate per tail. A percentile bootstrap does not simulate the
+    null, so treat it as a ranking and flag device, not an exact test. Its floor is 2 / replicates
+    (2 k / replicates after Bonferroni over k cells), so too few replicates make a flag
+    unreachable; the function refuses when that floor reaches the systematic threshold.
     """
     games = season.games
     kind = dict(zip(games.game_id, games.season_type, strict=True))
@@ -713,15 +723,14 @@ def unresolved_missingness(
             continue
         row = {g: i for i, g in enumerate(ids)}
         rng = _seed(seed, season.year, type_index, 7)
-        weights = rng.multinomial(len(ids), np.full(len(ids), 1.0 / len(ids)), size=replicates)
-        weights = weights.astype(np.float64)
         by_dimension: dict[str, dict[str, list[tuple[int, int, int]]]] = {}
         for cell in season.possession_cells:
             if cell["game_id"] in row:
                 by_dimension.setdefault(cell["dimension"], {}).setdefault(cell["cell"], []).append(
                     (row[cell["game_id"]], cell["possessions"], cell["unresolved"])
                 )
-        for dimension in ("all", "month", "offense_team", "period", "margin"):
+        matrices: dict[str, tuple[list[str], FloatArray, FloatArray]] = {}
+        for dimension in DIMENSIONS:
             groups = by_dimension.get(dimension, {})
             labels = sorted(groups)
             poss = np.zeros((len(ids), len(labels)))
@@ -730,8 +739,28 @@ def unresolved_missingness(
                 for i, p, u in groups[label]:
                     poss[i, j] += p
                     bad[i, j] += u
+            matrices[dimension] = (labels, poss, bad)
+            if dimension != "all" and 2 * len(labels) / replicates >= SYSTEMATIC_ALPHA:
+                raise ValueError(
+                    f"{replicates} bootstrap replicates cannot reach p < {SYSTEMATIC_ALPHA} "
+                    f"for {len(labels)} {dimension} cells after Bonferroni; "
+                    f"use more than {int(2 * len(labels) / SYSTEMATIC_ALPHA)}"
+                )
+        boot: dict[str, tuple[FloatArray, FloatArray]] = {
+            d: (np.zeros((replicates, len(m[0]))), np.zeros((replicates, len(m[0]))))
+            for d, m in matrices.items()
+        }
+        for start in range(0, replicates, BOOTSTRAP_CHUNK):
+            size = min(BOOTSTRAP_CHUNK, replicates - start)
+            draws = rng.multinomial(len(ids), np.full(len(ids), 1.0 / len(ids)), size=size)
+            draws = draws.astype(np.float64)
+            for dimension, (_labels, poss, bad) in matrices.items():
+                boot[dimension][0][start : start + size] = draws @ poss
+                boot[dimension][1][start : start + size] = draws @ bad
+        for dimension in DIMENSIONS:
+            labels, poss, bad = matrices[dimension]
             total_poss, total_bad = poss.sum(), bad.sum()
-            boot_poss, boot_bad = weights @ poss, weights @ bad
+            boot_poss, boot_bad = boot[dimension]
             for j, label in enumerate(labels):
                 cell_poss, cell_bad = poss[:, j].sum(), bad[:, j].sum()
                 rate = cell_bad / cell_poss if cell_poss else float("nan")
@@ -970,7 +999,7 @@ def run(
     *,
     seed: int = 20261123,
     permutations: int = 5000,
-    replicates: int = 1000,
+    replicates: int = 20_000,
     primary_years: Sequence[int] = (2018, 2019, 2020, 2021, 2022),
     run_checks: bool = False,
 ) -> dict[str, Any]:
