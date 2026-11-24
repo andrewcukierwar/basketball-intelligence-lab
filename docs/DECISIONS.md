@@ -2,6 +2,8 @@
 
 Maintain append-only decision records. Each entry should identify the date, status, alternatives, justification, implementation link and validation evidence.
 
+Additional record: [ADR-0014, prior-centered RAPM](decisions/0014-prior-centered-rapm.md).
+
 ## ADR-0001 — Methodology replication rather than output imitation
 
 **Date:** 2026-11-22  
