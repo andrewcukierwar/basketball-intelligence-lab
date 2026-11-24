@@ -544,7 +544,7 @@ Builds ran one at a time on the maintainer's Apple-silicon Mac. Times are wall-c
 | 2021–22 (run first) | 73.4 s | 0.81 GB |
 | 2022–23 rebuild | 62.8 s | 0.77 GB |
 
-The five seasons took 310 s in total. Memory stays below 0.9 GB per season, so a batch should run seasons in sequence rather than in parallel.
+The five seasons took 310 s in total, run in sequence, with peak memory below 0.9 GB per season. Parallel runs were not benchmarked.
 
 ### Pipeline change and 2022–23 equivalence
 
