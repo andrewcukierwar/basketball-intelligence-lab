@@ -53,6 +53,7 @@ LOWER_TRUST = (
     "v3_primary_order",
     "v3_event_order",
     "unresolved_possessions",
+    "v2_home_designation",
 )
 PERIOD_START = "case when {p} <= 4 then ({p} - 1) * 720000 else 2880000 + ({p} - 5) * 300000 end"
 

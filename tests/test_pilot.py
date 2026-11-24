@@ -886,6 +886,95 @@ def test_local_capture_copies_verified_bytes_without_network(
     assert not (tmp_path / "changed").exists() and not (tmp_path / "missing").exists()
 
 
+def test_box_logs_without_home_flags_wait_for_v2_designation(tmp_path: Path) -> None:
+    from bil.data.pilot_inputs import box_scores, designate_home
+
+    with duckdb.connect() as connection:
+        connection.execute(
+            """
+            copy (select * from (values
+                ('0022400001', date '2024-11-02', '300', '200', null::boolean, 98),
+                ('0022400001', date '2024-11-02', '200', '300', null::boolean, 118),
+                ('0022400002', date '2024-11-03', '200', '300', true, 100),
+                ('0022400002', date '2024-11-03', '300', '200', false, 90))
+              t(game_id, game_date, team_id, opp_team_id, home, pts))
+            to '{}' (format parquet);
+            copy (select * from (values
+                ('0022400001', '21', '200', 48.0, 20), ('0022400001', '31', '300', 48.0, -20),
+                ('0022400002', '21', '200', 48.0, 10), ('0022400002', '31', '300', 48.0, -10))
+              t(game_id, player_id, team_id, min, plus_minus))
+            to '{}' (format parquet);
+            """.format(tmp_path / "team_game_logs.parquet", tmp_path / "player_game_logs.parquet")
+        )
+        games, _ = box_scores(connection, tmp_path)
+    # A single null flag is still a conflict, but two give a provisional order by team ID.
+    provisional = games["0022400001"]
+    assert not provisional.home_designated
+    assert (provisional.home_id, provisional.away_id, provisional.home_points) == (200, 300, 118)
+    assert games["0022400002"].home_designated
+
+    def event(team: str, home: str, visitor: str) -> RawEvent:
+        fields = {"PLAYER1_TEAM_ID": team, "HOMEDESCRIPTION": home, "VISITORDESCRIPTION": visitor}
+        return RawEvent(fields, [2])
+
+    # V2 puts team 300's actions in the home column, so the provisional order is swapped.
+    events = [event("300", "Shot", ""), event("200", "", "Rebound"), event("", "", "Timeout")]
+    designated = designate_home(provisional, events)
+    assert designated is not None and designated.home_designated
+    assert (designated.home_id, designated.away_id) == (300, 200)
+    assert (designated.home_points, designated.away_points) == (98, 118)
+    # Contradictory or one-sided evidence designates nothing.
+    assert designate_home(provisional, [*events, event("300", "", "Foul")]) is None
+    assert designate_home(provisional, events[:1]) is None
+    assert designate_home(provisional, [event("300", "A", ""), event("200", "B", "")]) is None
+
+
+def test_undesignated_box_game_quarantines_without_v2_evidence(tmp_path: Path) -> None:
+    game, roster, _, _ = synthetic_game()
+    provisional = GameBox(
+        game.game_id, game.played_date, game.home_id, game.away_id, 1, 2, home_designated=False
+    )
+    artifact = {
+        "artifact_id": "fixture",
+        "name": "fixture",
+        "uri": "",
+        "source_id": "synthetic",
+        "upstream_namespace": "nba",
+        "source_revision": None,
+        "sha256": "0",
+        "size_bytes": 0,
+        "retrieved_at": "2026-11-23T00:00:00+00:00",
+        "rights_ref": "x",
+    }
+    rows = pilot._build_game(
+        provisional,
+        roster,
+        [
+            RawEvent(
+                {
+                    "EVENTNUM": "1",
+                    "EVENTMSGTYPE": "12",
+                    "PERIOD": "1",
+                    "PCTIMESTRING": "12:00",
+                    "HOMEDESCRIPTION": "",
+                    "VISITORDESCRIPTION": "",
+                },
+                [2],
+            )
+        ],
+        {},
+        None,
+        [artifact] * 7,  # type: ignore[list-item]
+        tmp_path,
+        "hash",
+        "2026-11-23T00:00:00+00:00",
+        season_start_year=2024,
+    )
+    review = rows["game_review"][0]
+    assert review["reason"] == "unresolved_home_designation" and review["accepted"] is False
+    assert rows["game"][0]["season_start_year"] == 2024
+
+
 def test_checks_and_evidence_read_the_recorded_season_files(tmp_path: Path) -> None:
     from bil.data import pilot_evidence
     from bil.data.pilot_check import _same_offense_violations

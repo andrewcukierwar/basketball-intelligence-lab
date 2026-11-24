@@ -30,6 +30,7 @@ from bil.data.pilot_inputs import (
     box_scores,
     cross_feeds,
     deduplicate_events,
+    designate_home,
     event_games,
     nba_game_id,
     shot_rows,
@@ -222,11 +223,29 @@ def _build_game(
     periods_match = None
     substitutions_match = None
     periods = reference.periods if reference is not None else {}
-    final_match = periods[max(periods)] == (game.home_points, game.away_points) if periods else None
     labels = _strata(events, periods)
+    undesignated = not game.home_designated
+    if undesignated:
+        # The box log has no home flag for either team. V2's description columns designate
+        # the sides, and the V3 terminal-score check below confirms them against the box.
+        designated = designate_home(game, events)
+        if designated is not None:
+            game = designated
+            labels.append("v2_home_designation")
+            warning = GameIssue(
+                "v2_home_designation",
+                "Box log has no home flag; V2 description columns designated the home team",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+    final_match = periods[max(periods)] == (game.home_points, game.away_points) if periods else None
     try:
         if not events:
             raise GameIssue("missing_v2_game", "Expected game is absent from V2 events")
+        if not game.home_designated:
+            raise GameIssue(
+                "unresolved_home_designation",
+                "Box log has no home flag and V2 does not designate the home team",
+            )
         if reference is None or final_match is not True:
             raise GameIssue("v3_box_final_mismatch", "V3 terminal score differs from the team box")
         raw = deduplicate_events(events)
