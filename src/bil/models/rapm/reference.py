@@ -108,6 +108,21 @@ def fit_rapm_diagnostics(
     return _solve_rapm(build_design(possessions), ridge, ridge, info=info), info
 
 
+def fit_split_rapm_diagnostics(
+    possessions: Sequence[Possession], *, offense_ridge: float, defense_ridge: float
+) -> tuple[RAPMFit, dict[str, float]]:
+    """Fit zero-prior ridge with separate role penalties and return the LSQR diagnostics.
+
+    Equal penalties take the same path as ``fit_rapm_diagnostics``.
+    """
+    for role, ridge in (("offense", offense_ridge), ("defense", defense_ridge)):
+        if not isfinite(ridge) or ridge <= 0:
+            raise ValueError(f"{role}_ridge must be positive and finite")
+    info: dict[str, float] = {}
+    design = build_design(possessions)
+    return _solve_rapm(design, offense_ridge, defense_ridge, info=info), info
+
+
 def fit_prior_rapm(
     possessions: Sequence[Possession],
     *,
