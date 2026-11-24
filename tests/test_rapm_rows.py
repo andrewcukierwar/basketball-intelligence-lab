@@ -1,0 +1,316 @@
+"""Hand-adjudicated and synthetic checks for the historical RAPM row builder."""
+
+from __future__ import annotations
+
+import copy
+import json
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+pytest.importorskip("duckdb")
+
+import duckdb  # noqa: E402
+
+from bil.data.pilot_output import write_tables  # noqa: E402
+from bil.data.pilot_sources import sha256_file  # noqa: E402
+from bil.data.rapm_rows import build_rows  # noqa: E402
+
+FIXTURE = Path(__file__).parent / "fixtures" / "rapm" / "historical_rows.json"
+COMMIT = "a" * 40
+WHEN = "2026-01-01T00:00:00+00:00"
+VERSION = {
+    "revision": 1,
+    "available_at": WHEN,
+    "availability_basis": "capture_bound",
+    "ingested_at": WHEN,
+    "source_refs": [],
+    "change": "upsert",
+}
+Mutation = Callable[[dict[str, Any]], None]
+
+
+def _game_tables(data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    game = data["game"]
+    revision = game["stream_revision"]
+    scope = {"game_id": game["game_id"], "stream_revision": revision}
+    return {
+        "game": [
+            {
+                "game_id": game["game_id"],
+                **VERSION,
+                "league": "NBA",
+                "season_start_year": 2022,
+                "season_type": "regular",
+                "game_date": "2022-10-18",
+                "date_basis": "played",
+                "home_team_id": game["home_team_id"],
+                "away_team_id": game["away_team_id"],
+                "neutral_site": None,
+                "status": "final",
+                "scheduled_tip_at": None,
+                "actual_tip_at": None,
+                "finalized_at": None,
+                "home_final": game["home_final"],
+                "away_final": game["away_final"],
+            }
+        ],
+        "game_stream": [
+            {
+                "game_id": game["game_id"],
+                **VERSION,
+                "official_game_revision": 1,
+                "parser_version": "test",
+                "reconciliation_view_id": "test",
+                "observed_date": "2022-10-18",
+                "complete": True,
+                "quality": "accepted",
+                "event_count": 15,
+            }
+        ],
+        "game_review": [
+            {
+                "game_id": game["game_id"],
+                "season_type": "regular",
+                "accepted": True,
+                "reason": None,
+                "strata": ["technical_free_throw", "overtime"],
+                "v3_periods_reconciled": 4,
+                "v3_box_final_match": True,
+                "v3_periods_match": True,
+                "v3_substitutions_match": True,
+            }
+        ],
+        "lineup": [{**scope, **row, "player_ids": row["player_ids"]} for row in data["lineups"]],
+        "stint": [{**scope, **row} for row in data["stints"]],
+        "possession": [{**scope, "end_reason": "test", **row} for row in data["possessions"]],
+        "score_allocation": [
+            {**scope, "attribution_rule": "test", **row} for row in data["score_allocations"]
+        ],
+    }
+
+
+def _quarantined_game() -> dict[str, list[dict[str, Any]]]:
+    base = _game_tables(json.loads(FIXTURE.read_text(encoding="utf-8")))
+    game = {**base["game"][0], "game_id": "0022200002", "home_final": 0, "away_final": 0}
+    stream = {**base["game_stream"][0], "game_id": "0022200002", "complete": False}
+    stream["quality"] = "quarantined"
+    review = {**base["game_review"][0], "game_id": "0022200002", "accepted": False}
+    review["reason"] = "parser_error"
+    review["strata"] = []
+    return {"game": [game], "game_stream": [stream], "game_review": [review]}
+
+
+def _pilot(tmp_path: Path, mutate: Mutation | None = None) -> tuple[Path, str]:
+    data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    if mutate:
+        mutate(data)
+    pilot = tmp_path / "pilot"
+    pilot.mkdir()
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    with duckdb.connect() as connection:
+        connection.execute("SET TimeZone = 'UTC'")
+        artifacts = write_tables(
+            connection, [_game_tables(data), _quarantined_game()], staging, pilot
+        )
+    manifest = {
+        "code_commit": COMMIT,
+        "parser": "test",
+        "availability": "retrospective_capture_bound",
+        "source_snapshot_sha256": "b" * 64,
+        "output_artifacts": artifacts,
+    }
+    (pilot / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return pilot, sha256_file(pilot / "manifest.json")
+
+
+def _read(path: Path, sql: str) -> list[tuple[Any, ...]]:
+    return duckdb.connect().execute(sql.replace("@", str(path))).fetchall()
+
+
+def test_fixture_dispositions_rows_and_totals(tmp_path: Path) -> None:
+    pilot, pin = _pilot(tmp_path)
+    output = tmp_path / "out"
+    manifest = build_rows(pilot, output, COMMIT, pin)
+    expected = json.loads(FIXTURE.read_text(encoding="utf-8"))["expected"]
+
+    dispositions = _read(
+        output,
+        "select possession_seq, reason, control_points, "
+        "case when reason = 'eligible' then 1 else 0 end "
+        "from '@/possession_disposition.parquet' order by 1",
+    )
+    assert dispositions == [
+        (row["possession_seq"], row["reason"], row["control_points"], row["exposure"])
+        for row in expected["dispositions"]
+    ]
+    rows = _read(
+        output,
+        "select possession_seq, offense_lineup_id, defense_lineup_id, model_points, exposure, "
+        "weight from '@/model_row.parquet' order by 1",
+    )
+    assert rows == [
+        (
+            row["possession_seq"],
+            row["offense_lineup_id"],
+            row["defense_lineup_id"],
+            row["model_points"],
+            row["exposure"],
+            float(row["weight"]),
+        )
+        for row in expected["model_rows"]
+    ]
+    game = json.loads(FIXTURE.read_text(encoding="utf-8"))["game"]
+    totals = _read(
+        output,
+        "select home_modeled_points, home_other_control_points, home_unassigned_dead_ball_points,"
+        " home_unresolved_points, home_final, home_model_offense_exposure,"
+        " away_modeled_points, away_other_control_points, away_unassigned_dead_ball_points,"
+        " away_unresolved_points, away_final, away_model_offense_exposure"
+        " from '@/game_reconciliation.parquet' where accepted",
+    )[0]
+    for offset, team in ((0, game["home_team_id"]), (6, game["away_team_id"])):
+        want = next(row for row in expected["team_totals"] if row["team_id"] == team)
+        assert totals[offset : offset + 6] == (
+            want["modeled_points"],
+            want["other_control_points"],
+            want["unassigned_dead_ball_points"],
+            want["unresolved_points"],
+            want["final_points"],
+            want["model_offense_exposure"],
+        )
+    assert not any(manifest["identity_violations"].values())  # type: ignore[attr-defined]
+
+
+def test_row_content_provenance_and_manifest(tmp_path: Path) -> None:
+    pilot, pin = _pilot(tmp_path)
+    output = tmp_path / "out"
+    manifest = build_rows(pilot, output, COMMIT, pin)
+    row = _read(
+        output,
+        "select game_revision, game_date::varchar, season_type, offense_player_ids, "
+        "defense_player_ids, stream_availability_basis, period, start_seq, end_seq "
+        "from '@/model_row.parquet' where possession_seq = 6",
+    )[0]
+    assert row == (
+        1,
+        "2022-10-18",
+        "regular",
+        ["21", "22", "23", "24", "25"],
+        ["11", "12", "13", "14", "17"],
+        "capture_bound",
+        1,
+        13,
+        15,
+    )
+    games = _read(
+        output,
+        "select game_id, accepted, quarantine_reason, possessions, allocations "
+        "from '@/game_reconciliation.parquet' order by 1",
+    )
+    assert games == [("0022200002", False, "parser_error", 0, 0), ("0022209999", True, None, 6, 6)]
+
+    recorded = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    assert recorded["pilot_manifest_sha256"] == pin
+    assert recorded["unit_exposure"] == "one_full_opportunity_per_eligible_possession"
+    assert recorded["evidence_tier"] == "retrospective_capture_bound"
+    for artifact in recorded["output_artifacts"]:
+        assert sha256_file(output / artifact["filename"]) == artifact["sha256"]
+    summary = recorded["reconciliation"]
+    assert summary["all|all"]["games_expected"] == 2
+    assert summary["all|all"]["games_quarantined"] == 1
+    assert summary["regular|overtime"]["eligible_possessions"] == 3
+    assert summary["regular|overtime"]["multiple_lineups_control_points"] == 3
+    assert summary["regular|overtime"]["score_unresolved_points"] == 2
+    assert summary["regular|technical_free_throw"]["score_modeled_points"] == 4
+    assert summary["all|all"]["final_points"] == 12
+    assert not (output / ".staging").exists()
+    assert manifest["build_id"] == recorded["build_id"]
+
+
+def test_rebuild_is_content_addressed(tmp_path: Path) -> None:
+    pilot, pin = _pilot(tmp_path)
+    first = build_rows(pilot, tmp_path / "one", COMMIT, pin)
+    second = build_rows(pilot, tmp_path / "two", "c" * 40, pin)
+    assert first["build_id"] == second["build_id"]
+    assert [row["sha256"] for row in first["output_artifacts"]] == [  # type: ignore[attr-defined]
+        row["sha256"]
+        for row in second["output_artifacts"]  # type: ignore[attr-defined]
+    ]
+
+
+def test_requires_pinned_manifest_and_commit(tmp_path: Path) -> None:
+    pilot, pin = _pilot(tmp_path)
+    with pytest.raises(ValueError, match="pinned digest"):
+        build_rows(pilot, tmp_path / "out", COMMIT, "0" * 64)
+    with pytest.raises(ValueError, match="full Git commit"):
+        build_rows(pilot, tmp_path / "out", "abc", pin)
+    assert not (tmp_path / "out").exists()
+
+
+def test_table_that_differs_from_manifest_is_rejected(tmp_path: Path) -> None:
+    pilot, pin = _pilot(tmp_path)
+    with (pilot / "possession.parquet").open("ab") as handle:
+        handle.write(b"x")
+    with pytest.raises(ValueError, match="possession differs"):
+        build_rows(pilot, tmp_path / "out", COMMIT, pin)
+
+
+def _duplicate_score(data: dict[str, Any]) -> None:
+    data["score_allocations"].append(copy.deepcopy(data["score_allocations"][0]))
+    data["game"]["home_final"] += 2
+
+
+def _stint_gap(data: dict[str, Any]) -> None:
+    data["stints"][2]["start_seq"] = 7
+    data["stints"][2]["end_seq"] = 15
+
+
+def _final_score_gap(data: dict[str, Any]) -> None:
+    data["game"]["away_final"] += 1
+
+
+def _control_by_defense(data: dict[str, Any]) -> None:
+    data["score_allocations"][0]["scoring_team_id"] = "200"
+    data["game"]["home_final"] -= 2
+    data["game"]["away_final"] += 2
+
+
+def _unlinked_control(data: dict[str, Any]) -> None:
+    data["score_allocations"][0]["possession_seq"] = None
+
+
+def _link_to_missing_possession(data: dict[str, Any]) -> None:
+    data["score_allocations"][0]["possession_seq"] = 99
+
+
+def _repeated_player(data: dict[str, Any]) -> None:
+    data["lineups"][1]["player_ids"][4] = "11"
+
+
+def _shared_player(data: dict[str, Any]) -> None:
+    data["lineups"][3]["player_ids"][4] = "11"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "check"),
+    [
+        (_duplicate_score, "score_allocations_classified_once"),
+        (_stint_gap, "accepted_possessions_covered_once_by_actual_stints"),
+        (_final_score_gap, "allocations_reconcile_to_final_score_by_side"),
+        (_control_by_defense, "control_points_scored_by_offense"),
+        (_unlinked_control, "score_allocations_classified_once"),
+        (_link_to_missing_possession, "score_allocations_classified_once"),
+        (_repeated_player, "lineups_have_five_distinct_positive_ids"),
+        (_shared_player, "model_rows_unique_unit_weight_and_valid_points"),
+    ],
+)
+def test_pilot_ledger_gaps_block_the_build(tmp_path: Path, mutation: Mutation, check: str) -> None:
+    pilot, pin = _pilot(tmp_path, mutation)
+    output = tmp_path / "out"
+    with pytest.raises(ValueError, match=check):
+        build_rows(pilot, output, COMMIT, pin)
+    assert not output.exists()
