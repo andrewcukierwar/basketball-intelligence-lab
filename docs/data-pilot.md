@@ -258,3 +258,17 @@ uv run python -m bil.features.box_build \
 Outputs, all Parquet except the manifest: `appearances` (validated observation grain, `(game_id, player_id)`), `same_window_features` (retrospective regular-season and playoff windows, which include every game in the window), `asof_retrospective_features` (per game and player, history from strictly earlier played dates of the same season type, with the New York cutoff recorded), `asof_strict_features` (same grain, built with the evaluation resolver in strict mode) and `manifest.json`. Feature rows are long: numerator, denominator, value, covered and eligible appearance counts and coverage per `(snapshot_id, feature_code, player_id)`.
 
 The pinned logs have only a 2026 capture bound and no finalization instants, so the strict view is an explicit unavailable cohort: every row has zero eligible appearances and null statistics. Do not use the retrospective as-of view as strict history. The manifest records source digests, the snapshot ID, feature version, cutoff rules, output digests and row counts, and a reconciliation of the Python views against independent DuckDB aggregates of the raw parquet. The build reads the written Parquet back, checks all 13 features in the same-window and as-of views against independent SQL over the raw logs, and requires the strict view to have no history. Any SQL mismatch, a group-versus-row count gap or a difference from the #63 profile counts fails the build, removes the output directory and exits nonzero. The manifest also records per-view, per-season-type coverage: rows, cold-start rows, players, and per-feature eligible, covered and null counts.
+
+## Skill histories and baselines
+
+The skill-history builder ([#31](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/31), [rules and results](research/skill-histories.md)) reuses the #62 loader on the same pinned logs. It writes a new private directory and never reads EPM or any model target. Use a new output directory for each build, and pass the #62 manifest so the build also checks that its appearances equal that table.
+
+```sh
+uv run python -m bil.features.skill_build \
+  data/raw/2022-23/issue-5-v2 \
+  data/processed/2022-23/issue-31-v1 \
+  --code-commit "$(git rev-parse HEAD)" \
+  --box-manifest data/processed/2022-23/issue-62-v2/manifest.json
+```
+
+Outputs: `appearance_opportunities` (per appearance: source row digest, earlier-appearance counts, New York cutoff, strict-cohort count and status), `skill_baselines` (per player-game and statistic: realized target, target and history status, covered-game counts and career or season sums, and the career, season, last-10, 30- and 90-day decay and league predictions from strictly earlier dates), `baseline_scores` (exposure-weighted MSE and log loss by season type, cohort, month and history bucket) and `manifest.json` with a `content_id`, snapshot IDs, opportunity and appearance digests, coverage and reconciliation. The build recomputes every baseline, target and headline score with independent DuckDB SQL over the raw logs. Any mismatch, a nonempty strict history, a player-day duplicate, career differing from season while one season is loaded, or a #62 mismatch fails the build, removes the output and exits nonzero. The run takes about 20 seconds.

@@ -202,6 +202,16 @@ V2 remains the event source of record.
 - **Consequences:** All fitted opportunities have exactly one five-on-five design vector. The cohort excludes 12.64% of accepted possessions. The baseline estimates stable-lineup scoring, and future comparisons can test broader representations.
 - **Links:** [Historical row contract](research/rapm-historical-rows.md), [Issue #20](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/20)
 
+## ADR-0014 — Fixed-constant baselines and season-type-keyed history for skill targets
+
+- **Date:** 2026-11-23
+- **Status:** Accepted for the #31 baselines.
+- **Context:** Estimated Skills needs next-game targets and reference forecasters before any decay or shrinkage is fitted ([EPM-U05](research/epm-uncertainties.md)).
+- **Decision:** Target is each player-game's own observed rate. Predictors use only appearances dated strictly before the game, keyed by player and season type. Baselines are career, season, last 10 covered games, 30- and 90-day decay and a league reference, all untuned. Scoring is exposure-weighted MSE and likelihood loss in chronological order on a common cohort.
+- **Evidence:** 2022–23 build reconciles against independent SQL. Unshrunk player percentages lose to the league baseline on several shooting statistics.
+- **Consequences:** Playoff debuts have no player history until a pooling convention is registered. Career equals season-to-date while one season is loaded. Strict baselines are unavailable with this source.
+- **Links:** [Skill histories](research/skill-histories.md), [Issue #31](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/31)
+
 ## Decision template
 
 ### ADR-XXXX — Title
