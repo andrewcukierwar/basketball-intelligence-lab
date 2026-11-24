@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import duckdb
 import numpy as np
 import pytest
 
@@ -23,7 +24,13 @@ from bil.features.skill_context import (
     link_values,
     schedule_inputs,
 )
-from bil.features.skill_context_build import adjust_block, base_fit, evaluate, fit_rows_for
+from bil.features.skill_context_build import (
+    adjust_block,
+    base_fit,
+    evaluate,
+    fit_rows_for,
+    write_tables,
+)
 from bil.features.skill_decay import (
     OUTER_BLOCKS,
     DESettings,
@@ -301,7 +308,7 @@ def built():  # type: ignore[no-untyped-def]
     return rows, panel, appearances, subset, inputs, fits, chosen
 
 
-def test_end_to_end_variants_scores_and_cold_rows(built) -> None:  # type: ignore[no-untyped-def]
+def test_end_to_end_variants_scores_and_cold_rows(built, tmp_path) -> None:  # type: ignore[no-untyped-def]
     _, panel, appearances, subset, inputs, fits, chosen = built
     out = evaluate(panel, appearances, subset, inputs, fits, chosen, replicates=40)
     assert out["predictions"] and out["coefficients"]
@@ -324,6 +331,18 @@ def test_end_to_end_variants_scores_and_cold_rows(built) -> None:  # type: ignor
         assert s["delta_ll_game_low"] <= s["log_loss"] + 1e-12 <= s["delta_ll_game_high"] + 2e-12
         assert s["delta_ll_player_low"] is not None
     assert {s["cohort"] for s in out["scores"]} >= {"common/all", "rookie_cold/all"}
+    assert len({frozenset(s) for s in out["scores"]}) == 1
+    staging, output = tmp_path / "staging", tmp_path / "out"
+    staging.mkdir()
+    output.mkdir()
+    with duckdb.connect() as connection:
+        artifacts = write_tables(
+            connection,
+            {k: out[k] for k in ("predictions", "scores", "coefficients")},
+            staging,
+            output,
+        )
+    assert artifacts["scores"]["row_count"] == len(out["scores"])
 
 
 def test_context_fit_ignores_scored_block_outcomes(built) -> None:  # type: ignore[no-untyped-def]

@@ -95,6 +95,12 @@ PLAYER_SEED = 33_034
 SNAPSHOT_TOLERANCE = 1e-9
 PREDICTION_TOLERANCE = 1e-9
 UPSTREAM = ("fits", "clock_selection", "predictions", "snapshots")
+DELTA_KEYS = tuple(
+    f"delta_{metric}_{name}_{side}"
+    for metric in ("ll", "mse")
+    for name in ("game", "player")
+    for side in ("low", "high")
+)
 
 
 def load_team_games(connection: duckdb.DuckDBPyConnection, directory: Path) -> list[TeamGame]:
@@ -263,6 +269,7 @@ def _cells(
                 "value_kind": "level",
                 "log_loss": float(loss[variant][select].sum() / w.sum()),
                 "weighted_mse": float(sq[variant][select].sum() / w.sum()),
+                **dict.fromkeys(DELTA_KEYS),
             }
         )
     for variant, references in REFERENCES.items():
