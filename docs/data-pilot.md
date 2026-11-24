@@ -229,3 +229,17 @@ Results for the M1 build `issue-5-v5`:
 | Parser limitations | 6 | Unsupported cross-clock reorders (3), a missing period start, a parser error and a substitution conflict. Bentes reproduces the box minutes and plus-minus in all six, so the data can be reconciled, but not by the pinned parser path. |
 
 The quarantine of the 10 substitution-defect games is correct. Recovering them would make a box-consistent third reconstruction a source of record, which needs a separate decision. The two V3 period-score defects and the 11 resolvable unresolved possessions could be recovered by an explicit three-feed adjudication rule. These are proposals and are not applied. [ADR-0010](DECISIONS.md)
+
+## Build the historical RAPM row set
+
+[Issue #59](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/59) turns an exported pilot build into the per-possession input to the [synthetic RAPM estimator](research/rapm-synthetic.md), following the [row contract](research/rapm-historical-rows.md). Pin the pilot manifest by its SHA-256 and write to a new directory under `data/`. The builder verifies every pilot table against the digests the manifest lists, and no private row enters Git.
+
+```sh
+uv run python -m bil.data.rapm_rows \
+  data/processed/2022-23/issue-19-v6 \
+  data/processed/2022-23/issue-59-v1 \
+  --pilot-manifest-sha256 "$(shasum -a 256 data/processed/2022-23/issue-19-v6/manifest.json | cut -d' ' -f1)" \
+  --code-commit "$(git rev-parse HEAD)"
+```
+
+The output directory holds `model_row`, `possession_disposition`, `score_reconciliation` and `game_reconciliation` Parquet tables plus `manifest.json`. The manifest records the pilot manifest and snapshot digests, the SHA-256 and row count of each output, the reconciliation by season type and adjudication stratum (`<season type>|<stratum>`, with `all` as the unfiltered scope) and a content-addressed `build_id`. The id hashes the contract revision, the pinned inputs and the output digests, so a rebuild from the same pilot gives the same id. DuckDB spills go to a staging directory inside the output that is removed on exit. The build fails and removes its output directory if any identity check finds a gap or a duplicate versus the pinned possession and scoring ledgers. Rows stay per possession: no aggregation is applied. Strata overlap, so stratum cells do not sum to a season type.
