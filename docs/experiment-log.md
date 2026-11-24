@@ -157,3 +157,27 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Inputs and configuration:** Pinned `issue-5-v2` logs, #31 build `issue-31-v1`, [frozen protocol](research/skill-decay-protocol.md) (commit `4e25451`), code commit `33fd3d0`, output `issue-32-v1`. 234 DE fits, game-clustered bootstrap with 2,000 replicates.
 - **Results:** In regular-season outer blocks, the model beat every #31 baseline on all 13 statistics in log loss and MSE, with intervals excluding zero. MSE gains were 0.6–3.7% over the best player or league baseline. Playoff gains were smaller and mostly within intervals against the 90-day decay. Clocks are indistinguishable for 11–12 of 13 statistics. A pure day clock is worse for free-throw rate. 33 of 234 fits hit the no-decay half-life bound. [Full results](research/skill-decay-2022-23.md)
 - **Scope:** Single-season evidence only. Outer seasons 2023–24 and 2024–25 must be run before any clock or parameter is fixed.
+
+### EXP-0009 — 2017–18 through 2021–22 development season builds
+
+- **Status:** Completed.
+- **Date:** 2026-11-23.
+- **Research question:** Do the unchanged pilot rules and M1 thresholds hold for the five seasons before 2022–23? Three of them lack archived liveData.
+- **Category:** Original (data pipeline, not a model).
+- **Code SHA / run ID:** `4b72175`, builds `issue-25-v1` for each season and `issue-25-rebuild-v1` for 2022–23.
+- **Datasets/checksums and cutoff:** Snapshots `issue-25-v1` and `issue-25-evidence-v1` for each season. They were copied from the #51 audit capture and checked against its register pins. Retrospective capture with no availability claim. The 2025–26 holdout was not built.
+- **Train / validation / test periods:** Not applicable.
+- **Baselines:** 2022–23 build `issue-19-v6` and the M1 thresholds.
+- **Results:**
+  - **Meet M1:** 2019–20 (1,041 of 1,059 regular-season and 82 of 83 playoff games) and 2020–21 (1,072 of 1,080 and 85 of 85).
+  - **Recorded unavailable:**
+    - 2017–18 has 85.5% regular-season coverage and 0.391% unresolved possessions. Early-season event-order failures dominate.
+    - 2018–19 accepts 58 of 67 overtime games (86.6%).
+    - 2021–22 accepts 55 of 58 overtime games (94.8%).
+  - Every build passes 26 of 26 checks, and `check-seasons` finds no identity or chronology violations.
+  - Bentes lineup agreement is 99.97% in every season.
+  - 2017–18 through 2019–20 carry the `no_livedata` stratum (ADR-0020).
+  - The 2022–23 rebuild is row-identical.
+  - Builds take 56 to 73 s and peak at 0.76 to 0.85 GB each. [Full results](data-pilot.md#development-seasons-201718-through-202122)
+- **Limitations / interpretation:** Thresholds were set after 2022–23 was observed and were not changed. Two of the three failures turn on small overtime denominators. The 2017–18 diagnosis is Inferred and was not investigated at the event level.
+- **Next decision:** The maintainer decides whether a stratum floor alone should make a season unavailable, and reassesses the #26 window. Under the current thresholds, the M1 seasons from 2017–18 to 2022–23 are 2019–20, 2020–21 and 2022–23.

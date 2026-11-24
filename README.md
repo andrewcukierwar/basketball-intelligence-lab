@@ -75,6 +75,6 @@ The committed `uv.lock` pins the local development environment. CI installs the 
 
 ## Status
 
-**M0 — Research foundation:** complete. **M1 — Historical NBA dataset:** the 2022–23 pilot accepts 1,292 of 1,314 games under documented invariants and tolerances, with archived-feed adjudication (ADR-0011). The 2023–24 and 2024–25 outer-validation folds are built under the same rules, accepting 1,299 of 1,312 and 1,289 of 1,314 games. **M2 — RAPM baseline:** synthetic reference verified. See the [pilot guide](docs/data-pilot.md) and [project milestones](docs/PROJECT_PLAN.md#9-project-management).
+**M0 — Research foundation:** complete. **M1 — Historical NBA dataset:** the 2022–23 pilot accepts 1,292 of 1,314 games under documented invariants and tolerances, with archived-feed adjudication (ADR-0011). The 2023–24 and 2024–25 outer-validation folds are built under the same rules, accepting 1,299 of 1,312 and 1,289 of 1,314 games. Of the 2017–18 through 2021–22 development seasons, 2019–20 and 2020–21 meet the M1 thresholds. 2017–18, 2018–19 and 2021–22 do not and are recorded as unavailable. **M2 — RAPM baseline:** synthetic reference verified. See the [pilot guide](docs/data-pilot.md) and [project milestones](docs/PROJECT_PLAN.md#9-project-management).
 
 This is an independent research project and is not affiliated with Dunks & Threes, DARKO, BBall Index or the NBA.

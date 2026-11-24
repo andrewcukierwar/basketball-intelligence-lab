@@ -304,13 +304,14 @@ def _period_start_clock(period: int) -> str:
     return "PT12M00.00S" if period <= 4 else "PT05M00.00S"
 
 
-def cross_feeds(livedata: Path, datanba: Path) -> dict[str, CrossFeed]:
+def cross_feeds(livedata: Path | None, datanba: Path) -> dict[str, CrossFeed]:
+    """Read both cross-feeds. Without a liveData archive, no game has liveData evidence."""
     games: dict[str, CrossFeed] = defaultdict(CrossFeed)
     live_ends: dict[tuple[str, int], tuple[int, tuple[int, int]]] = {}
     moves: dict[tuple[str, int, int], tuple[set[int], set[int]]] = defaultdict(
         lambda: (set(), set())
     )
-    for row in archive_rows(livedata):
+    for row in archive_rows(livedata) if livedata is not None else ():
         game_id = nba_game_id(row["gameId"])
         games[game_id].has_livedata = True
         if not row["period"].isdigit() or not row["orderNumber"].isdigit():

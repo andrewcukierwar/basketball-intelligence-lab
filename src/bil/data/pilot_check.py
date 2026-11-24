@@ -282,3 +282,95 @@ def check_build(output: Path, snapshot: Path) -> dict[str, int]:
             row = connection.execute(sql).fetchone()
             results[name] = row[0] if row else -1
     return results
+
+
+CROSS_SEASON_CHECKS = {
+    "game_ids_unique_across_seasons": "select count(*) - count(distinct game_id) from games",
+    "game_id_encodes_season_and_type": """
+        select count(*) from games
+        where substr(game_id, 4, 2) <> lpad(cast(season_start_year % 100 as varchar), 2, '0')
+           or season_start_year <> manifest_year
+           or (left(game_id, 3) = '002') <> (season_type = 'regular')
+           or left(game_id, 3) not in ('002', '004')""",
+    "seasons_in_date_order": """
+        with spans as (
+          select season_start_year as year, min(game_date) as first, max(game_date) as last
+          from games group by 1)
+        select count(*) from spans a join spans b on b.year > a.year and b.first <= a.last""",
+    "playoffs_after_each_team_regular_season": """
+        with sides as (
+          select season_start_year, season_type, game_date, home_team_id as team from games
+          union all
+          select season_start_year, season_type, game_date, away_team_id from games)
+        select count(*) from (
+          select season_start_year, team,
+                 max(game_date) filter (where season_type = 'regular') as last_regular,
+                 min(game_date) filter (where season_type = 'playoffs') as first_playoff
+          from sides group by all)
+        where first_playoff <= last_regular""",
+    "lineup_team_matches_player_box": """
+        select count(*) from (select distinct game_id, team_id, player_id from on_court) o
+        left join box b using (game_id, player_id)
+        where b.team_id is distinct from o.team_id""",
+}
+
+
+def check_seasons(builds: list[tuple[Path, Path]]) -> tuple[dict[str, int], dict[str, int]]:
+    """Check identity and chronology across several season builds and their snapshots.
+
+    Returns violation counts, each zero for a valid set, and aggregate roster counts. Lineup
+    players are matched to that game's box team, so traded players are checked per game.
+    """
+    with duckdb.connect() as connection:
+        for index, (output, snapshot) in enumerate(builds):
+            manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+            year = int(manifest["season_start_year"])
+            game = _literal(output / "game.parquet")
+            lineup = _literal(output / "lineup.parquet")
+            box = _literal(snapshot / "player_game_logs.parquet")
+            verb = "create table {} as" if index == 0 else "insert into {}"
+            connection.execute(
+                f"""{verb.format("games")}
+                select game_id, season_start_year, {year} as manifest_year, season_type,
+                       cast(game_date as date) as game_date, home_team_id, away_team_id
+                from read_parquet({game})"""
+            )
+            connection.execute(
+                f"""{verb.format("on_court")}
+                select game_id, team_id, unnest(player_ids) as player_id, {year} as year
+                from read_parquet({lineup})"""
+            )
+            connection.execute(
+                f"""{verb.format("box")}
+                select lpad(cast(game_id as varchar), 10, '0') as game_id,
+                       cast(player_id as varchar) as player_id,
+                       cast(team_id as varchar) as team_id, {year} as year
+                from read_parquet({box})
+                where left(lpad(cast(game_id as varchar), 10, '0'), 3) in ('002', '004')"""
+            )
+        results: dict[str, int] = {}
+        for name, sql in CROSS_SEASON_CHECKS.items():
+            row = connection.execute(sql).fetchone()
+            results[name] = row[0] if row else -1
+        summary = connection.execute(
+            """
+            with teams as (
+              select year, player_id, count(distinct team_id) as n from box group by all),
+            lineup_teams as (
+              select year, player_id, count(distinct team_id) as n from on_court group by all)
+            select (select count(*) from games),
+                   (select count(distinct player_id) from box),
+                   (select count(*) from teams where n > 1),
+                   (select count(*) from lineup_teams where n > 1),
+                   (select count(*) from (select player_id from box group by 1
+                                          having count(distinct year) > 1))
+            """
+        ).fetchone()
+    keys = (
+        "games",
+        "box_players",
+        "player_seasons_with_several_box_teams",
+        "player_seasons_on_court_for_several_teams",
+        "players_in_several_seasons",
+    )
+    return results, dict(zip(keys, summary or (), strict=True))
