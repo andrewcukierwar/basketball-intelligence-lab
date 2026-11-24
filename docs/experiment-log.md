@@ -272,3 +272,22 @@ Do not overwrite negative or unexpected results. New experiments should be appen
   - [Report](research/rapm-multiseason.md)
 - **Limitations / interpretation:** Near-tie selection. `W5` was truncated in development. Neutral sites are not coded. The context advantage rests on end-of-period run-outs (#82). Retrospective, not confirmatory.
 - **Next decision:** Review, then whether informed RAPM (#30 and later) should take the RAPM-with-context-offset model as its comparator.
+
+### EXP-0016 — Independent reproducibility replay of the ADR-0025 multi-season RAPM configuration
+
+- **Status:** Completed. Result: numerically identical, with one explained provenance difference.
+- **Date:** 2026-11-24.
+- **Research question:** Do the existing runner and the pinned inputs regenerate the #26 development and outer artifacts and aggregates under pre-registered tolerances? (ADR-0026 condition for closing #27.) Not model selection: nothing new was tried and the selection was not changed.
+- **Category:** Verification, Original design.
+- **Code SHA / run ID:** [Protocol](research/rapm-replay-protocol.md) committed before any replay run. Comparison script `scripts/compare_rapm_runs.py`. Runs from a clean tree on `claude/issue-27-replay` (runner unchanged since #26). Output: `data/processed/multiseason/issue-27-replay-dev-v1` and `issue-27-replay-outer-v1`, compared with `issue-26-dev-v1` and `issue-26-outer-v1`.
+- **Datasets and cutoff:** The same pinned `issue-93-v1` row sets and pilot builds, 2018–19 through 2024–25. No 2025–26 row and no EPM value was read.
+- **Tolerances (fixed in advance):** exact for strings, integers, digests, row counts, selected configuration, iteration counts and player ids. For other floats, |a−b| ≤ 1e-10 + 1e-8·max(|a|,|b|). Bootstrap seed 2023 is fixed, so intervals use the same tolerance. Timings, commits and file byte digests are reported only.
+- **Results:**
+  - Development: all 13 groups pass. about 58,600 compared leaves, including all 8 candidate MSEs, deltas and intervals, the selected configuration (`W2`, 4,000 / 8,000), row counts, input digests, the 3,970-entry fit log and the 3,575 coefficient values. Maximum deviation is exactly 0. `player_estimates.csv` is byte-identical (same SHA-256).
+  - Outer: all groups pass except one leaf. Deltas against league and context with their intervals, calibration, refit volatility, the 20-fit log and every array in `predictions.npz` have maximum deviation exactly 0. Outcome digests and counts match.
+  - The failed leaf is `addendum.addendum_commit`: `57fe88e` originally, `7f9b85e` in the replay. The #26 PR was squash-merged, so the commit that last touched the addendum on `main` has a new hash. The addendum's SHA-256 matches the frozen digest, and the file is unchanged.
+  - Two interventions are on record. The comparison script's ignore list omitted two solver-timing keys (`median_fit_seconds`, `total_fit_seconds`), which the protocol already classes as reported. They were added (protocol amendment, no tolerance changed). The outer runner was given the original development manifest, because its guard requires the digest the addendum froze, and a replayed manifest cannot match it.
+  - Library versions are identical (Python 3.14.3, NumPy 2.5.5, SciPy 1.18.1, DuckDB 2.0.1).
+- **Runtime:** development 1,149 s (original 1,156 s), outer 11.1 s (original 11.7 s).
+- **Limitations:** Bitwise reproduction on the same machine and library versions. It does not test other platforms or library versions, or rebuilding inputs from raw sources. It does not validate the modeling choices.
+- **Next decision:** Maintainer review, then close #27.

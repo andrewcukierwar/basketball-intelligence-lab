@@ -33,6 +33,8 @@ IGNORED_KEYS = frozenset(
         "peak_memory_mib",
         "seconds",
         "fit_seconds",
+        "median_fit_seconds",
+        "total_fit_seconds",
         "_assemble_seconds",
         "code_commit",
         "head_commit",
