@@ -29,10 +29,12 @@ from bil.models.rapm.targets import (
     ARTIFACT_LABEL,
     AUTHORIZED_SEASONS,
     DATA_END,
+    ERA,
     EVALUATION_SCENARIO,
     REFERENCES,
     TARGET_PINS,
     TARGET_VERSION,
+    VERIFICATION_GROUP,
     chronological_registration,
     origin_schedule,
     verify_protocol,
@@ -52,6 +54,7 @@ from bil.models.spm_evaluation import (
     COURT_NAMES,
     SNAPSHOT_CANDIDATES,
     VOLUME,
+    BoolArray,
     CourtBaselines,
     CourtPredictions,
     IntArray,
@@ -61,14 +64,16 @@ from bil.models.spm_evaluation import (
     clustered_interval,
     court_scores,
     fit_court_baselines,
+    lookup,
     minutes_bands,
+    pair_fallback,
     predict_court,
     predict_pair,
     sum_by,
     volume_bands,
 )
 
-VERSION = "issue-30-v1"
+VERSION = "issue-30-v2"
 EVIDENCE = "retrospective_capture_bound"
 TARGET_MANIFEST = "40fcfba98a3a243377612292d59860541a710a5be902011ec03ec276118fe043"
 AGE_MANIFEST = "5a6f26e3b8b2dad9b0ef1e3400b561a9955a4e138abc2a165afa588f36502e76"
@@ -216,6 +221,8 @@ def fit_models(
         support.extend(by_player[player].forward for player in eligible)
         coverage[str(season)] = {
             "joined_training_rows": len(eligible),
+            "verification_group": VERIFICATION_GROUP[season],
+            "era": ERA[season],
             "target_only": len(set(by_player) - set(history)),
             "box_only": len(set(history) - set(by_player)),
             "labels_below_minimum": sum(not label.enough() for label in by_player.values()),
@@ -271,17 +278,19 @@ class Opening:
     minutes: FloatArray
     volume: FloatArray
     predictions: dict[str, FloatArray]
+    fallback: dict[str, FloatArray]
+    uses_fallback: dict[str, BoolArray]
 
 
 def opening(
     season: int,
     day: date,
-    rows: Rows,
     previous: Sequence[Appearance],
     models: Mapping[str, PriorPair],
 ) -> Opening:
-    keys = np.unique(np.concatenate((rows.offense.ravel(), rows.defense.ravel())))
-    values, minutes = feature_matrix(completed_history(previous, day), keys.tolist())
+    history = completed_history(previous, day)
+    keys = np.asarray(sorted(history), dtype=np.int64)
+    values, minutes = feature_matrix(history, keys.tolist())
     return Opening(
         season,
         day,
@@ -289,6 +298,8 @@ def opening(
         minutes,
         values[:, VOLUME],
         {name: predict_pair(pair, values) for name, pair in models.items()},
+        {name: np.array([model.intercept for model in pair]) for name, pair in models.items()},
+        {name: pair_fallback(pair, values) for name, pair in models.items()},
     )
 
 
@@ -305,15 +316,18 @@ def freeze_fold(
         "evidence_tier": EVIDENCE,
         "fit_id": metadata["fit_id"],
     }
-    opening_predictions: dict[str, Any] = dict(start.predictions)
+    candidates = tuple(start.predictions)
     np.savez_compressed(
         directory / "opening.npz",
         player_id=start.players,
         minutes=start.minutes,
         volume=start.volume,
         origin=start.day.isoformat(),
+        candidates=candidates,
+        priors=np.stack([start.predictions[name] for name in candidates], axis=1),
+        fallback_priors=np.stack([start.fallback[name] for name in candidates]),
+        uses_fallback=np.stack([start.uses_fallback[name] for name in candidates], axis=1),
         **common,
-        **opening_predictions,
     )
     dated = court.dated
     np.savez_compressed(
@@ -325,6 +339,8 @@ def freeze_fold(
         minutes=np.concatenate([view.minutes for view in dated]),
         volume=np.concatenate([view.volume for view in dated]),
         priors=np.concatenate([view.priors for view in dated]),
+        uses_fallback=np.concatenate([view.fallback for view in dated]),
+        has_current_history=np.concatenate([view.has_current_history for view in dated]),
     )
     np.savez_compressed(
         directory / "court_predictions.npz",
@@ -352,20 +368,26 @@ def label_scores(
         for (season, player), label in labels.items()
         if season == prediction.season and label.enough() and (common is None or player in common)
     }
-    included = np.isin(prediction.players, list(available))
-    players = prediction.players[included]
+    players = np.asarray(sorted(available), dtype=np.int64)
+    indices = lookup(prediction.players, players)
+    known = indices < len(prediction.players)
     actual = np.asarray([available[int(player)].values for player in players])
     exposure = np.asarray([min(available[int(player)].exposure) for player in players])
     if not len(players):
         raise ValueError("evaluation fold has no eligible K0 players")
     errors = {}
+    fallback_with_history = {}
     for name, values in prediction.predictions.items():
-        difference = values[included] - actual
+        indexed = np.vstack((values, prediction.fallback[name]))[indices]
+        difference = indexed - actual
+        fallback_with_history[name] = (
+            prediction.uses_fallback[name][indices[known]].sum(axis=0).tolist()
+        )
         errors[name] = np.column_stack((difference, difference.sum(axis=1)))
     ages = ages_at(players, prediction.day, births)
     groups = {
-        "minutes": minutes_bands(prediction.minutes[included]),
-        "shot_volume_role": volume_bands(prediction.volume[included]),
+        "minutes": minutes_bands(np.append(prediction.minutes, np.nan)[indices]),
+        "shot_volume_role": volume_bands(np.append(prediction.volume, np.nan)[indices]),
         "age": age_bands(ages),
         "label_exposure": {
             "250_to_999": exposure < 1000,
@@ -376,7 +398,11 @@ def label_scores(
     summary = label_slice(errors, np.ones(len(players), dtype=bool))
     summary.update(
         eligible=len(available),
-        missing_prediction=len(available) - len(players),
+        opened_players=len(prediction.players),
+        scored_with_opening_history=int(known.sum()),
+        scored_with_cold_fallback=int((~known).sum()),
+        intercept_fallback_with_history=fallback_with_history,
+        missing_prediction=0,
         roster_position={"status": "unavailable", "players": len(players)},
     )
     for group, masks in groups.items():
@@ -505,6 +531,60 @@ def verify_row_dates(rows: Rows, season: int, calendar: Mapping[int, tuple[date,
         raise ValueError(f"invalid canonical row dates or years for {season}")
 
 
+def calibration_updates(previous: Labels, current: Labels) -> dict[str, int]:
+    """Compare eligible target records from successive pre-evaluation origins."""
+    before = {key for key, label in previous.items() if label.enough()}
+    after = {key for key, label in current.items() if label.enough()}
+    continuing = before & after
+    changed = sum(previous[key] != current[key] for key in continuing)
+    return {
+        "newly_eligible": len(after - before),
+        "no_longer_eligible": len(before - after),
+        "revised": changed,
+        "unchanged": len(continuing) - changed,
+    }
+
+
+def audit_overlap(
+    season: int,
+    opening_day: date,
+    scored: Rows,
+    comparison_fit: Rows,
+    opening_history: Sequence[Appearance],
+    calibration_box: Mapping[int, Sequence[Appearance]],
+    calibration_rows: Mapping[int, Rows],
+) -> dict[str, int]:
+    scored_ids = set(scored.game_ids)
+    overlaps = {
+        "evaluation_season_in_calibration": int(season in calibration_rows),
+        "scored_games_in_calibration_target_rowsets": len(
+            scored_ids.intersection(
+                game for rows in calibration_rows.values() for game in rows.game_ids
+            )
+        ),
+        "scored_games_in_calibration_box_logs": len(
+            scored_ids.intersection(
+                row.game_id for appearances in calibration_box.values() for row in appearances
+            )
+        ),
+        "scored_games_in_comparator_fit": len(scored_ids.intersection(comparison_fit.game_ids)),
+        "scored_games_in_opening_history": len(
+            scored_ids.intersection(
+                row.game_id for row in opening_history if row.game_date < opening_day
+            )
+        ),
+        "comparator_rows_on_or_after_opening": int(
+            (comparison_fit.day >= opening_day.toordinal()).sum()
+        ),
+        "target_source_rows_on_or_after_opening": sum(
+            int((rows.day >= opening_day.toordinal()).sum()) for rows in calibration_rows.values()
+        ),
+    }
+    if any(overlaps.values()):
+        raise ValueError(f"calibration and scoring overlap: {overlaps}")
+    return overlaps
+
+
 def run(raw: Path, processed: Path, output: Path, protocol_sha256: str) -> None:
     start_time = time.monotonic()
     protocol = verify_protocol(REPO_ROOT / "docs/research/box-spm-protocol.md", protocol_sha256)
@@ -547,6 +627,7 @@ def run(raw: Path, processed: Path, output: Path, protocol_sha256: str) -> None:
                     processed, season, AUTHORIZED_SEASONS, Path(sandbox), TARGET_PINS
                 )
                 row_inputs[str(season)] = {
+                    "verification_group": VERIFICATION_GROUP[season],
                     "row_manifest_sha256": load.pin.row_manifest_sha256,
                     "pilot_manifest_sha256": load.pin.pilot_manifest_sha256,
                     "coverage": load.coverage,
@@ -562,6 +643,7 @@ def run(raw: Path, processed: Path, output: Path, protocol_sha256: str) -> None:
         # Age is only joined in the scoring calls, following each prediction write.
         births, age_inputs = checked_ages(raw)
         for reference, rules in registration.items():
+            last_target: Labels = {}
             first = rules["first_season_unavailable"]
             report["folds"][reference] = {str(first["season"]): {"status": "unavailable", **first}}
             for fold in rules["folds"]:
@@ -583,6 +665,8 @@ def run(raw: Path, processed: Path, output: Path, protocol_sha256: str) -> None:
                     training[origin], seasons, histories, cutoff, CANDIDATES
                 )
                 fit = model_records(models, origin, record, coverage, log_inputs)
+                updates = calibration_updates(last_target, training[origin])
+                last_target = training[origin]
                 details = {
                     **fit,
                     "evaluation_season": season,
@@ -606,7 +690,16 @@ def run(raw: Path, processed: Path, output: Path, protocol_sha256: str) -> None:
                 if earlier not in baselines:
                     baselines[earlier] = fit_court_baselines(previous_rows, cut)
                 previous = histories[season - 1] if season - 1 in REFERENCES[reference] else []
-                start = opening(season, cut, rows, previous, models)
+                start = opening(season, cut, previous, models)
+                overlap = audit_overlap(
+                    season,
+                    cut,
+                    rows,
+                    previous_rows,
+                    previous,
+                    {year: histories[year] for year in seasons},
+                    {year: canonical(year) for year in seasons},
+                )
                 court = predict_court(rows, previous, histories[season], baselines[earlier], models)
                 details["court_baselines"] = baselines[earlier].fit_metadata
                 freeze_fold(stage / f"{reference}-{season}", start, rows, court, details)
@@ -625,6 +718,10 @@ def run(raw: Path, processed: Path, output: Path, protocol_sha256: str) -> None:
                     "last_scored_date": date.fromordinal(int(np.max(rows.day))).isoformat(),
                     "court": metrics,
                     "training": coverage,
+                    "calibration_target_updates": updates,
+                    "verification_group": VERIFICATION_GROUP[season],
+                    "era": ERA[season],
+                    "overlap_audit": overlap,
                 }
                 del court
 

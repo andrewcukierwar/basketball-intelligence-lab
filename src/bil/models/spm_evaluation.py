@@ -65,6 +65,8 @@ class CourtBaselines:
 
 def lookup(keys: IntArray, ids: IntArray) -> IntArray:
     """Sorted-key indices; unseen keys go to the appended fallback row."""
+    if not keys.size:
+        return np.zeros_like(ids)
     indices = np.searchsorted(keys, ids)
     found = (indices < keys.size) & (keys[np.minimum(indices, keys.size - 1)] == ids)
     return np.where(found, indices, keys.size)
@@ -109,6 +111,8 @@ class DatedPriors:
     minutes: FloatArray
     volume: FloatArray
     priors: FloatArray
+    fallback: BoolArray
+    has_current_history: BoolArray
 
 
 @dataclass(frozen=True)
@@ -123,6 +127,13 @@ class CourtPredictions:
 def predict_pair(pair: PriorPair, values: FloatArray) -> FloatArray:
     result: FloatArray = np.column_stack([model.predict(values) for model in pair])
     return result
+
+
+def pair_fallback(pair: PriorPair, values: FloatArray) -> BoolArray:
+    fallback: BoolArray = np.column_stack(
+        [~np.isfinite(values[:, model.features]).any(axis=1) for model in pair]
+    )
+    return fallback
 
 
 def lineup_mean(values: FloatArray) -> FloatArray:
@@ -151,6 +162,11 @@ def predict_court(
     minutes_mean = np.empty(len(rows))
     volume_mean = np.empty(len(rows))
     dated = []
+    first_current: dict[int, date] = {}
+    for row in current:
+        if row.minutes_ms > 0:
+            player = int(row.player_id)
+            first_current[player] = min(first_current.get(player, row.game_date), row.game_date)
     for day, history in dated_histories(previous, current, days):
         ordinal = day.toordinal()
         subset = rows.day == ordinal
@@ -178,7 +194,17 @@ def predict_court(
         missing_history[subset] = np.isnan(minutes[offense]).sum(axis=1) + np.isnan(
             minutes[defense]
         ).sum(axis=1)
-        dated.append(DatedPriors(ordinal, ids, minutes, values[:, VOLUME], priors))
+        fallback = np.stack(
+            [pair_fallback(models[name], values) for name in SNAPSHOT_CANDIDATES], axis=1
+        )
+        has_current_history = np.asarray(
+            [first_current.get(int(player), date.max) < day for player in ids], dtype=np.bool_
+        )
+        dated.append(
+            DatedPriors(
+                ordinal, ids, minutes, values[:, VOLUME], priors, fallback, has_current_history
+            )
+        )
     return CourtPredictions(predictions, minutes_mean, volume_mean, missing_history, dated)
 
 
@@ -237,6 +263,20 @@ def court_scores(
         "dated_players_without_history": sum(
             int(np.isnan(view.minutes).sum()) for view in predictions.dated
         ),
+    }
+    score["history"]["dated_players_without_current_season_history"] = sum(
+        int((~view.has_current_history).sum()) for view in predictions.dated
+    )
+    score["history"]["intercept_fallback_dated_with_history"] = {
+        name: np.stack(
+            [
+                (view.fallback[:, index] & np.isfinite(view.minutes)[:, None]).sum(axis=0)
+                for view in predictions.dated
+            ]
+        )
+        .sum(axis=0)
+        .tolist()
+        for index, name in enumerate(SNAPSHOT_CANDIDATES)
     }
     age = np.full(len(rows), np.nan)
     for view in predictions.dated:

@@ -13,7 +13,16 @@ from bil.models.spm import (
     fit_prior,
     signed_lineup_sum,
 )
-from bil.models.spm_build import Label, checked_logs, fit_models, freeze_fold, label_scores, opening
+from bil.models.spm_build import (
+    Label,
+    audit_overlap,
+    calibration_updates,
+    checked_logs,
+    fit_models,
+    freeze_fold,
+    label_scores,
+    opening,
+)
 from bil.models.spm_evaluation import (
     ages_at,
     clustered_interval,
@@ -132,7 +141,7 @@ def test_calendar_cutoff_and_same_day_box_and_outcome_poisoning():
     assert first.values[:2] == pytest.approx(changed.values[:2])
     assert not np.allclose(first.values[2:], changed.values[2:])
     assert first.dated[0].volume == pytest.approx(np.arange(1, 11))
-    start = opening(2022, days[0], rows, previous + poisoned, models)
+    start = opening(2022, days[0], previous + poisoned, models)
     assert start.volume == pytest.approx(np.arange(1, 11))
     with pytest.raises(ValueError, match="incomplete"):
         fit_models(label_data, [2021], {2021: previous + poisoned}, days[0], CANDIDATES)
@@ -143,6 +152,8 @@ def test_calendar_cutoff_and_same_day_box_and_outcome_poisoning():
     assert court["represented_game_margins"] == 2
     assert court["age"]["unknown"]["possessions"] == 4
     assert weekly[:, 0].sum() == 4
+    assert court["history"]["dated_players_without_current_season_history"] == 19
+    assert court["history"]["intercept_fallback_dated_with_history"]["full"] == [0, 20]
     scores, players, _ = label_scores(
         start,
         {(2022, 1): label_data[(2021, 1)], (2022, 2): Label((1, 1), (249, 300), False)},
@@ -176,7 +187,7 @@ def test_private_prediction_artifacts_are_outcome_free(tmp_path):
     prior = fit_court_baselines(court_rows([first]), day)
     rows = court_rows([day])
     court = predict_court(rows, history, [], prior, models)
-    start = opening(2022, day, rows, history, models)
+    start = opening(2022, day, history, models)
     target = tmp_path / "predictions"
     freeze_fold(target, start, rows, court, {"fit_id": "synthetic"})
     with np.load(target / "court_predictions.npz", allow_pickle=False) as artifact:
@@ -186,3 +197,61 @@ def test_private_prediction_artifacts_are_outcome_free(tmp_path):
     with np.load(target / "dated_priors.npz", allow_pickle=False) as artifact:
         assert artifact["priors"].shape == (10, 2, 2)
         assert artifact["evidence_tier"] == "retrospective_capture_bound"
+    late_player = 101
+    poisoned = replace(
+        rows,
+        offense=np.where(rows.offense == 1, late_player, rows.offense),
+        defense=np.where(rows.defense == 1, late_player, rows.defense),
+    )
+    poisoned_court = predict_court(poisoned, history, [], prior, models)
+    other = tmp_path / "poisoned"
+    freeze_fold(
+        other,
+        opening(2022, day, history, models),
+        poisoned,
+        poisoned_court,
+        {"fit_id": "synthetic"},
+    )
+    assert (target / "opening.npz").read_bytes() == (other / "opening.npz").read_bytes()
+    with np.load(target / "opening.npz", allow_pickle=False) as artifact:
+        assert late_player not in artifact["player_id"]
+        assert np.all(artifact["fallback_priors"][0] == 0)
+
+    gap = opening(2022, day, [], models)
+    assert not gap.players.size
+    scored, players, errors = label_scores(
+        gap,
+        {(2022, late_player): Label((2.0, 1.0), (300, 300), False)},
+        {},
+    )
+    assert players.tolist() == [late_player]
+    assert scored["scored_with_cold_fallback"] == 1
+    assert scored["missing_prediction"] == 0
+    assert errors["zero"][0, :2].tolist() == [-2.0, -1.0]
+    assert errors["full"][0, :2] == pytest.approx(gap.fallback["full"] - [2.0, 1.0])
+
+
+def test_overlap_audit_and_eligible_calibration_revisions():
+    early = date(2021, 4, 1)
+    day = date(2022, 3, 1)
+    prior = replace(court_rows([early]), game_ids=("earlier",))
+    scored = court_rows([day])
+    boxes = {2021: [appearance(1, early, 7)]}
+    assert not any(
+        audit_overlap(2022, day, scored, prior, boxes[2021], boxes, {2021: prior}).values()
+    )
+    with pytest.raises(ValueError, match="calibration and scoring overlap"):
+        audit_overlap(2022, day, scored, prior, boxes[2021], boxes, {2021: scored})
+    retained = Label((1.0, 2.0), (250, 250), False)
+    immature = Label((1.0, 2.0), (249, 250), False)
+    previous = {(2021, 1): retained, (2021, 2): retained, (2021, 3): retained}
+    updates = calibration_updates(
+        previous,
+        {
+            (2021, 1): replace(retained, forward=True),
+            (2021, 2): immature,
+            (2021, 3): retained,
+            (2022, 1): retained,
+        },
+    )
+    assert updates == {"newly_eligible": 1, "no_longer_eligible": 1, "revised": 1, "unchanged": 1}
