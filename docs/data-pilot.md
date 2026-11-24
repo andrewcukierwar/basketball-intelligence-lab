@@ -243,3 +243,18 @@ uv run python -m bil.data.rapm_rows \
 ```
 
 The output directory holds `model_row`, `possession_disposition`, `score_reconciliation` and `game_reconciliation` Parquet tables plus `manifest.json`. The manifest records the pilot manifest and snapshot digests, the SHA-256 and row count of each output, the reconciliation by season type and adjudication stratum (`<season type>|<stratum>`, with `all` as the unfiltered scope) and a content-addressed `build_id`. The id hashes the contract revision, the pinned inputs and the output digests, so a rebuild from the same pilot gives the same id. DuckDB spills go to a staging directory inside the output that is removed on exit. The build fails and removes its output directory if any identity check finds a gap or a duplicate versus the pinned possession and scoring ledgers. Rows stay per possession: no aggregation is applied. Strata overlap, so stratum cells do not sum to a season type.
+
+## Box-score feature views (issue #62)
+
+The builder turns the pinned `issue-5-v2` player and team game logs into the [box-score features](research/box-score-feature-contract.md). It reads only those two logs, verifies the pinned snapshot, and writes a new private directory. It never reads EPM or any model target.
+
+```sh
+uv run python -m bil.features.box_build \
+  data/raw/2022-23/issue-5-v2 \
+  data/processed/2022-23/issue-62-v1 \
+  --code-commit "$(git rev-parse HEAD)"
+```
+
+Outputs, all Parquet except the manifest: `appearances` (validated observation grain, `(game_id, player_id)`), `same_window_features` (retrospective regular-season and playoff windows, which include every game in the window), `asof_retrospective_features` (per game and player, history from strictly earlier played dates of the same season type, with the New York cutoff recorded), `asof_strict_features` (same grain, built with the evaluation resolver in strict mode) and `manifest.json`. Feature rows are long: numerator, denominator, value, covered and eligible appearance counts and coverage per `(snapshot_id, feature_code, player_id)`.
+
+The pinned logs have only a 2026 capture bound and no finalization instants, so the strict view is an explicit unavailable cohort: every row has zero eligible appearances and null statistics. Do not use the retrospective as-of view as strict history. The manifest records source digests, the snapshot ID, feature version, cutoff rules, output digests and row counts, and a reconciliation of the Python views against independent DuckDB aggregates of the raw parquet. The build reads the written Parquet back, checks all 13 features in the same-window and as-of views against independent SQL over the raw logs, and requires the strict view to have no history. Any SQL mismatch, a group-versus-row count gap or a difference from the #63 profile counts fails the build, removes the output directory and exits nonzero. The manifest also records per-view, per-season-type coverage: rows, cold-start rows, players, and per-feature eligible, covered and null counts.
