@@ -1,0 +1,56 @@
+{
+  "game": {
+    "game_id": "0022209999",
+    "stream_revision": 1,
+    "home_team_id": "100",
+    "away_team_id": "200",
+    "home_final": 3,
+    "away_final": 9
+  },
+  "lineups": [
+    {"lineup_id": "h1", "team_id": "100", "player_ids": ["11", "12", "13", "14", "15"]},
+    {"lineup_id": "h2", "team_id": "100", "player_ids": ["11", "12", "13", "14", "16"]},
+    {"lineup_id": "h3", "team_id": "100", "player_ids": ["11", "12", "13", "14", "17"]},
+    {"lineup_id": "a1", "team_id": "200", "player_ids": ["21", "22", "23", "24", "25"]}
+  ],
+  "stints": [
+    {"stint_seq": 1, "period": 1, "start_seq": 1, "end_seq": 4, "start_elapsed_ms": 0, "end_elapsed_ms": 30000, "home_lineup_id": "h1", "away_lineup_id": "a1"},
+    {"stint_seq": 2, "period": 1, "start_seq": 4, "end_seq": 6, "start_elapsed_ms": 30000, "end_elapsed_ms": 30000, "home_lineup_id": "h2", "away_lineup_id": "a1"},
+    {"stint_seq": 3, "period": 1, "start_seq": 6, "end_seq": 15, "start_elapsed_ms": 30000, "end_elapsed_ms": 720000, "home_lineup_id": "h3", "away_lineup_id": "a1"}
+  ],
+  "possessions": [
+    {"possession_seq": 1, "period": 1, "start_seq": 1, "end_seq": 4, "offense_team_id": "100", "defense_team_id": "200", "status": "accepted"},
+    {"possession_seq": 2, "period": 1, "start_seq": 4, "end_seq": 7, "offense_team_id": "200", "defense_team_id": "100", "status": "accepted"},
+    {"possession_seq": 3, "period": 1, "start_seq": 7, "end_seq": 8, "offense_team_id": "100", "defense_team_id": "200", "status": "excluded"},
+    {"possession_seq": 4, "period": 1, "start_seq": 8, "end_seq": 10, "offense_team_id": "200", "defense_team_id": "100", "status": "unresolved"},
+    {"possession_seq": 5, "period": 1, "start_seq": 10, "end_seq": 13, "offense_team_id": "100", "defense_team_id": "200", "status": "accepted"},
+    {"possession_seq": 6, "period": 1, "start_seq": 13, "end_seq": 15, "offense_team_id": "200", "defense_team_id": "100", "status": "accepted"}
+  ],
+  "score_allocations": [
+    {"seq": 2, "scoring_team_id": "100", "points_delta": 2, "possession_seq": 1, "credited_stint_seq": 2, "possession_reason": "control_possession"},
+    {"seq": 4, "scoring_team_id": "100", "points_delta": 1, "possession_seq": null, "credited_stint_seq": 2, "possession_reason": "unassigned_dead_ball"},
+    {"seq": 5, "scoring_team_id": "200", "points_delta": 3, "possession_seq": 2, "credited_stint_seq": 2, "possession_reason": "control_possession"},
+    {"seq": 9, "scoring_team_id": "200", "points_delta": 2, "possession_seq": null, "credited_stint_seq": 3, "possession_reason": "unresolved"},
+    {"seq": 13, "scoring_team_id": "200", "points_delta": 2, "possession_seq": null, "credited_stint_seq": 3, "possession_reason": "unassigned_dead_ball"},
+    {"seq": 14, "scoring_team_id": "200", "points_delta": 2, "possession_seq": 6, "credited_stint_seq": 3, "possession_reason": "control_possession"}
+  ],
+  "expected": {
+    "dispositions": [
+      {"possession_seq": 1, "reason": "eligible", "control_points": 2, "exposure": 1},
+      {"possession_seq": 2, "reason": "multiple_lineups", "control_points": 3, "exposure": 0},
+      {"possession_seq": 3, "reason": "pilot_excluded", "control_points": 0, "exposure": 0},
+      {"possession_seq": 4, "reason": "unresolved_control", "control_points": 0, "exposure": 0},
+      {"possession_seq": 5, "reason": "eligible", "control_points": 0, "exposure": 1},
+      {"possession_seq": 6, "reason": "eligible", "control_points": 2, "exposure": 1}
+    ],
+    "model_rows": [
+      {"possession_seq": 1, "offense_lineup_id": "h1", "defense_lineup_id": "a1", "model_points": 2, "exposure": 1, "weight": 1},
+      {"possession_seq": 5, "offense_lineup_id": "h3", "defense_lineup_id": "a1", "model_points": 0, "exposure": 1, "weight": 1},
+      {"possession_seq": 6, "offense_lineup_id": "a1", "defense_lineup_id": "h3", "model_points": 2, "exposure": 1, "weight": 1}
+    ],
+    "team_totals": [
+      {"team_id": "100", "modeled_points": 2, "other_control_points": 0, "unassigned_dead_ball_points": 1, "unresolved_points": 0, "final_points": 3, "model_offense_exposure": 2},
+      {"team_id": "200", "modeled_points": 2, "other_control_points": 3, "unassigned_dead_ball_points": 2, "unresolved_points": 2, "final_points": 9, "model_offense_exposure": 1}
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 """Check an exported pilot build against its documented invariants.
 
-The checks read only the exported Parquet tables, the manifest and the pinned player box log.
+The checks read only the exported tables, the manifest and the pinned box and event inputs.
 They do not import the reconstruction code, so they are an independent check of the output.
 Each check counts violating rows, and zero means the check passed.
 """
@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 
 import duckdb
+
+from bil.data.pilot_inputs import archive_rows, nba_game_id
 
 TABLES = (
     "game",
@@ -207,6 +209,48 @@ def _prepare(connection: duckdb.DuckDBPyConnection, output: Path, snapshot: Path
     )
 
 
+def _same_offense_violations(connection: duckdb.DuckDBPyConnection, snapshot: Path) -> int:
+    """Check within-period pairs against unresolved status and original V2 foul codes."""
+    pairs = connection.execute(
+        """
+        with neighbors as (
+            select *, lag(offense_team_id) over w as earlier_offense,
+                   lag(status) over w as earlier_status,
+                   lag(start_seq) over w as earlier_start, lag(end_seq) over w as earlier_end,
+                   lag(start_seq, 2) over w as preceding_start,
+                   lag(end_seq, 2) over w as preceding_end
+            from possession
+            window w as (partition by game_id, stream_revision, period order by possession_seq)
+        )
+        select p.game_id, array(
+            select e.source_event_id from event e
+            where e.game_id = p.game_id and e.stream_revision = p.stream_revision
+              and ((e.seq >= p.earlier_start and e.seq < p.earlier_end)
+                   or (e.seq >= p.preceding_start and e.seq < p.preceding_end))
+              and e.kind = 'foul'
+        ) as possible_exemptions
+        from neighbors p
+        where offense_team_id = earlier_offense
+          and (status is distinct from 'unresolved' or earlier_status is distinct from 'unresolved')
+        """
+    ).fetchall()
+    candidate_games = {game_id for game_id, events in pairs if events}
+    flagrant_fouls: set[tuple[str, str]] = set()
+    for prefix, filename in (("002", "nbastats_2022"), ("004", "nbastats_po_2022")):
+        if not any(game_id.startswith(prefix) for game_id in candidate_games):
+            continue
+        for row in archive_rows(snapshot / f"{filename}.tar.xz"):
+            if row["EVENTMSGTYPE"] != "6" or row["EVENTMSGACTIONTYPE"] not in {"14", "15"}:
+                continue
+            game_id = nba_game_id(row["GAME_ID"])
+            if game_id in candidate_games:
+                flagrant_fouls.add((game_id, row["EVENTNUM"]))
+    return sum(
+        not any((game_id, event_id) in flagrant_fouls for event_id in events)
+        for game_id, events in pairs
+    )
+
+
 def check_build(output: Path, snapshot: Path) -> dict[str, int]:
     """Return the number of violations for each check. Every value is zero for a valid build."""
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
@@ -228,6 +272,9 @@ def check_build(output: Path, snapshot: Path) -> dict[str, int]:
                     (select game_id from game_stream where quality = 'accepted')"""
             ).fetchone()
             results[f"no_quarantined_rows_in_{table}"] = row[0] if row else -1
+        results["consecutive_offenses_accounted_for"] = _same_offense_violations(
+            connection, snapshot
+        )
         for name, sql in CHECKS.items():
             row = connection.execute(sql).fetchone()
             results[name] = row[0] if row else -1

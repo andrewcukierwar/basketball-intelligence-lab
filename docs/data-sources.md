@@ -21,6 +21,8 @@ Ranges are inclusive. The GitHub release and tree inventories contained a matchi
 | Bill Mill NBA-derived team and player game logs | Publisher documents stats.nba.com data from 1996–97 onward. Verified the 2022–23 partition. | Verified the 2022–23 partition. | Season Parquet with team or player appearance grain. Pilot partitions match the event archive's game sets. Other partitions and historical version availability remain unverified. [Data dictionary][billmill] [Pilot checks](research/nba-source-validation.md#machine-readable-box-score-comparison) |
 | NBA public defensive tracking and hustle dashboards | NBA reports all-game tracking since 2013, with Second Spectrum from 2017–18. Dashboard and category coverage by season remains unverified. | Unverified | Provider eras establish that tracking was collected. They do not establish the public availability of a given metric, game exposure, definitions across eras or raw trajectories. [NBA tracking announcement][nba-tracking] [Defense dashboard][nba-defense] [Hustle dashboard][nba-hustle] |
 
+The [historical feed coverage audit](research/nba-feed-coverage.md) records measured game and row counts, exact archive revisions, and pilot-rule evidence for 2001–02 through 2024–25.
+
 ## Schema, access and permissions ledger
 
 | Candidate | Format, grain and pilot role | Access and rights finding |

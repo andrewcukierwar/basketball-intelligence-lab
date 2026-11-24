@@ -22,12 +22,21 @@ Run a build from a clean checkout, with a new output directory for each run. Omi
   --code-commit "$(git rev-parse HEAD)"
 ```
 
-Then check the exported tables independently. The check reads only the output tables, the manifest and the pinned player box log, and it exits nonzero on any violation.
+Then check the exported tables independently. The check reads the output tables, the manifest and the pinned player box and V2 event inputs. It exits nonzero on any violation.
 
 ```sh
 .venv/bin/python -m bil.data.pilot check \
   data/processed/2022-23/issue-5-v6 \
   data/raw/2022-23/issue-5-v2
+```
+
+The possession check examines consecutive possession rows within each period, including parser-excluded rows. If they share an offense, both rows must be unresolved unless a flagrant foul occurred in the earlier possession or the possession immediately before it. The check looks up flagrant fouls in the pinned V2 archive by game and source event ID. This is the same within-period exception used by the pinned parser.
+
+To run the real parser integration tests for the starter search and V3-primary retry, point pytest at your existing private snapshot. The fixtures select two archived games and keep the underlying source rows outside Git.
+
+```sh
+BIL_PILOT_SNAPSHOT=data/raw/2022-23/issue-5-v2 \
+  .venv/bin/python -m pytest -q tests/test_pilot_archived.py
 ```
 
 The manifest records output file digests, row counts, the snapshot digest, code commit, parser version, reconciliation tolerances and coverage. Its ingestion timestamps identify this build. Availability for a canonical stream is the latest captured time of the pinned evidence used by that stream. The box feeds have no actual tip or finalization instant in this pilot. These are retrospective snapshots and carry no claim of availability at a 2022–23 forecast origin. DuckDB spills and intermediate rows stay under the private build staging directory and are removed when the build exits. [Canonical availability rules](data-contracts.md#provenance-and-time)

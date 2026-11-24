@@ -127,8 +127,8 @@
       "artifact_id": "parent-forecast",
       "kind": "forecast_manifest",
       "uri": "synthetic_forecast.json",
-      "sha256": "598994b3bb932fbe32b51c6418fa2cebea1eeff9b13a028a0176cb64499fa1a2",
-      "size_bytes": 7872,
+      "sha256": "4ef82a0118095b35ca64a17603ec29ea433f23f5bddc9b5f0ea0ce04800274cc",
+      "size_bytes": 7912,
       "source_artifact_id": null,
       "rights_ref": null
     },
@@ -144,9 +144,9 @@
     {
       "artifact_id": "outcomes-keys",
       "kind": "selection",
-      "uri": "fixture:outcomes-keys",
-      "sha256": "8a1c32831ee045dc1df9bde3849e1c0bdfe8a692772b9b7a875822b93000328f",
-      "size_bytes": 23,
+      "uri": "synthetic/outcomes-keys.json",
+      "sha256": "a76d1eef14b565a4cde428cec10d02eff8676742c7d12c26e868c3f5108bade5",
+      "size_bytes": 776,
       "source_artifact_id": null,
       "rights_ref": null
     },
@@ -162,9 +162,9 @@
     {
       "artifact_id": "metrics",
       "kind": "metrics",
-      "uri": "fixture:metrics",
-      "sha256": "defce360a93529d3b91fc832ee1afa3c23a2492c7d57a6c5f88c8b2c86fdc83b",
-      "size_bytes": 17,
+      "uri": "synthetic/metrics.json",
+      "sha256": "e13c5c4ba5fff6b1eda5ffb0650df22287b9c9adc4754a9a824dda9dc017f64c",
+      "size_bytes": 545,
       "source_artifact_id": null,
       "rights_ref": null
     }

@@ -1,0 +1,18 @@
+{
+  "predictions": [
+    {
+      "key": "a:margin",
+      "values": {
+        "synthetic-candidate": 14.0,
+        "synthetic-baseline": 15.0
+      }
+    },
+    {
+      "key": "b:margin",
+      "values": {
+        "synthetic-candidate": 6.0,
+        "synthetic-baseline": 3.0
+      }
+    }
+  ]
+}
