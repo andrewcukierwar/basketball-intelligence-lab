@@ -98,6 +98,16 @@ def fit_rapm(possessions: Sequence[Possession], *, ridge: float) -> RAPMFit:
     return _solve_rapm(build_design(possessions), ridge, ridge)
 
 
+def fit_rapm_diagnostics(
+    possessions: Sequence[Possession], *, ridge: float
+) -> tuple[RAPMFit, dict[str, float]]:
+    """Run ``fit_rapm`` and also return the LSQR stop code, iterations, norms and condition."""
+    if not isfinite(ridge) or ridge <= 0:
+        raise ValueError("ridge must be positive and finite")
+    info: dict[str, float] = {}
+    return _solve_rapm(build_design(possessions), ridge, ridge, info=info), info
+
+
 def fit_prior_rapm(
     possessions: Sequence[Possession],
     *,
@@ -142,6 +152,7 @@ def _solve_rapm(
     offense_ridge: float,
     defense_ridge: float,
     prior: NDArray[np.float64] | None = None,
+    info: dict[str, float] | None = None,
 ) -> RAPMFit:
     row_count = len(design.response)
     player_count = len(design.player_ids)
@@ -214,7 +225,21 @@ def _solve_rapm(
     target = np.concatenate(
         (project(scaled_weights * (shifted_response / target_scale)), np.zeros(player_columns))
     )
-    solution, stop, *_ = lsqr(system, target, atol=1e-12, btol=1e-12)
+    result = lsqr(system, target, atol=1e-12, btol=1e-12)
+    solution, stop, iterations, residual, condition = (
+        result[0],
+        result[1],
+        result[2],
+        result[3],
+        result[6],
+    )
+    if info is not None:
+        info.update(
+            stop=float(stop),
+            iterations=float(iterations),
+            scaled_residual_norm=float(residual),
+            condition_estimate=float(condition),
+        )
     if stop not in _CONVERGED or not np.all(np.isfinite(solution)):
         raise RuntimeError(f"sparse RAPM solve failed to converge (LSQR stop {stop})")
     with np.errstate(over="ignore", invalid="ignore"):
