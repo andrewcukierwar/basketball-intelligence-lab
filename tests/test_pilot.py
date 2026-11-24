@@ -239,7 +239,7 @@ def test_build_routes_duckdb_spills_to_private_staging(
         assert connection.execute("SELECT current_setting('temp_directory')").fetchone() == (
             str(staging / "duckdb-spill"),
         )
-        assert args[-1] == 2023 and options == {"order_repair": False}
+        assert args[-1] == 2023 and options == {"order_repair": False, "same_clock_rule": False}
         return []
 
     monkeypatch.setattr(
@@ -1042,7 +1042,10 @@ def test_seasons_before_livedata_pin_every_other_feed() -> None:
         2005,
         2006,
         2007,
+        2008,
+        2009,
         2010,
+        2011,
         2012,
         2013,
         2014,
@@ -1413,3 +1416,35 @@ def test_starter_check_requires_livedata_coverage_where_pinned() -> None:
     assert run(2017)["livedata_unavailable"] == 1
     with pytest.raises(ValueError, match="liveData is pinned"):
         run(2022)
+
+
+def test_same_clock_rule_leaves_an_early_quarantine_unchanged(tmp_path: Path) -> None:
+    game, roster, _, _ = synthetic_game()
+    artifact = {
+        "artifact_id": "fixture",
+        "name": "fixture",
+        "uri": "",
+        "source_id": "synthetic",
+        "upstream_namespace": "nba",
+        "source_revision": None,
+        "sha256": "0",
+        "size_bytes": 0,
+        "retrieved_at": "2026-11-23T00:00:00+00:00",
+        "rights_ref": "x",
+    }
+    rows = pilot._build_game(
+        game,
+        roster,
+        [],
+        {},
+        None,
+        [artifact] * 6,  # type: ignore[list-item]
+        tmp_path,
+        "hash",
+        "2026-11-23T00:00:00+00:00",
+        None,
+        2010,
+        False,
+        True,
+    )
+    assert rows["game_review"][0]["reason"] == "missing_v2_game"

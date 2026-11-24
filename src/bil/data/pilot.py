@@ -18,6 +18,7 @@ from typing import cast
 import duckdb
 
 from bil.data.pilot_check import check_build, check_seasons
+from bil.data.pilot_clock_order import RULE_VERSION, ClockOrder, Declined, reorder_same_clock
 from bil.data.pilot_evidence import compare as compare_evidence
 from bil.data.pilot_inputs import (
     GAME_PREFIXES,
@@ -243,6 +244,7 @@ def _build_game(
     cross: CrossFeed | None = None,
     season_start_year: int = 2022,
     order_repair: bool = False,
+    same_clock_rule: bool = False,
 ) -> Rows:
     kind = GAME_PREFIXES[game.game_id[:3]]
     cross = cross or CrossFeed()
@@ -252,6 +254,9 @@ def _build_game(
     raw: dict[int, RawEvent] = {}
     rows: Rows = {}
     failure = None
+    clock_ordered: ClockOrder | None = None
+    clock_declined: Declined | None = None
+    clock_failed: ClockOrder | None = None
     periods_reconciled = 0
     periods_match = None
     substitutions_match = None
@@ -365,17 +370,38 @@ def _build_game(
                 choice = reconstruct(primary=True)
                 v3_primary = True
             except GameIssue:
+                # Opt-in (ADR-0028): offer the same-clock rule's order. It runs only after the
+                # V2 and V3 orders failed, so no previously accepted game can change.
+                if same_clock_rule:
+                    offered_clock = reorder_same_clock(raw)
+                    if isinstance(offered_clock, Declined):
+                        clock_declined = offered_clock
+                    elif offered_clock is not None:
+                        try:
+                            choice = reconstruct(
+                                False, offered_clock.events, list(offered_clock.events)
+                            )
+                            raw = offered_clock.events
+                            clock_ordered = offered_clock
+                        except GameIssue:
+                            clock_failed = offered_clock
                 # Opt-in last resort (ADR-0023, proposed): follow data.nba's entry order and
                 # re-clock late-entered events. Every check still applies to the new stream.
-                repaired = repair_order(raw, cross.order) if order_repair else None
-                if repaired is not None:
+                repaired = (
+                    repair_order(raw, cross.order)
+                    if order_repair and clock_ordered is None
+                    else None
+                )
+                if clock_ordered is not None:
+                    pass
+                elif repaired is not None:
                     try:
                         choice = reconstruct(False, repaired.events, list(repaired.events))
                         raw = repaired.events
                         reordered = repaired
                     except GameIssue:
                         repaired = None
-                if repaired is None:
+                if clock_ordered is None and repaired is None:
                     if isinstance(first, PeriodScoreMismatch):
                         periods_match, periods_reconciled = False, first.reconciled
                     raise first from None
@@ -416,6 +442,21 @@ def _build_game(
                 "offense on every shot, free throw and turnover",
             )
             issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if clock_ordered is not None:
+            labels.append("same_clock_order")
+            moved = "; ".join(
+                f"{period} {clock} missed shot {shot} placed before rebound {rebound}"
+                for period, clock, shot, rebound in clock_ordered.moves
+            )
+            warning = GameIssue("same_clock_order", f"{RULE_VERSION}: {moved}")
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if clock_ordered is None and clock_declined is not None:
+            note = GameIssue(
+                "same_clock_declined",
+                f"{RULE_VERSION} declined ({clock_declined.reason}) at period "
+                f"{clock_declined.period} {clock_declined.clock}, rebound {clock_declined.rebound}",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, note, "warning", refs))
         if reordered is not None:
             labels.append("datanba_event_order")
             shifts = [abs(shift) for _, _, shift in reordered.clamped.values()]
@@ -485,6 +526,19 @@ def _build_game(
     except GameIssue as error:
         rows = {}
         failure = error.code
+        if clock_declined is not None:
+            note = GameIssue(
+                "same_clock_declined",
+                f"{RULE_VERSION} declined ({clock_declined.reason}) at period "
+                f"{clock_declined.period} {clock_declined.clock}, rebound {clock_declined.rebound}",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, note, "warning", refs))
+        elif clock_failed is not None:
+            note = GameIssue(
+                "same_clock_rejected",
+                f"{RULE_VERSION} order failed reconciliation ({len(clock_failed.moves)} moves)",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, note, "warning", refs))
         raw_event = raw.get(error.event_num) if error.event_num is not None else None
         failures = (
             refs
@@ -541,6 +595,7 @@ def _season_games(
     when: str,
     season_start_year: int = 2022,
     order_repair: bool = False,
+    same_clock_rule: bool = False,
 ) -> Iterator[Rows]:
     games, players = box_scores(connection, snapshot_dir)
     expected = chosen or set(games)
@@ -597,6 +652,7 @@ def _season_games(
                     feeds.get(game_id),
                     year,
                     order_repair,
+                    same_clock_rule,
                 )
                 remaining.remove(game_id)
         for game_id in sorted(remaining):
@@ -613,6 +669,7 @@ def _season_games(
                 feeds.get(game_id),
                 year,
                 order_repair,
+                same_clock_rule,
             )
 
 
@@ -647,12 +704,32 @@ def summarize_reviews(reviews: list[Row]) -> dict[str, object]:
     }
 
 
+def _same_clock_log(connection: duckdb.DuckDBPyConnection, path: Path) -> list[Row]:
+    """Every game the same-clock rule applied to, declined or failed, in game order."""
+    cursor = connection.execute(
+        "SELECT game_id, code, detail FROM read_parquet(?) "
+        "WHERE code IN ('same_clock_order', 'same_clock_declined', 'same_clock_rejected') "
+        "ORDER BY game_id, issue_seq",
+        [str(path)],
+    )
+    outcome = {
+        "same_clock_order": "applied",
+        "same_clock_declined": "declined",
+        "same_clock_rejected": "rejected",
+    }
+    return [
+        {"game_id": game_id, "outcome": outcome[code], "detail": detail}
+        for game_id, code, detail in cursor.fetchall()
+    ]
+
+
 def build_pilot(
     snapshot_dir: Path,
     output: Path,
     code_commit: str,
     chosen: set[str] | None = None,
     order_repair: bool = False,
+    same_clock_rule: bool = False,
 ) -> dict[str, object]:
     if re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
         raise ValueError("Record a full Git commit for the pilot build")
@@ -677,9 +754,15 @@ def build_pilot(
                 when,
                 year,
                 order_repair=order_repair,
+                same_clock_rule=same_clock_rule,
             )
             artifacts = write_tables(connection, games, staging, output)
             results = summarize_reviews(read_game_reviews(connection, output))
+            clock_log = (
+                _same_clock_log(connection, output / "quality_issue.parquet")
+                if same_clock_rule
+                else None
+            )
         manifest: dict[str, object] = {
             "schema_version": 1,
             "season_start_year": year,
@@ -689,6 +772,11 @@ def build_pilot(
             "parser": PARSER_VERSION,
             "duckdb_version": version("duckdb"),
             **({"order_repair": True} if order_repair else {}),
+            **(
+                {"same_clock_rule": {"version": RULE_VERSION, "games": clock_log}}
+                if clock_log is not None
+                else {}
+            ),
             "source_snapshot_sha256": snapshot_hash,
             "source_artifacts": snapshot["artifacts"],
             "output_artifacts": artifacts,
@@ -714,6 +802,11 @@ def main() -> None:
     build.add_argument("output_dir", type=Path)
     build.add_argument("--code-commit", required=True)
     build.add_argument("--game-id", action="append", type=nba_game_id)
+    build.add_argument(
+        "--same-clock-rule",
+        action="store_true",
+        help="retry failed games with the same-clock rebound ordering rule (ADR-0028)",
+    )
     build.add_argument(
         "--order-repair",
         action="store_true",
@@ -797,6 +890,7 @@ def main() -> None:
             args.code_commit,
             set(args.game_id or []),
             args.order_repair,
+            args.same_clock_rule,
         )
         print(json.dumps(manifest["coverage"], sort_keys=True))
 
