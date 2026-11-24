@@ -134,8 +134,8 @@ def infer_missing_misses(
         makes = 0
         for number, event in attempts[shooter]:
             marker = "MISS " in "".join(event[field] for field in DESCRIPTIONS)
-            score = event["SCORE"]
-            if not score and (marker or number in patched):
+            score_text = event["SCORE"]
+            if not score_text and (marker or number in patched):
                 continue
             if not marker and number in made_free_throws:
                 makes += 1
