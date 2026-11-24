@@ -1035,7 +1035,10 @@ def test_checks_and_evidence_read_the_recorded_season_files(tmp_path: Path) -> N
 
 def test_seasons_before_livedata_pin_every_other_feed() -> None:
     assert pilot_sources.SEASONS == (
+        2004,
         2005,
+        2006,
+        2007,
         2010,
         2014,
         2016,
