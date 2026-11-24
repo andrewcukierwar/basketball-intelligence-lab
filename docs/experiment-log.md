@@ -275,11 +275,11 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0018 — Same-clock shot, tip and rebound ordering rule, 2008–09 through 2011–12 and older seasons
 
-- **Status:** Completed. Each build ran once. A fresh reviewer found no blocker (see the handoff).
+- **Status:** Proposed pending independent review of PR #114. Each build ran once per version. The first subagent review did not replay the rule on real data. The second review found one blocker, fixed in this version (see the report).
 - **Date:** 2026-11-24.
 - **Research question:** Does a deterministic same-clock rule, derived from event semantics and not tuned on reconciliation, recover games that fail on a rebound with no missed shot before it, without changing any accepted game and without relaxing any check?
 - **Category:** Experimental, Original design. No EPM output was used.
-- **Code SHA / run ID:** `15923601` (rule `same-clock-v1`). Builds `issue-111-rule-v4` for 2001–02 to 2016–17 and 2018–19, `issue-111-base-v1` default builds of the four target seasons, `quality/issue-111-v2`.
+- **Code SHA / run ID:** `1055a39f` (rule `same-clock-v1`). Builds `issue-111-rule-v5` for 2001–02 to 2016–17 and 2018–19, `issue-111-base-v2` default builds of the four target seasons, `quality/issue-111-v3`, `quality/issue-111-base-v2`.
 - **Datasets/checksums and cutoff:** Pinned archives from the #51 register for 2008–09, 2009–10 and 2011–12 (new pins) and earlier pinned seasons, captured with `--from-local`. No 2025–26 or later file was read.
 - **Train / validation / test periods:** None. Dataset construction, no model.
 - **Model and configuration:** Retry only after V2 and V3-primary fail. Orphan rebound takes the single same-team missed field goal later in its clock group, else the game is declined.

@@ -1,9 +1,9 @@
 # Agent run: same-clock shot, tip and rebound ordering rule
 
 - **Date:** 2026-11-24
-- **Status:** Awaiting review (PR open, not merged)
+- **Status:** Awaiting review (PR #114 open, not merged). ADR-0028 and EXP-0018 are Proposed.
 - **Related issues:** #111 (parent #53), #99 (order repair, untouched), ADR-0022, ADR-0028, EXP-0018
-- **Branch / PR:** `claude/issue-111-same-clock-rebound`. Builds ran at `15923601`. The last commit adds only a warning note for a game that `--order-repair` rescues after the rule declined it, plus two tests and doc edits.
+- **Branch / PR:** `claude/issue-111-same-clock-rebound`. Builds (`issue-111-rule-v5`, default comparison `issue-111-base-v2`) ran at `1055a39f`.
 
 ## Objective and scope
 
@@ -38,7 +38,7 @@ Not run: a re-run of builds after the final logging-only commit (default path an
 
 ## Independent review
 
-A fresh subagent read the diff and the builds. No blocker. It suggested logging a declined game rescued by `--order-repair` (done), more tests (two added), and doc wording (fixed, including the Bentes caveat). It did not replay the rule on real data.
+A first subagent read the diff and builds but did not replay the rule on real data. A second, independent review found one blocker: the rule moved a miss before a rebound after a same-team made putback in 2015–16 game `0021500061` (P3 8:04). Fixed with a possession check through the last non-skippable event, subs and timeouts included; the retry now passes only the rule's own order to the parser. v4 to v5 changes exactly one game (`0021500061` quarantined). Regression, 26 of 26 checks, and eligibility classes unchanged. Re-review of the fix is pending.
 
 ## Open items
 

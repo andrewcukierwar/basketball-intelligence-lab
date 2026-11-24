@@ -18,7 +18,7 @@ Applied to one clock group (same period and same `PCTIMESTRING`), in V2 order, n
 
 1. Every rebound follows exactly one missed field goal or missed free throw. The pinned parser also accepts subs and timeouts in between, and one jump ball after a miss (a held ball after a blocked shot), so the rule does too.
 2. A rebound without such a predecessor is an **orphan**. Its missed shot is a later missed field goal of the same group, entered late. Only a field goal can be a tip or putback, so free throws are never moved.
-3. The shot immediately after a rebound at the same clock is taken by the team that just gained the ball. If the previous event is a rebound, the candidate's team must equal that rebound's team. This is the only team test, and it does not look at downstream results.
+3. A shot at one clock is taken by the team that holds the ball. A rebound gives the ball to its team, and a made field goal or a turnover gives it to the other team, looking back through subs and timeouts. A candidate of another team is excluded. If the last event does not say who holds the ball (a foul, a free throw, a jump ball), the other tests decide. This is the only team test, and it does not look at downstream results.
 4. A candidate is never taken from beyond a period start or end event. Only order inside the group changes. Clocks and rows are not edited.
 5. Exactly one candidate must remain. With none (`no_candidate`), or with several of the same or different teams (`ambiguous_candidates`, `ambiguous_team`), the rule **declines the whole game** and it keeps its original quarantine. Several same-team candidates would swap shooters and rebounders between plays. That is not a possession change but it is a different attribution, so it is quarantined instead of settled by a tie-break.
 
@@ -58,7 +58,7 @@ The rule never reads Bentes. After the builds, each applied move was compared wi
 
 ## Results
 
-All builds pass 26 of 26 `check` invariants. Builds are the `issue-111-rule-v4` directories at `15923601`. Accepted games before and after the rule are compared in six tables (`event`, `possession`, `lineup`, `stint`, `score_allocation`, `event_actor`, `ingested_at` excluded).
+All builds pass 26 of 26 `check` invariants. Builds are the `issue-111-rule-v5` directories at `1055a39f` (default comparison builds `issue-111-base-v2` at the same commit). Accepted games before and after the rule are compared in six tables (`event`, `possession`, `lineup`, `stint`, `score_allocation`, `event_actor`, `ingested_at` excluded).
 
 ### Regression: previously accepted games
 
@@ -83,13 +83,17 @@ All builds pass 26 of 26 `check` invariants. Builds are the `issue-111-rule-v4` 
 | 2012–13 | 1,187 of 1,229 | 1,192 of 1,229 | 5 | 11 / 0 | 0.024% | Fails: regular 96.99% (6 short before, 1 game short now) |
 | 2013–14 | 1,198 (86 of 89) | 1,203 (86 of 89) | 5 | 17 / 0 | 0.020% | Fails: playoffs 96.6% |
 | 2001–02, 2002–03, 2003–04 | | | 4, 0, 4 | 5/1, 3/0, 6/0 | | Still fail (playoffs 63 of 71, 85 of 88, 79 of 82) |
-| 2005–06, 2007–08, 2015–16, 2016–17 | | | 2, 9, 6, 7 | | | Unchanged class, a few more games |
+| 2005–06, 2007–08, 2015–16, 2016–17 | | | 2, 9, 5, 7 | | | Unchanged class, a few more games |
 
 Class changes: **2010–11, 2004–05 and 2014–15 move from "fails hard limit" to "meets"** under the rule. 2011–12 and 2012–13 miss by one game each, so the rule does not rescue them, and no threshold was relaxed. 2011–12's remaining playoff quarantines are two `unsupported_reorder` and one `parser_error` that is not a same-clock miss.
 
 ### Verification (pinned `evidence`, **Documented**)
 
 Bentes lineups: time-weighted agreement 100% in 2008–09 through 2011–12 and 2004–05 (lowest game 100%), 99.996% in 2014–15 (lowest game 96.0%, the same outlier as before). pbpstats.com possession counts equal in 1,263 of 1,291 games (2008–09), 1,272 of 1,296 (2009–10), 1,266 of 1,290 (2010–11), 1,032 of 1,050 (2011–12), 1,254 of 1,286 (2004–05) and 1,272 of 1,291 (2014–15). Inferred starters agree with Bentes in 17 of 18, 14 of 15, 10 of 13, 15 of 18, 10 of 11 and 11 of 13 team-periods. No liveData, no data.nba and no `ord` exist for these seasons, so period-score and event-order comparisons against another feed are unavailable.
+
+### A defect the first review found, and the fix
+
+The first independent review of the PR found that an earlier version checked the ball only when the previous event was a rebound. In 2015–16 game `0021500061` P3 8:04 V2 lists 272 (Aldridge made putback), 271 (Aldridge rebound), 270 (Leonard miss). The earlier rule moved 270 before 271 and produced 272, 270, 271: SAS scored and then missed with no change of possession, and the game's three unresolved possessions sat at that clock. The real order is 270, 271, 272. Of 101 moves, 16 had no prior same-team rebound, and this was the only one inconsistent with possession. The current rule infers the ball from the last non-skippable event (rebound, made field goal, turnover) through subs and timeouts, so the putback case is declined. Rebuilding every season changes exactly one game against the earlier build: `0021500061` is now quarantined (2015–16 regular 1,214 to 1,213). Nothing else changed in any of 17 builds, and eligibility classes are unchanged. The rule's output is also now the only order offered to the parser on the retry, so the parser's data.nba fallback cannot swap in the V3 order.
 
 ## What the rule does not fix
 
@@ -108,9 +112,9 @@ Bentes lineups: time-weighted agreement 100% in 2008–09 through 2011–12 and 
 M=/path/to/repo; A=$M/data/raw/historical-feed-audit/2026-11-23
 uv run python -m bil.data.pilot capture $M/data/raw/2011-12/issue-111-v1 --season 2011 --from-local "$A"
 uv run python -m bil.data.pilot capture-evidence $M/data/raw/2011-12/issue-111-evidence-v1 --season 2011 --from-local "$A"
-uv run python -m bil.data.pilot build $M/data/raw/2011-12/issue-111-v1 $M/data/processed/2011-12/issue-111-rule-v4 \
+uv run python -m bil.data.pilot build $M/data/raw/2011-12/issue-111-v1 $M/data/processed/2011-12/issue-111-rule-v5 \
   --code-commit <sha> --same-clock-rule
-uv run python -m bil.data.pilot check $M/data/processed/2011-12/issue-111-rule-v4 $M/data/raw/2011-12/issue-111-v1
+uv run python -m bil.data.pilot check $M/data/processed/2011-12/issue-111-rule-v5 $M/data/raw/2011-12/issue-111-v1
 ```
 
 Pins for 2008–09, 2009–10 and 2011–12 were generated from the #51 register, and the existing register test covers them. No payload was downloaded, and no 2025–26 or later file was read.
