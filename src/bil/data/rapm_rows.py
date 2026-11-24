@@ -347,7 +347,7 @@ def _tally(connection: duckdb.DuckDBPyConnection) -> dict[str, dict[str, int]]:
     strata = "unnest(list_concat(['all'], g.strata)) AS stratum"
     queries: tuple[tuple[str, Callable[..., dict[str, int]]], ...] = (
         (
-            f"SELECT g.season_type, {strata}, g.accepted, g.home_final + g.away_final, 1 "
+            f"SELECT g.season_type, {strata}, g.accepted, coalesce(g.home_final + g.away_final, 0), 1 "
             "FROM games g",
             lambda accepted, final, n: {
                 "games_expected": n,

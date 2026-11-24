@@ -283,7 +283,9 @@ def order_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object]:
     }
 
 
-def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object]:
+def starter_agreement(
+    connection: duckdb.DuckDBPyConnection, season_start_year: int = 2022
+) -> dict[str, object]:
     """Check inferred starters against Bentes and liveData between-period substitutions.
 
     The liveData check starts from BIL's own lineup at the end of the previous period, so it
@@ -336,6 +338,8 @@ def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object
             "select count(*) from cdnnba where gameId = ?", [game_id]
         ).fetchone()
         if not covered or not covered[0]:
+            if has_livedata(season_start_year):
+                raise ValueError(f"liveData is pinned for {season_start_year} but lacks {game_id}")
             live_unavailable += 1
             continue
         previous = connection.execute(
@@ -441,6 +445,6 @@ def compare(
             "lineups_vs_bentes": lineup_agreement(connection),
             "possession_offense": possession_agreement(connection),
             "event_order_vs_datanba": order_agreement(connection),
-            "inferred_starters": starter_agreement(connection),
+            "inferred_starters": starter_agreement(connection, season_start_year),
             "period_scores": period_score_agreement(connection, snapshot, season_start_year),
         }

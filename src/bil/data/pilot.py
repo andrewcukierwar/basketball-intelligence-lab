@@ -426,8 +426,13 @@ def _build_game(
         )
         issues.append(_issue_row(game.game_id, len(issues) + 1, error, "quarantine", failures))
 
+    game_row = _game_row(game, kind, sources[0], when, season_start_year)
+    if not game.home_designated:
+        # The orientation is only provisional (team-ID order), so do not export it as fact.
+        for field in ("home_team_id", "away_team_id", "home_final", "away_final"):
+            game_row[field] = None
     rows.update(
-        game=[_game_row(game, kind, sources[0], when, season_start_year)],
+        game=[game_row],
         game_stream=[
             {
                 "game_id": game.game_id,
