@@ -1,0 +1,818 @@
+[
+  {
+    "start_year": 2017,
+    "season_type": "regular",
+    "box": {
+      "games": 1230,
+      "player_games": 26104,
+      "players": 540,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 231888,
+      "tracking_games": 1222,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 231853,
+      "valid_opportunity_rows": 231888,
+      "zero_partial_possession_rows": 374,
+      "zero_matchup_fga_rows": 118394,
+      "defender_appearances": 25935,
+      "linked_defender_appearances_with_positive_exposure": 25923,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 25129,
+      "shooter_games_with_exact_box_fga": 11070,
+      "matched_shooter_games_with_positive_box_fga": 24799,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 231888,
+      "tracking_games": 1222,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 231853,
+      "valid_opportunity_rows": 231888,
+      "zero_partial_possession_rows": 374,
+      "zero_matchup_fga_rows": 118394,
+      "defender_appearances": 25935,
+      "linked_defender_appearances_with_positive_exposure": 25923,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 25129,
+      "shooter_games_with_exact_box_fga": 11070,
+      "matched_shooter_games_with_positive_box_fga": 24799,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 231888,
+      "same_values_on_compared_fields": 231888,
+      "same_games": 1222,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 536,
+      "players": 536,
+      "linked_box_players": 536,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 5,
+      "zero_deflection_rows": 26,
+      "positive_minutes_rows": 536,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 540,
+      "players": 540,
+      "linked_box_players": 540,
+      "positive_rim_attempt_rows": 519,
+      "zero_rim_attempt_rows": 21,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2017,
+    "season_type": "playoffs",
+    "box": {
+      "games": 82,
+      "player_games": 1729,
+      "players": 210,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 14555,
+      "tracking_games": 82,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 14555,
+      "valid_opportunity_rows": 14555,
+      "zero_partial_possession_rows": 19,
+      "zero_matchup_fga_rows": 7417,
+      "defender_appearances": 1722,
+      "linked_defender_appearances_with_positive_exposure": 1722,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1642,
+      "shooter_games_with_exact_box_fga": 750,
+      "matched_shooter_games_with_positive_box_fga": 1581,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 14555,
+      "tracking_games": 82,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 14555,
+      "valid_opportunity_rows": 14555,
+      "zero_partial_possession_rows": 19,
+      "zero_matchup_fga_rows": 7417,
+      "defender_appearances": 1722,
+      "linked_defender_appearances_with_positive_exposure": 1722,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1642,
+      "shooter_games_with_exact_box_fga": 750,
+      "matched_shooter_games_with_positive_box_fga": 1581,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 14555,
+      "same_values_on_compared_fields": 14555,
+      "same_games": 82,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 204,
+      "players": 204,
+      "linked_box_players": 204,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 4,
+      "zero_deflection_rows": 24,
+      "positive_minutes_rows": 204,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 210,
+      "players": 210,
+      "linked_box_players": 210,
+      "positive_rim_attempt_rows": 190,
+      "zero_rim_attempt_rows": 20,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2018,
+    "season_type": "regular",
+    "box": {
+      "games": 1230,
+      "player_games": 26098,
+      "players": 530,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 232985,
+      "tracking_games": 1223,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 232982,
+      "valid_opportunity_rows": 232985,
+      "zero_partial_possession_rows": 223,
+      "zero_matchup_fga_rows": 115837,
+      "defender_appearances": 25931,
+      "linked_defender_appearances_with_positive_exposure": 25930,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 25258,
+      "shooter_games_with_exact_box_fga": 10776,
+      "matched_shooter_games_with_positive_box_fga": 24956,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 232983,
+      "tracking_games": 1223,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 232980,
+      "valid_opportunity_rows": 232983,
+      "zero_partial_possession_rows": 223,
+      "zero_matchup_fga_rows": 115835,
+      "defender_appearances": 25931,
+      "linked_defender_appearances_with_positive_exposure": 25930,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 25258,
+      "shooter_games_with_exact_box_fga": 10777,
+      "matched_shooter_games_with_positive_box_fga": 24956,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 232980,
+      "same_values_on_compared_fields": 232824,
+      "same_games": 1223,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 525,
+      "players": 525,
+      "linked_box_players": 525,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 2,
+      "zero_deflection_rows": 21,
+      "positive_minutes_rows": 525,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 530,
+      "players": 530,
+      "linked_box_players": 530,
+      "positive_rim_attempt_rows": 516,
+      "zero_rim_attempt_rows": 14,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2018,
+    "season_type": "playoffs",
+    "box": {
+      "games": 82,
+      "player_games": 1761,
+      "players": 212,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 14616,
+      "tracking_games": 82,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 14613,
+      "valid_opportunity_rows": 14616,
+      "zero_partial_possession_rows": 9,
+      "zero_matchup_fga_rows": 6936,
+      "defender_appearances": 1757,
+      "linked_defender_appearances_with_positive_exposure": 1756,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1669,
+      "shooter_games_with_exact_box_fga": 538,
+      "matched_shooter_games_with_positive_box_fga": 1622,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 14616,
+      "tracking_games": 82,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 14613,
+      "valid_opportunity_rows": 14616,
+      "zero_partial_possession_rows": 9,
+      "zero_matchup_fga_rows": 6936,
+      "defender_appearances": 1757,
+      "linked_defender_appearances_with_positive_exposure": 1756,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1669,
+      "shooter_games_with_exact_box_fga": 538,
+      "matched_shooter_games_with_positive_box_fga": 1622,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 14616,
+      "same_values_on_compared_fields": 14616,
+      "same_games": 82,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 208,
+      "players": 208,
+      "linked_box_players": 208,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 1,
+      "zero_deflection_rows": 22,
+      "positive_minutes_rows": 208,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 212,
+      "players": 212,
+      "linked_box_players": 212,
+      "positive_rim_attempt_rows": 196,
+      "zero_rim_attempt_rows": 16,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2019,
+    "season_type": "regular",
+    "box": {
+      "games": 1059,
+      "player_games": 22392,
+      "players": 529,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 181840,
+      "tracking_games": 967,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 181837,
+      "valid_opportunity_rows": 181840,
+      "zero_partial_possession_rows": 108,
+      "zero_matchup_fga_rows": 88772,
+      "defender_appearances": 20402,
+      "linked_defender_appearances_with_positive_exposure": 20400,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 19816,
+      "shooter_games_with_exact_box_fga": 8016,
+      "matched_shooter_games_with_positive_box_fga": 19583,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 198908,
+      "tracking_games": 1055,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 198905,
+      "valid_opportunity_rows": 198908,
+      "zero_partial_possession_rows": 114,
+      "zero_matchup_fga_rows": 97169,
+      "defender_appearances": 22291,
+      "linked_defender_appearances_with_positive_exposure": 22289,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 21655,
+      "shooter_games_with_exact_box_fga": 8746,
+      "matched_shooter_games_with_positive_box_fga": 21387,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 181840,
+      "same_values_on_compared_fields": 181840,
+      "same_games": 967,
+      "sdv_only_games": 88,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 525,
+      "players": 525,
+      "linked_box_players": 525,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 1,
+      "zero_deflection_rows": 15,
+      "positive_minutes_rows": 525,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 529,
+      "players": 529,
+      "linked_box_players": 529,
+      "positive_rim_attempt_rows": 518,
+      "zero_rim_attempt_rows": 11,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2019,
+    "season_type": "playoffs",
+    "box": {
+      "games": 83,
+      "player_games": 1692,
+      "players": 216,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 14071,
+      "tracking_games": 83,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 14070,
+      "valid_opportunity_rows": 14071,
+      "zero_partial_possession_rows": 12,
+      "zero_matchup_fga_rows": 6675,
+      "defender_appearances": 1688,
+      "linked_defender_appearances_with_positive_exposure": 1686,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1625,
+      "shooter_games_with_exact_box_fga": 637,
+      "matched_shooter_games_with_positive_box_fga": 1573,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 14071,
+      "tracking_games": 83,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 14070,
+      "valid_opportunity_rows": 14071,
+      "zero_partial_possession_rows": 12,
+      "zero_matchup_fga_rows": 6675,
+      "defender_appearances": 1688,
+      "linked_defender_appearances_with_positive_exposure": 1686,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1625,
+      "shooter_games_with_exact_box_fga": 636,
+      "matched_shooter_games_with_positive_box_fga": 1573,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 14071,
+      "same_values_on_compared_fields": 13967,
+      "same_games": 83,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 208,
+      "players": 208,
+      "linked_box_players": 208,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 3,
+      "zero_deflection_rows": 36,
+      "positive_minutes_rows": 206,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 217,
+      "players": 217,
+      "linked_box_players": 216,
+      "positive_rim_attempt_rows": 192,
+      "zero_rim_attempt_rows": 25,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2020,
+    "season_type": "regular",
+    "box": {
+      "games": 1080,
+      "player_games": 23054,
+      "players": 540,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 202195,
+      "tracking_games": 1080,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 202190,
+      "valid_opportunity_rows": 202195,
+      "zero_partial_possession_rows": 122,
+      "zero_matchup_fga_rows": 98122,
+      "defender_appearances": 23039,
+      "linked_defender_appearances_with_positive_exposure": 23036,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 22233,
+      "shooter_games_with_exact_box_fga": 8825,
+      "matched_shooter_games_with_positive_box_fga": 21893,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 202196,
+      "tracking_games": 1080,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 202191,
+      "valid_opportunity_rows": 202196,
+      "zero_partial_possession_rows": 123,
+      "zero_matchup_fga_rows": 98123,
+      "defender_appearances": 23039,
+      "linked_defender_appearances_with_positive_exposure": 23036,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 22233,
+      "shooter_games_with_exact_box_fga": 8825,
+      "matched_shooter_games_with_positive_box_fga": 21893,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 202195,
+      "same_values_on_compared_fields": 202120,
+      "same_games": 1080,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 538,
+      "players": 538,
+      "linked_box_players": 538,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 2,
+      "zero_deflection_rows": 13,
+      "positive_minutes_rows": 538,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 540,
+      "players": 540,
+      "linked_box_players": 540,
+      "positive_rim_attempt_rows": 531,
+      "zero_rim_attempt_rows": 9,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2020,
+    "season_type": "playoffs",
+    "box": {
+      "games": 85,
+      "player_games": 1864,
+      "players": 239,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 15060,
+      "tracking_games": 85,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 15060,
+      "valid_opportunity_rows": 15060,
+      "zero_partial_possession_rows": 8,
+      "zero_matchup_fga_rows": 7572,
+      "defender_appearances": 1861,
+      "linked_defender_appearances_with_positive_exposure": 1861,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1711,
+      "shooter_games_with_exact_box_fga": 726,
+      "matched_shooter_games_with_positive_box_fga": 1685,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 15060,
+      "tracking_games": 85,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 15060,
+      "valid_opportunity_rows": 15060,
+      "zero_partial_possession_rows": 8,
+      "zero_matchup_fga_rows": 7572,
+      "defender_appearances": 1861,
+      "linked_defender_appearances_with_positive_exposure": 1861,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1711,
+      "shooter_games_with_exact_box_fga": 726,
+      "matched_shooter_games_with_positive_box_fga": 1685,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 15060,
+      "same_values_on_compared_fields": 15060,
+      "same_games": 85,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 228,
+      "players": 228,
+      "linked_box_players": 228,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 5,
+      "zero_deflection_rows": 34,
+      "positive_minutes_rows": 228,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 239,
+      "players": 239,
+      "linked_box_players": 239,
+      "positive_rim_attempt_rows": 205,
+      "zero_rim_attempt_rows": 34,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2021,
+    "season_type": "regular",
+    "box": {
+      "games": 1230,
+      "player_games": 26036,
+      "players": 605,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 229901,
+      "tracking_games": 1229,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 229889,
+      "valid_opportunity_rows": 229901,
+      "zero_partial_possession_rows": 128,
+      "zero_matchup_fga_rows": 110140,
+      "defender_appearances": 26007,
+      "linked_defender_appearances_with_positive_exposure": 26003,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 25115,
+      "shooter_games_with_exact_box_fga": 9732,
+      "matched_shooter_games_with_positive_box_fga": 24747,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 229901,
+      "tracking_games": 1229,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 229889,
+      "valid_opportunity_rows": 229901,
+      "zero_partial_possession_rows": 128,
+      "zero_matchup_fga_rows": 110138,
+      "defender_appearances": 26007,
+      "linked_defender_appearances_with_positive_exposure": 26003,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 25115,
+      "shooter_games_with_exact_box_fga": 9733,
+      "matched_shooter_games_with_positive_box_fga": 24747,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 229901,
+      "same_values_on_compared_fields": 229823,
+      "same_games": 1229,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 596,
+      "players": 596,
+      "linked_box_players": 596,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 9,
+      "zero_deflection_rows": 21,
+      "positive_minutes_rows": 595,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 605,
+      "players": 605,
+      "linked_box_players": 605,
+      "positive_rim_attempt_rows": 583,
+      "zero_rim_attempt_rows": 22,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2021,
+    "season_type": "playoffs",
+    "box": {
+      "games": 87,
+      "player_games": 1891,
+      "players": 217,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 15312,
+      "tracking_games": 87,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 15312,
+      "valid_opportunity_rows": 15312,
+      "zero_partial_possession_rows": 9,
+      "zero_matchup_fga_rows": 7618,
+      "defender_appearances": 1889,
+      "linked_defender_appearances_with_positive_exposure": 1889,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1747,
+      "shooter_games_with_exact_box_fga": 709,
+      "matched_shooter_games_with_positive_box_fga": 1695,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 15312,
+      "tracking_games": 87,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 15312,
+      "valid_opportunity_rows": 15312,
+      "zero_partial_possession_rows": 9,
+      "zero_matchup_fga_rows": 7618,
+      "defender_appearances": 1889,
+      "linked_defender_appearances_with_positive_exposure": 1889,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1747,
+      "shooter_games_with_exact_box_fga": 709,
+      "matched_shooter_games_with_positive_box_fga": 1695,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 15312,
+      "same_values_on_compared_fields": 15312,
+      "same_games": 87,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 211,
+      "players": 211,
+      "linked_box_players": 211,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 6,
+      "zero_deflection_rows": 21,
+      "positive_minutes_rows": 211,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 217,
+      "players": 217,
+      "linked_box_players": 217,
+      "positive_rim_attempt_rows": 199,
+      "zero_rim_attempt_rows": 18,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2022,
+    "season_type": "regular",
+    "box": {
+      "games": 1230,
+      "player_games": 25892,
+      "players": 539,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 229185,
+      "tracking_games": 1230,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 229185,
+      "valid_opportunity_rows": 229185,
+      "zero_partial_possession_rows": 135,
+      "zero_matchup_fga_rows": 109908,
+      "defender_appearances": 25875,
+      "linked_defender_appearances_with_positive_exposure": 25875,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 25056,
+      "shooter_games_with_exact_box_fga": 9516,
+      "matched_shooter_games_with_positive_box_fga": 24677,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 229185,
+      "tracking_games": 1230,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 229185,
+      "valid_opportunity_rows": 229185,
+      "zero_partial_possession_rows": 135,
+      "zero_matchup_fga_rows": 109906,
+      "defender_appearances": 25875,
+      "linked_defender_appearances_with_positive_exposure": 25875,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 25056,
+      "shooter_games_with_exact_box_fga": 9516,
+      "matched_shooter_games_with_positive_box_fga": 24677,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 229185,
+      "same_values_on_compared_fields": 229145,
+      "same_games": 1230,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 535,
+      "players": 535,
+      "linked_box_players": 535,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 2,
+      "zero_deflection_rows": 12,
+      "positive_minutes_rows": 535,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 539,
+      "players": 539,
+      "linked_box_players": 539,
+      "positive_rim_attempt_rows": 527,
+      "zero_rim_attempt_rows": 12,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  },
+  {
+    "start_year": 2022,
+    "season_type": "playoffs",
+    "box": {
+      "games": 84,
+      "player_games": 1728,
+      "players": 217,
+      "duplicate_keys": 0
+    },
+    "shufinskiy": {
+      "pair_rows": 13817,
+      "tracking_games": 84,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 13817,
+      "valid_opportunity_rows": 13817,
+      "zero_partial_possession_rows": 18,
+      "zero_matchup_fga_rows": 6612,
+      "defender_appearances": 1721,
+      "linked_defender_appearances_with_positive_exposure": 1721,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1615,
+      "shooter_games_with_exact_box_fga": 636,
+      "matched_shooter_games_with_positive_box_fga": 1567,
+      "games_outside_box_universe": 0
+    },
+    "sportsdataverse": {
+      "pair_rows": 13817,
+      "tracking_games": 84,
+      "duplicate_keys": 0,
+      "linked_opposing_positive_minutes_rows": 13817,
+      "valid_opportunity_rows": 13817,
+      "zero_partial_possession_rows": 18,
+      "zero_matchup_fga_rows": 6612,
+      "defender_appearances": 1721,
+      "linked_defender_appearances_with_positive_exposure": 1721,
+      "linked_defender_appearances_with_positive_exposure_and_fga": 1615,
+      "shooter_games_with_exact_box_fga": 636,
+      "matched_shooter_games_with_positive_box_fga": 1567,
+      "games_outside_box_universe": 0
+    },
+    "mirror_overlap": {
+      "same_directed_pair_rows": 13817,
+      "same_values_on_compared_fields": 13817,
+      "same_games": 84,
+      "sdv_only_games": 0,
+      "shuf_only_games": 0
+    },
+    "hustle": {
+      "rows": 210,
+      "players": 210,
+      "linked_box_players": 210,
+      "missing_candidate_count_rows": 0,
+      "zero_contest_rows": 5,
+      "zero_deflection_rows": 30,
+      "positive_minutes_rows": 210,
+      "min_per_mode": "totals",
+      "max_per_mode": "totals"
+    },
+    "rim_tracking": {
+      "rows": 217,
+      "players": 217,
+      "linked_box_players": 217,
+      "positive_rim_attempt_rows": 192,
+      "zero_rim_attempt_rows": 25,
+      "missing_rim_count_rows": 0,
+      "min_per_mode": "Totals",
+      "max_per_mode": "Totals"
+    }
+  }
+]
