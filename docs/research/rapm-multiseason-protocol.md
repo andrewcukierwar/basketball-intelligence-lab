@@ -105,6 +105,8 @@ Each scenario removes rows from both fitting and scoring and reruns the **whole 
 | `exclude_overtime` | possessions in period 5 or later |
 | `exclude_no_livedata` | games carrying the `no_livedata` stratum in `game_reconciliation` (all of 2018–19 and 2019–20) |
 
+**Pre-run clarification (2026-11-24, before any real-data fit).** The synthetic end-to-end test showed that a candidate can have no fit rows at a cutoff: under `exclude_2021_22`, `W1` at the 2022-10-01 cutoff covers only 2021–22. A candidate whose window is empty at any scored block's cutoff in a scenario is **infeasible** there. It is not searched, scored or selectable in that scenario, for the model or a baseline, and the report lists it. Rank comparisons use the candidates that are feasible in both analyses. In the primary analysis every candidate is feasible. This clarification was added after the protocol commit `86790ae` and before the development run.
+
 Reported for each: the selected configuration and its pooled delta against B0; the primary-selected configuration's score and rank; the rank correlation of the per-candidate best MSEs with the primary analysis; the paired MSE difference, on the scenario's scored rows, between the primary configuration fitted on the reduced rows and on all rows; and the shift of the primary configuration's final development fit (cutoff 2023-07-01) against the full-data fit (root-mean-square change, correlation, by band). **Sensitivity results never change the primary selection.**
 
 ## Freeze and Phase 2
