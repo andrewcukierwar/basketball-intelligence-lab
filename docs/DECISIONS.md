@@ -276,18 +276,17 @@ V2 remains the event source of record.
 **Consequences:** Tradeoffs and limitations  
 **Links:** Relevant issues, PRs and research reports
 
-## ADR-0019 — Exclude no-action possessions from RAPM model rows
+## ADR-0019 — Exclude period-end pseudo-possessions from RAPM model rows
 
 - **Date:** 2026-11-23
-- **Status:** **Proposed, awaiting maintainer sign-off.** It applies to the historical RAPM row set (`issue-82-v1`, [#82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)). Independent review judged it a material methodology change: it redefines the canonical RAPM sample and reverses the #24 finding that the context-only comparator beats zero-context player RAPM. Until it is accepted, `issue-59-v1` remains the default pin for the #23 and #24 runners.
-- **Open alternatives for sign-off:**
-  - (a) Exclude all no-action possessions. This is the current implementation: 1,039 possessions, of which 1,003 are eligible.
-  - (b) Exclude only possessions that start on `period_end`, a rule known before the possession (962 of the 1,039).
-  - (c) Keep all of them in the model rows, as in `issue-59-v1`.
-  - Seven mid-period held-ball (`jump_ball`) possessions are classed as no-action under (a). A held ball is arguably a player-attributable outcome, but the effect is immaterial in size.
+- **Status:** **Accepted, option B. Maintainer decision 2026-11-23.** It applies to the historical RAPM row set (`issue-82-B-v1`, [#82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)).
 - **Evidence class:** Original BIL design.
-- **Context:** The review of #24 found that possessions starting near a period's end drive most of the measured time-of-period effect. Many are run-outs that contain no shot, free throw, turnover, foul or violation and score 0.
-- **Decision:** Give an accepted possession the disposition `no_action` when no `shot`, `free_throw`, `turnover`, `foul` or `violation` event lies inside its own sequence interval. Use only events inside the possession. Do not use its end reason, outcome or score. Exclude these from model rows (exposure 0) but keep them in the disposition and reconciliation ledgers. The check applies after the pilot-status check and before the lineup rule.
-- **Evidence:** In 2022–23, 996 of the 6,028 possessions starting with 24 s or less left contain no action, and 962 start on `period_end`. Across the whole pilot, 1,039 accepted possessions have no action event (1,003 eligible and 36 multiple-lineup). All score 0, so the points reconcile unchanged. The #24 review measured an in-sample end-of-period gain of 26.5 that falls to 5.6 without them.
-- **Consequences:** The baseline estimates scoring when a possession has a player-attributable outcome, so held-out MSE and the time effect are no longer inflated by a possession-definition artifact. Whole-game total use must add back the zero-point run-outs separately. Whether the exclusion helps or changes RAPM is measured under a frozen addendum protocol, not assumed.
-- **Links:** [Row contract](research/rapm-historical-rows.md), [Addendum protocol](research/rapm-no-action-protocol.md)
+- **Context:** The review of #24 found that possessions starting near a period's end drive most of the measured time-of-period effect. Many are run-outs that score 0. Independent review judged the first implementation (exclude every possession with no action event) a material methodology change, because it filters rows by how each possession turned out.
+- **Decision:**
+  - Give an accepted possession the disposition `period_end_pseudo` when its first event is `period_end`. Exclude it from model rows (exposure 0) but keep it in the disposition and reconciliation ledgers. The check follows the pilot-status check and precedes the lineup rule.
+  - Keep real possessions with intentional run-outs, held balls and other outcome-free endings in model rows. Eligibility never depends on later actions or realized outcomes.
+  - The rule was not chosen or justified by whether player RAPM beats the context-only comparator.
+  - Keep two versioned sensitivity alternatives, selectable with `--variant`: **A** excludes accepted possessions with no shot, free throw, turnover, foul or violation event (`no_action`, `issue-82-v1`), and **C** keeps everything (`issue-59-v1`). B is the default.
+- **Evidence:** `scripts/audit_period_end_possessions.py` on `issue-19-v6`: 962 of 256,456 accepted possessions begin with `period_end`. None has a shot, free throw, turnover, foul, violation or jump ball, a score delta or allocation, a nonzero game-clock duration or a period-boundary span, and each is followed by `period_start` or the end of the stream. There are no exceptions. All 962 were eligible stable-lineup rows and score 0, so modeled points (249,091) are unchanged. The 962 are also the 962 `period_end` starts the #24 review counted.
+- **Consequences:** The baseline estimates scoring over live-ball possessions. Whole-game total use must add back the zero-point period-end rows. B, A and C give nearly identical player results (RAPM vs league −13.16, −13.17 and −14.09 on their own cohorts) and a time-block gain that falls from −25.7 (C) to −5.2 (B). On a common held-out cohort a B fit scores 2.46 MSE better than a C fit. These are descriptions of the sample, not reasons for the rule.
+- **Links:** [Row contract](research/rapm-historical-rows.md), [Report](research/rapm-no-action-2022-23.md), [Protocol v2](research/rapm-no-action-protocol-v2.md), [Protocol v1 (A)](research/rapm-no-action-protocol.md)

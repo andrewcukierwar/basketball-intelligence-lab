@@ -191,3 +191,14 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Inputs and configuration:** Pinned `issue-5-v2` logs, frozen `issue-32-v1` fits, [frozen protocol](research/skill-context-protocol.md) (commit `9642a51`), code commit `9483a40`, output `issue-33-v1`. 2,496 penalized likelihood fits, game- and player-clustered bootstrap with 2,000 replicates.
 - **Results:** All 194,764 base predictions and 26,481 snapshot rows reproduced #32 exactly, and no context input used a date on or after its game. The matchup-specific forecast lowered log loss in 12 of 13 statistics (10 with game-clustered intervals excluding zero), with MSE changes of −0.02% to −0.88%. Opponent allowed rates carried the gain (retained for 9 statistics). Home, rest and team terms did not beat an intercept-only control. Aging was untestable (no birthdates). Playoffs got worse for 4 statistics. [Full results](research/skill-context-2022-23.md)
 - **Scope:** Single-season evidence only. Outer seasons 2023–24 and 2024–25 must be run before any context is adopted.
+
+### EXP-0011 — Period-end pseudo-possession exclusion in the RAPM row set, 2022–23
+
+- **Status:** Run once under frozen protocols (v1 for variant A, v2 for B and the common cohort). Independent review of the B change not yet run.
+- **Date:** 2026-11-23.
+- **Research question:** Does excluding possessions with no live-ball opportunity change the #23 baseline and #24 context results, and which rows should be eligible?
+- **Category:** Experimental (retrospective replay, one season), with an Original row rule.
+- **Inputs and configuration:** `issue-19-v6`. Row sets `issue-59-v1` (C), `issue-82-v1` (A) and `issue-82-B-v1` (B, build id `7b8c6449…eac3`). [Protocol v2](research/rapm-no-action-protocol-v2.md) commit `3863286`. $\lambda$ = 4,000, bootstrap seed 2023.
+- **Results:** 962 accepted `period_end` first-event possessions with no exceptions in the audit. RAPM vs league −13.16 (B) against −14.09 (C). `T_fit` −5.20 (−8.16 to −2.06) against −25.69. `HST_fit` −11.26 against −32.25. On the common A cohort, B − C RAPM MSE −2.46 (−3.15 to −1.74), A − B −0.15 (−0.21 to −0.09). [Report](research/rapm-no-action-2022-23.md)
+- **Limitations / interpretation:** One season. The residual end-of-period effect (about −16) is unexplained, and a game-final explanation is Inferred only.
+- **Next decision:** Whether game-final possessions need a treatment, and whether B transfers to outer seasons.
