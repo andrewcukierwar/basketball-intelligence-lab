@@ -369,8 +369,9 @@ def _write_parquet(
     rows: list[dict[str, Any]],
     staging: Path,
     output: Path,
+    columns: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    columns = TABLES[name]
+    columns = TABLES[name] if columns is None else columns
     source = staging / f"{name}.jsonl"
     with source.open("x", encoding="utf-8") as stream:
         for row in rows:
