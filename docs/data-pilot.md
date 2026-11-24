@@ -618,12 +618,52 @@ ADR-0020 makes liveData an optional build input for seasons where the provider a
 
 `check` passes 26 of 26 on the rebuild. `evidence` reproduces the recorded values: 99.97% Bentes agreement, 1,260 / 1,286 games against pbpstats.com, 5,346 / 5,349 liveData versus data.nba periods, and 35 of 35 starter team-periods.
 
+## Backfill batch 1: 2016–17
+
+[Issue #96](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/96), under [#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53), builds 2016–17 with the default path at `8401bc7` and parser `pbpstats-1.3.11-bil-v6`. The order repair of ADR-0023 (proposed) was not used. The pin from [#90](research/backfill-feasibility.md) was reused: `capture --from-local` and `capture-evidence --from-local` verified 10 inputs and 6 evidence files by size and SHA-256, with no download. Private outputs: `data/raw/2016-17/issue-96-v1`, `issue-96-evidence-v1`, `data/processed/2016-17/issue-96-v1`, `issue-96-rows-v1` and `data/processed/quality/issue-96-v1`.
+
+```sh
+M=/path/to/repo; A=$M/data/raw/historical-feed-audit/2026-11-23
+uv run python -m bil.data.pilot capture $M/data/raw/2016-17/issue-96-v1 --season 2016 --from-local "$A"
+uv run python -m bil.data.pilot capture-evidence $M/data/raw/2016-17/issue-96-evidence-v1 --season 2016 --from-local "$A"
+uv run python -m bil.data.pilot build $M/data/raw/2016-17/issue-96-v1 $M/data/processed/2016-17/issue-96-v1 --code-commit <sha>
+uv run python -m bil.data.pilot check $M/data/processed/2016-17/issue-96-v1 $M/data/raw/2016-17/issue-96-v1
+uv run python -m bil.data.pilot evidence $M/data/processed/2016-17/issue-96-v1 $M/data/raw/2016-17/issue-96-v1 $M/data/raw/2016-17/issue-96-evidence-v1
+uv run python scripts/season_quality.py $M/data/processed/quality/issue-96-v1 \
+  --build $M/data/processed/2016-17/issue-96-v1 $M/data/raw/2016-17/issue-96-v1
+uv run python -m bil.data.rapm_rows $M/data/processed/2016-17/issue-96-v1 $M/data/processed/2016-17/issue-96-rows-v1 \
+  --pilot-manifest-sha256 "$(shasum -a 256 $M/data/processed/2016-17/issue-96-v1/manifest.json | cut -d' ' -f1)" --code-commit <sha>
+```
+
+Results are aggregates only. `check` passes 26 of 26. `check-seasons` over 2016–17, 2017–18 to 2022–23 and 2023–24 and 2024–25 (11,497 games) reports zero violations.
+
+| Season type | Expected | Accepted | Quarantined | Possessions | Excluded | Unresolved | Unresolved share |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Regular | 1,230 | 1,209 (98.3%) | 21 | 236,228 | 2,664 | 71 | 0.030% |
+| Playoffs | 79 | 79 (100%) | 0 | 15,116 | 178 | 61 | 0.404% |
+| Season | 1,309 | 1,288 | 21 | 251,344 | 2,842 | 132 | 0.053% |
+
+Both coverage floors (97%) and the full-season unresolved limit (0.1%) pass. Quarantine causes, all regular season: 14 `parser_error`, 4 `unresolved_event_order`, 2 `player_plus_minus_mismatch`, 1 `unresolved_starters`. The `season_quality.py` diagnostic gives original M1 status fail and revised status **meets with warnings**. The warnings are the regular-season overtime stratum (66 of 70, 94.3%, below the 95% target) and the playoff unresolved share (0.404%), which is a stratum-level warning under ADR-0022 and not the full-season gate. The only missingness flag is `watch` for overtime (21 quarantines in 2 cells, chi-square p = 0.031, lift 3.3 on 4 events).
+
+Evidence (**Documented**, from `evidence`): no liveData and no data.nba `ord`, so every game carries `no_livedata`, 9 team-periods have inferred starters (Bentes agrees with all 9), and period scores and event order cannot be compared with data.nba. pbpstats.com possession counts are equal in 1,240 of 1,288 games and within 2 in 1,259. Offense keys agree with data.nba for 893 of 893 events.
+
+Canonical RAPM row set (`bil.data.rapm_rows`, variant `canonical`, build id `b77fe289`, 0 identity violations, no model fitted):
+
+| Season type | Accepted possessions | Eligible | Multiple lineups | Pilot excluded | Unresolved | Eligible share of accepted |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Regular | 233,493 | 203,037 | 30,456 | 2,664 | 71 | 86.95% |
+| Playoffs | 14,877 | 12,847 | 2,030 | 178 | 61 | 86.36% |
+| Season | 248,370 | 215,884 | 32,486 | 2,842 | 132 | 86.92% |
+
+Ledger points are 227,541 modeled and 44,470 not modeled, from 272,011 final points. The row counts are 215,884 `model_row`, 251,344 `possession_disposition`, 146,507 `score_reconciliation` and 1,309 `game_reconciliation`.
+
 ## Season eligibility matrix (ADR-0022)
 
 Maintainer decisions of 2026-11-23 ([#89](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/89)), applied to the revised M1 classification. "Primary training" is the retrospective cohort 2018–19 through 2022–23. "Outer validation" seasons receive data-quality diagnostics here and no model results until their planned evaluation. The 2025–26 and later seasons are the holdout and were not read.
 
 | Season | Revised M1 class | Role | Conditions |
 | --- | --- | --- | --- |
+| 2016–17 | Meets, two warnings | Eligible history, outside the planned #26 window | Not part of the #26 primary window (2018–19 to 2022–23). Available for later use. Weaker verification (`no_livedata`, data.nba without `ord`). Regular-season overtime stratum at 94.3% (66 of 70) and a playoff unresolved share of 0.404%. Default build, no order repair ([#96](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/96)). |
 | 2017–18 | Fails hard limits | Excluded | Outside the primary cohort pending remediation ([#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53) feasibility). Early-season event-order failures, 14.6% of expected possessions lost to quarantines. |
 | 2018–19 | Meets, one warning | Primary training, conditional | Subject to the missingness analysis. Weaker verification (`no_livedata`). Systematic quarantine concentration in overtime games and in November 2018, reported in the [report](research/season-quality-2017-2025.md). Sensitivity run excluding it, overtime and weaker strata. |
 | 2019–20 | Meets | Primary training | Weaker verification (`no_livedata`); treat as a sensitivity stratum (ADR-0020). |
