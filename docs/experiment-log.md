@@ -184,7 +184,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0010 — Context for game-agnostic and game-optimized skill forecasts, 2022–23
 
-- **Status:** Run once under a frozen protocol. Independent review not yet run.
+- **Status:** Run once under a frozen protocol. Independently reviewed (approved; #87).
 - **Date:** 2026-11-23.
 - **Research question:** Does a fitted pregame context adjustment (home, team rest, opponent allowed rates, own-team rate, league trend) improve the frozen #32 skill forecast on later 2022–23 games, factor by factor, using only evidence available at the prediction origin?
 - **Category:** Experimental (retrospective replay, one season).
@@ -205,7 +205,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0012 — M1 quality policy revision and season missingness diagnostic, 2017–18 through 2024–25
 
-- **Status:** Completed. Independent review not yet run.
+- **Status:** Completed. Independently reviewed (approved; #92).
 - **Date:** 2026-11-24.
 - **Research question:** Under the revised M1 policy (ADR-0022), which seasons meet the hard limits, and are quarantined games and unresolved possessions missing systematically by team, date, player, exposure, game state or cause? How much does the primary cohort (2018–19 through 2022–23) depend on the conditionally authorized seasons, overtime periods and weaker-verification strata?
 - **Category:** Original (data-quality diagnostic, no model).
@@ -240,7 +240,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0014 — Split penalties, random-exclusion control and per-fit diagnostics for the RAPM baseline, 2022–23
 
-- **Status:** Run once under a frozen protocol. Independent review not yet run.
+- **Status:** Run once under a frozen protocol. Independently reviewed (approved; #100).
 - **Date:** 2026-11-24.
 - **Research question:** Do separate offense and defense ridge penalties improve held-out possession scoring over the single #23 penalty, and is the effect of excluding the 170 adjudication-stratum games unusual against excluding the same number of random ordinary games?
 - **Category:** Experimental (retrospective replay, one season).
@@ -248,3 +248,27 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Results:** Selected $(\lambda_{off}, \lambda_{def})$ = (2,000, 8,000). Pooled R1–R4 delta against the single penalty is −1.57 (95% −3.11 to −0.06), optimistic. P1 delta is +3.57 (−1.61 to +8.75), so the split penalty is not distinguishable by the frozen rule. Stratum exclusion shifts estimates like random exclusion (total RMS 0.369 against 0.361 ± 0.015). Its held-out effect (−0.79) is lower than 2% of random draws (mean +1.28), which is descriptive only. All fits converged (iterations 8 to 60, condition at most 106).
 - **Limitations / interpretation:** One season, one short playoff block, selection and reporting share R1–R4. The single penalty remains the baseline. [Report](research/rapm-baseline-controls-2022-23.md)
 - **Next decision:** Whether a split penalty is worth carrying to the 2023–24 outer-validation season.
+
+### EXP-0015 — Multi-season RAPM: temporal weighting, split penalties and outer validation, 2018–19 through 2024–25
+
+- **Status:** Completed. Development and outer runs each ran once. Independently reviewed (approved).
+- **Date:** 2026-11-24.
+- **Research question:** Which window or exponential decay, with separate offense and defense penalties, best predicts held-out possession scoring in chronological development folds? Does the frozen choice beat the league mean and the #24 context-only comparator in 2023–24 and 2024–25?
+- **Category:** Experimental (retrospective replay, realized lineups), Original design.
+- **Code SHA / run ID:** Protocol `86790ae`. Runner `ec4f127`. Development run `data/processed/multiseason/issue-26-dev-v1` (manifest `8cbb4e5e…536a`, results committed `bd86289`). Addendum `57fe88e` (SHA-256 `23a9d3b7…420b`). Outer run `data/processed/multiseason/issue-26-outer-v1` at `57fe88e`.
+- **Datasets/checksums and cutoff:** Canonical `issue-93-v1` row sets for 2018–19 to 2024–25, each pinned by manifest SHA-256, with pilot builds (`issue-25-v1`, `issue-19-v6`, `issue-52-v1`) for context covariates. No 2017–18 or 2025–26+ file was read.
+- **Train / validation / test periods:**
+  - Development: R1–R4 and P blocks of 2021–22 and 2022–23, fitting on all earlier rows in the window.
+  - Outer: the same blocks in 2023–24 and 2024–25, walk-forward.
+  - The confirmatory holdout (2025–26) was untouched.
+- **Model and configuration:** Zero-prior two-penalty sparse ridge. Candidates `W1`, `W2`, `W3`, `W5`, `H90`, `H180`, `H365` and `H730`. The search used a shared grid, then the defense penalty, then the offense penalty. Selected: `W2`, $\lambda_o$ = 4,000, $\lambda_d$ = 8,000.
+- **Baselines:** League mean and #24 `home_score_time` context-only, each with its own selected window (both `W1`). Secondary model: RAPM with a context offset.
+- **Metrics and uncertainty:** Per-possession MSE deltas with game-clustered and week-clustered bootstrap (2,000 resamples, seed 2023). Calibration-in-the-large and slope. Coverage.
+- **Results:**
+  - Development: `W2` −16.24 (−19.25 to −13.20) against the league mean and +12.28 (+7.61 to +16.71) against context. Selection unchanged in all four sensitivity scenarios.
+  - Outer, regular season over both seasons: −23.39 (−26.48 to −20.33) against the league mean (better) and +8.82 (+4.09 to +13.68) against context (worse). RAPM with a context offset beats context by 24.73 (−27.88 to −21.50).
+  - Outer playoffs: −14.03 (−30.24 to +1.39) and +15.56 (−6.03 to +36.32), both inconclusive.
+  - Calibration slope of RAPM in the regular season is 1.12 (1.04 to 1.20). Every model over-predicts playoff scoring by 2 to 4 points per 100.
+  - [Report](research/rapm-multiseason.md)
+- **Limitations / interpretation:** Near-tie selection. `W5` was truncated in development. Neutral sites are not coded. The context advantage rests on end-of-period run-outs (#82). Retrospective, not confirmatory.
+- **Next decision:** Review, then whether informed RAPM (#30 and later) should take the RAPM-with-context-offset model as its comparator.
