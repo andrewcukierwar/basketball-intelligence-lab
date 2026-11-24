@@ -19,7 +19,8 @@ Freeze a protocol for provisional, independent long-window RAPM training targets
 ## Key decisions and discoveries
 
 - **Primary label `K365` (Original).** It is a season-centred, two-sided kernel: weight 1 in the target season and `0.5 ** (gap_days / 365)` up to 730 days, where the gap is measured in real days. A missing season is real elapsed time. The window-constant label is only a sensitivity.
-- **Two-stage fit.** First a context offset with season-by-season-type levels for era and playoffs, then the verified two-penalty ridge.
+- **Joint fit (revision 2).** Context and season-by-season-type levels are unpenalized and fitted jointly with the two-penalty player ridge (`fit_joint`, FWL projection plus LSQR). It agrees with a dense oracle to 5e-10 or better. Revision 1's two-stage offset is kept as a sensitivity.
+- **Evaluation label (revision 2).** For #30, the season-only `K0` label at the final origin with its own CV penalties, which replaces revision 1's forward-borrowing label.
 - **Penalty choice.** One pair per reference, origin and scenario, by five-fold game-grouped CV inside the origin's eligible rows, using the #26 search.
 - **Centring.** Labels are possession-weighted to zero within each target season. The ADR-0012 values are kept as `*_raw`.
 - **Origins.** Each origin is the day after the season's last scheduled game, because a 1 July boundary would cut the 2019–20 and 2020–21 playoffs. Origins for gap seasons are unavailable.
@@ -30,7 +31,7 @@ Freeze a protocol for provisional, independent long-window RAPM training targets
 
 | Check | Actual result |
 | --- | --- |
-| `uv run pytest -q` | 331 passed, 2 skipped, exit 0 |
+| `uv run pytest -q` (revision 2) | 333 passed, 2 skipped, exit 0 (revision 1: 331 passed) |
 | `uv run ruff check .` | Pass |
 | `uv run ruff format --check .` | Pass |
 | `uv run mypy src` | Pass (strict) |
@@ -41,6 +42,10 @@ Freeze a protocol for provisional, independent long-window RAPM training targets
 - The runtime of about two to three hours is an estimate. No real fit was timed.
 - Open questions are listed in the protocol's §12.
 - ADR-0027 and EXP-0017 are reserved but not written. They are written with the phase-2 results.
+
+## Revision 2 (after the independent protocol review)
+
+The independent review of `0195f99` found two blockers. The evaluation label's estimand varied by fold, and the two-stage offset let context terms absorb player composition. Both were fixed before any real-data fit, together with the recommended changes. The protocol's §13 lists them. The checks were rerun after the fix.
 
 ## Next actions
 

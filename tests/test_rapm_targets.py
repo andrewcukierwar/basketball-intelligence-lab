@@ -228,7 +228,7 @@ def test_kernel_uses_real_elapsed_time_across_gaps():
     # Two-sided: 2016-17 is weighted for a 2015-16 label once it is eligible.
     backward = tg.kernel_weights(season, ordinal, 2016, spans, tg.PRIMARY_KERNEL)
     assert backward[2] == pytest.approx(0.5 ** (gap / 365))
-    k0 = tg.kernel_weights(season, ordinal, 2015, spans, tg.SENSITIVITY_KERNELS[0])
+    k0 = tg.kernel_weights(season, ordinal, 2015, spans, tg.SEASON_ONLY_KERNEL)
     assert k0.tolist() == [0.0, 1.0, 1.0, 0.0, 0.0]
 
 
@@ -272,7 +272,8 @@ def test_chronological_registration_trains_only_on_earlier_target_sets():
             assert all(s < e for s in fold["training_seasons"])
             cutoff = date.fromisoformat(fold["training_target_set"].split("@")[1])
             assert cutoff <= _calendar()[e][0]
-            assert fold["evaluation_rows_from"] == cutoff.isoformat()
+            assert fold["evaluation_label_rows"] == f"season {e} only"
+            assert "evaluation_K0" in fold["evaluation_label"]
     extended = {f["evaluation_season"]: f for f in reg["extended"]["folds"]}
     assert extended[2015]["training_seasons"] == [2005, 2006, 2007]
     assert extended[2018]["training_seasons"][-1] == 2016
@@ -291,11 +292,14 @@ def test_game_folds_are_deterministic_and_whole_games():
 
 def test_team_codes_pair_the_two_offenses():
     game = np.array([0, 0, 0, 1, 1], dtype=np.int64)
-    offense = np.array(["A", "B", "A", "C", "A"])
+    offense = np.array(["1610612737", "1610612738", "1610612737", "1610612760", "1610612737"])
     codes = tg.team_codes(offense, game)
-    assert codes.tolist() == [[0, 1], [1, 0], [0, 1], [2, 0], [0, 2]]
+    a, b, c = 1610612737, 1610612738, 1610612760
+    assert codes.tolist() == [[a, b], [b, a], [a, b], [c, a], [a, c]]
+    # Raw IDs: a game's codes do not depend on which other games are loaded.
+    assert tg.team_codes(offense[3:], np.array([0, 0], dtype=np.int64)).tolist() == [[c, a], [a, c]]
     with pytest.raises(ValueError, match="only one"):
-        tg.team_codes(np.array(["A", "A"]), np.array([0, 0], dtype=np.int64))
+        tg.team_codes(np.array(["1", "1"]), np.array([0, 0], dtype=np.int64))
 
 
 # --- freezing ------------------------------------------------------------------------------------
@@ -343,9 +347,7 @@ def test_later_rows_cannot_change_a_frozen_target():
 def test_a_revised_earlier_row_is_detected_and_needs_a_new_version():
     rows, teams, _ = synthetic((2018, 2019), step=8)
     origin = _origin(rows, 2019)
-    frozen, _, _, _ = tg.build_target_set(
-        rows, teams, origin, tg.PRIMARY_KERNEL, [], penalties=(500.0, 1000.0)
-    )
+    frozen, _, _, _ = tg.build_target_set(rows, teams, origin, tg.PRIMARY_KERNEL, [])
     for field_name, revise in (
         ("y", lambda r: np.where(np.arange(len(r)) == 5, r.y + 100.0, r.y)),
         ("context", lambda r: np.where(np.arange(len(r))[:, None] == 7, r.context * 2, r.context)),
@@ -354,7 +356,7 @@ def test_a_revised_earlier_row_is_detected_and_needs_a_new_version():
         with pytest.raises(tg.FrozenTargetError, match="new target version"):
             tg.verify_frozen(frozen, revised, teams)
         new, _, _, _ = tg.build_target_set(
-            revised, teams, origin, tg.PRIMARY_KERNEL, [], penalties=(500.0, 1000.0)
+            revised, teams, origin, tg.PRIMARY_KERNEL, [], penalties=(500.0, 1000.0), scenario="x"
         )
         assert new.input_digest != frozen.input_digest
 
@@ -362,8 +364,14 @@ def test_a_revised_earlier_row_is_detected_and_needs_a_new_version():
 def test_sensitivity_fits_are_never_frozen_targets():
     rows, teams, _ = synthetic((2018,), step=8)
     origin = _origin(rows, 2018)
-    with pytest.raises(ValueError, match="sensitivity scenario"):
-        tg.build_target_set(rows, teams, origin, tg.POOLED_KERNEL, [], penalties=(1.0, 1.0))
+    for kwargs in (
+        {"kernel": tg.POOLED_KERNEL},
+        {"kernel": tg.PRIMARY_KERNEL, "penalties": (1.0, 1.0)},
+        {"kernel": tg.PRIMARY_KERNEL, "offset_mode": "two_stage"},
+        {"kernel": tg.PRIMARY_KERNEL, "available": ~rows.playoff},
+    ):
+        with pytest.raises(ValueError, match="must name its scenario"):
+            tg.build_target_set(rows, teams, origin, log=[], **kwargs)
     record, _, _, _ = tg.build_target_set(
         rows, teams, origin, tg.POOLED_KERNEL, [], penalties=(1.0, 1.0), scenario="pooled"
     )
@@ -409,14 +417,9 @@ def test_season_levels_absorb_an_era_scoring_shift():
     fit = tg.fit_season(od, 2018, tg.PRIMARY_KERNEL, 1000.0, 1000.0)
     effects = dict(zip(fit.offset.levels[1:], fit.offset.level_effects, strict=True))
 
-    def mean(season: int, playoff: bool) -> float:
-        return float(rows.y[(rows.season == season) & (rows.playoff == playoff)].mean())
-
-    # Each season-type level carries its own scoring baseline (here the +10 shift plus the
-    # sampled schedule), so the shift cannot load onto the players of one season.
-    assert effects[2019 * 2] == pytest.approx(mean(2019, False) - mean(2018, False), abs=0.5)
-    assert effects[2019 * 2] == pytest.approx(10.0, abs=4.0)
-    assert effects[2018 * 2 + 1] == pytest.approx(mean(2018, True) - mean(2018, False), abs=0.5)
+    # The 2019 regular-season level carries the +10 shift (fitted jointly with the players),
+    # so the shift cannot load onto the players of one season.
+    assert effects[2019 * 2] == pytest.approx(10.0, abs=2.5)
     # The labels of the target season are centred whatever the level of a neighbouring season.
     table = tg.labels(od, fit)
     assert abs(np.average(table["offense"], weights=table["offense_possessions"])) < 1e-9
@@ -446,8 +449,15 @@ def test_run_reference_end_to_end_on_synthetic_seasons():
     rows, teams, _ = synthetic(tg.REFERENCES["contiguous"], step=12, possessions=30, seed=21)
     log: list[dict] = []
     result = tg.run_reference(
-        rows, teams, "contiguous", calendar_of(rows), log, bootstrap_replicates=3
+        rows,
+        teams,
+        "contiguous",
+        calendar_of(rows),
+        log,
+        bootstrap_replicates=3,
+        provenance={"code_commit": "c" * 40, "protocol_sha256": "p" * 64},
     )
+    assert all(f.code_commit == "c" * 40 and f.protocol_sha256 == "p" * 64 for f in result.frozen)
     summary = result.summary
     assert summary["artifact_label"] == tg.ARTIFACT_LABEL
     assert len(result.frozen) == 5
@@ -465,17 +475,106 @@ def test_run_reference_end_to_end_on_synthetic_seasons():
     final = summary["origins"][summary["final_origin"]]["fits"]
     assert final["2018"]["forward_support"] is True
     assert final["2022"]["forward_support"] is False
-    # Evaluation labels never read a row before their training origin.
-    for season, meta in summary["evaluation_labels"].items():
-        assert min(meta["kernel_seasons"]) == int(season)
+    # Evaluation labels use only their own season's rows, with their own CV penalties.
+    evaluation = summary["evaluation_labels"]
+    assert evaluation["scenario"] == "evaluation_K0" and evaluation["cv_mse"]
+    assert set(result.eval_tables) == set(tg.REFERENCES["contiguous"])
+    for season, table in result.eval_tables.items():
+        assert set(table["kernel_seasons"].tolist()) == {str(season)}
+        assert not table["forward_support"].any()
+    assert set(evaluation["year_to_year"]) == {
+        "2018->2019",
+        "2019->2020",
+        "2020->2021",
+        "2021->2022",
+    }
+    # Revisions are reported as frozen and under the final penalties.
+    assert set(summary["label_revision_vs_final"]) == set(
+        summary["label_revision_vs_final_fixed_penalties"]
+    )
+    final_tables = result.tables[summary["final_origin"]]
+    assert final_tables[2018]["forward_support"].all()
+    assert set(final_tables[2018]["kernel_seasons"].tolist()) == {"2018;2019;2020"}
     assert set(summary["sensitivity"]) == {
-        "K0",
         "K730",
         "regular_only",
         "pooled_window",
         "exclude_no_livedata",
+        "two_stage_offset",
     }
+    assert summary["sensitivity"]["two_stage_offset"]["offset_mode"] == "two_stage"
+    assert all(f.offset_mode == "joint" and f.fold_salt == tg.FOLD_SALT for f in result.frozen)
     assert summary["sensitivity"]["exclude_no_livedata"]["seasons"] == [2020, 2021, 2022]
     assert set(result.errors) == set(tg.REFERENCES["contiguous"])
     assert "offense|all" in summary["split_half"] and "defense|all" in summary["split_half"]
     assert ms._solver_summary([{**e, "temporal": e["kernel"]} for e in log])["all_converged"]
+
+
+# --- joint context fit ---------------------------------------------------------------------------
+
+
+def _dense_joint(rows, index, weights, unpenalized, offense_ridge, defense_ridge):
+    """Independent oracle: dense normal equations over [1, C, offense, -defense]."""
+    ids = np.unique(np.concatenate([rows.offense[index].ravel(), rows.defense[index].ravel()]))
+    m = ids.size
+    x = np.zeros((index.size, 2 * m))
+    for row, i in enumerate(index):
+        x[row, np.searchsorted(ids, rows.offense[i])] = 1.0
+        x[row, m + np.searchsorted(ids, rows.defense[i])] = -1.0
+    full = np.column_stack([np.ones(index.size), unpenalized, x])
+    k = 1 + unpenalized.shape[1]
+    penalty = np.concatenate([np.zeros(k), np.full(m, offense_ridge), np.full(m, defense_ridge)])
+    lhs = full.T @ (weights[:, None] * full) + np.diag(penalty)
+    theta = np.linalg.solve(lhs, full.T @ (weights * rows.y[index]))
+    return ids, theta[0], theta[1:k], theta[k : k + m], theta[k + m :]
+
+
+def test_joint_fit_matches_a_dense_oracle():
+    rows, teams, _ = synthetic((2018, 2019), step=8, possessions=30, seed=4)
+    od = tg.origin_data(rows, teams, np.ones(len(rows), dtype=bool), [])
+    weights = od.kernel(2018, tg.PRIMARY_KERNEL)
+    index = np.flatnonzero(weights > 0)
+    w = weights[index]
+    levels, dummies = tg.level_columns(od.level[index])
+    unpenalized = np.column_stack([od.rows.context[index], dummies])
+    unpenalized = unpenalized[:, np.any(unpenalized != 0, axis=0)]
+    for ridges in ((300.0, 600.0), (2000.0, 500.0), (50.0, 50.0)):
+        fit, gamma = tg.fit_joint(od.design, index, od.rows.y[index], w, unpenalized, *ridges)
+        ids, intercept, g, off, dfn = _dense_joint(od.rows, index, w, unpenalized, *ridges)
+        position = np.searchsorted(np.asarray(od.design.player_ids), ids)
+        m = od.design.size
+        assert fit.intercept == pytest.approx(intercept, abs=1e-7)
+        assert np.allclose(gamma, g, atol=1e-7)
+        assert np.allclose(fit.effects[:m][position], off, atol=1e-7)
+        assert np.allclose(fit.effects[m:][position], dfn, atol=1e-7)
+        delta = max(
+            abs(fit.intercept - intercept),
+            float(np.max(np.abs(gamma - g))),
+            float(np.max(np.abs(fit.effects[:m][position] - off))),
+            float(np.max(np.abs(fit.effects[m:][position] - dfn))),
+        )
+        assert delta < 1e-7
+    # Through fit_season the same columns (levels included) give the same answer.
+    season_fit = tg.fit_season(od, 2018, tg.PRIMARY_KERNEL, 300.0, 600.0)
+    oracle = _dense_joint(od.rows, index, w, unpenalized, 300.0, 600.0)
+    assert season_fit.players.intercept == pytest.approx(oracle[1], abs=1e-7)
+
+
+def test_joint_fit_keeps_player_quality_out_of_correlated_context():
+    rows, teams, effects = synthetic((2018,), step=1, possessions=60, seed=12, effects_sd=6.0)
+    # A context flag that is on when the offensive lineup is strong (like "leading" or "closing
+    # lineup"). Its true effect is zero, so a coefficient on it is borrowed player quality.
+    quality = np.array([sum(effects[int(p)][0] for p in lineup) for lineup in rows.offense])
+    context = rows.context.copy()
+    context[:, 7] = (quality > np.median(quality)).astype(float)
+    rows = replace(rows, context=context)
+    coefficient, accuracy = {}, {}
+    for mode in ("joint", "two_stage"):
+        od = tg.origin_data(rows, teams, np.ones(len(rows), dtype=bool), [], offset_mode=mode)
+        fit = tg.fit_season(od, 2018, tg.PRIMARY_KERNEL, 200.0, 200.0)
+        table = tg.labels(od, fit)
+        truth = np.array([effects[int(p)][0] for p in table["player_id"]])
+        coefficient[mode] = abs(float(fit.offset.context[7]))
+        accuracy[mode] = float(np.corrcoef(table["offense"], truth)[0, 1])
+    assert coefficient["joint"] < coefficient["two_stage"] / 2
+    assert accuracy["joint"] > accuracy["two_stage"] + 0.1

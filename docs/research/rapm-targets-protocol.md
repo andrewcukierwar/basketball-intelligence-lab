@@ -1,6 +1,6 @@
 # RAPM training targets for box-score SPM: protocol (issue #28)
 
-**Status:** Frozen before any real-data target fit for [issue #28](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/28). **Classification:** Original BIL design under the maintainer decision of 2026-11-24 ([ADR-0026](../DECISIONS.md#adr-0026--maintainer-decisions-of-2026-11-24-m2-acceptance-informed-rapm-comparators-and-partial-history-spm-targets)). **Reserved records:** ADR-0027 (target specification, written with the results) and EXP-0017 (the single real-data run). Results go in `docs/research/rapm-targets.md`, written after the run. Any change to this document after the run starts is a deviation and is listed in that report.
+**Status:** Revision 2, frozen before any real-data target fit for [issue #28](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/28). **Classification:** Original BIL design under the maintainer decision of 2026-11-24 ([ADR-0026](../DECISIONS.md#adr-0026--maintainer-decisions-of-2026-11-24-m2-acceptance-informed-rapm-comparators-and-partial-history-spm-targets)). **Reserved records:** ADR-0027 (target specification, written with the results) and EXP-0017 (the single real-data run). Results go in `docs/research/rapm-targets.md`, written after the run. Any change to this document after the run starts is a deviation and is listed in that report. The revision history is in §13.
 
 **Every artifact of this issue is a _partial-history methodology replication_, not a full historical EPM replication.** EPM documents box-score SPM trained on independent RAPM over 2003–04 through 2022–23 ([EPM methodology](epm-methodology.md), Documented). BIL has 10 of those 20 seasons eligible, with a seven-season gap. The runner writes the label `partial-history methodology replication` into every output row, manifest and frozen-target record.
 
@@ -42,9 +42,9 @@ The ten seasons hold 2,117,689 rows from 12,640 accepted games. The row sets for
 
 ## 3. Estimand
 
-For reference $R$, origin $O$, target season $s$ and player $p$, the **offensive label** $o_{p,s}$ and **defensive label** $d_{p,s}$ are the player's effects, in points per 100 possessions, in a season-centred, elapsed-time-weighted, ridge-regularized RAPM fit. The fit uses the rows of $R$ played strictly before $O$ and is adjusted for home court, pre-possession score state, game time and each season-and-season-type scoring level. Positive offense scores more; positive defense prevents points. The total is $o + d$.
+For reference $R$, origin $O$, target season $s$ and player $p$, the **offensive label** $o_{p,s}$ and **defensive label** $d_{p,s}$ are the player's effects, in points per 100 possessions, in a season-centred, elapsed-time-weighted, ridge-regularized RAPM fit. The fit uses the rows of $R$ played strictly before $O$ and is adjusted, jointly with the players, for home court, pre-possession score state, game time and each season-and-season-type scoring level. Positive offense scores more; positive defense prevents points. The total is $o + d$.
 
-The label describes the player's average on-court impact around season $s$, borrowing from neighbouring eligible seasons in proportion to the real time between them. It is defined for every player with at least one offensive and one defensive possession in season $s$. EPM's SPM target is "multi-season RAPM from the same seasons" (Documented); the season-centred weighting is an **Original** BIL choice, made because the eligible seasons span 18 years with a seven-season gap, and a single constant effect per player over that span would ignore aging and the time that elapsed.
+The label describes the player's average on-court impact around season $s$, borrowing from neighbouring eligible seasons in proportion to the real time between them. It is defined for every player with at least one offensive and one defensive possession in season $s$. EPM's SPM target is "multi-season RAPM from the same seasons" (Documented); the season-centred weighting is an **Original** BIL choice, made because the eligible seasons span 18 years with a seven-season gap, and a single constant effect per player over that span would ignore aging and the time that elapsed. `K365` was specified in this protocol before any fit and relies on no outer-season, EPM or downstream result.
 
 **Why not ADR-0025.** ADR-0025 weights the 730 days *before* a cutoff to predict *later* possessions. A label needs the best description of season $s$, so it may use later eligible seasons as well (two-sided), and its penalty is chosen for in-window, not forward, accuracy.
 
@@ -56,14 +56,21 @@ $$w = 1 \text{ in season } s, \qquad w = 0.5^{\,g/365} \text{ if } 0 < g \le 730
 
 The kernel is named `K365`. A missing season therefore counts as the time that elapsed. 2007–08 rows reach no 2015–16 label (gap above seven years), and 2016–17 rows reach a 2018–19 label at 0.25 to 0.39 weight. A row of another season inside $[f_s, l_s]$ raises an error. Weights are not renormalized and penalties are not rescaled (ADR-0015). The half-life and cap are fixed here and are not tuned: 365 days gives the adjacent seasons about 0.5 to 0.8 weight and caps the reach at about two seasons on each side. The three nearest #26 candidates (`W2`, `H365`, `H730`) were a predictive near-tie, which gives no reason to prefer a different scale.
 
-**Stage 1, context offset.** Weighted least squares of the response (100 × `model_points`) on an intercept, the #24 `home_score_time` columns (home ±1, clipped pre-possession margin, period 2–4 and overtime indicators, end of period, final two minutes; built and timing-audited exactly as in #24 and #26) and indicator columns for every season-and-season-type level present in the fit rows except the first (`bil.models.rapm.context.fit_context_only`). EPM documents home-court and rubber-band adjustment in the SPM-target RAPM (Documented). The levels carry era differences in scoring and the playoff scoring level, and the offset absorbs each level's average lineup composition as well (Inferred; a joint fit is not implemented).
+**Objective (one joint fit).** With $C$ the #24 `home_score_time` columns (home ±1, clipped pre-possession margin, period 2–4 and overtime indicators, end of period, final two minutes; built and timing-audited exactly as in #24 and #26) and indicator columns for every season-and-season-type level present in the fit rows except the first,
 
-**Stage 2, players.** On the response minus the offset (without its intercept), the verified zero-prior two-penalty ridge with a free intercept, five positive offensive and five negative defensive indicators, penalties $\lambda_o$ and $\lambda_d$, and each player block centred on its unweighted mean over the fit universe (ADR-0012; `reference._solve_rapm` through `multiseason.fit_players`). Each origin builds its own design from its own eligible rows, so a later row cannot enter a column or change an earlier solve.
+$$\min_{a,\,g,\,o,\,d}\ \sum_i w_i\,(y_i - a - C_i g - X^O_i o + X^D_i d)^2 + \lambda_o \lVert o\rVert^2 + \lambda_d \lVert d\rVert^2,$$
+
+where $y$ is 100 × `model_points`, $X^O$ and $X^D$ hold the five offensive and five defensive players, and the intercept $a$ and context and level coefficients $g$ are unpenalized. EPM documents home-court and rubber-band adjustment in the SPM-target RAPM (Documented).
+
+- **Solver** (`targets.fit_joint`). The weighted span of $[1, C]$ is projected out of the player design and the response (Frisch–Waugh–Lovell). The penalized player problem is solved by sparse LSQR with each role rescaled to a unit penalty. $a$ and $g$ then follow by weighted least squares on the player residual. Columns that are zero in every fit row get coefficient 0. Each player block has zero mean over its observed players, as the free intercept implies (ADR-0012).
+- **Oracle.** A dense normal-equation solution agrees to 5e-10 or better on synthetic data, with split penalties, context and levels (`test_joint_fit_matches_a_dense_oracle`).
+- **Levels.** They carry era differences in scoring and the playoff scoring level. Because they are fitted jointly, they do not absorb player composition, except through ridge shrinkage. Unpenalized columns can still take up part of the signal that the penalty removes from correlated players (Inferred, visible in the synthetic tests).
+- **Design.** Each origin builds its design from its own eligible rows, so a later row cannot enter a column or change an earlier solve.
 
 **Penalty choice (specified in advance).** For each reference, origin and scenario, one pair $(\lambda_o, \lambda_d)$ shared by all target seasons is chosen by **five-fold game-grouped cross-validation inside the rows eligible at that origin**:
 
 - A game's fold is `int(sha256("issue-28-v1:" + game_id)) mod 5`. It is the same at every origin.
-- For fold $k$ and target $s$, both stages are fitted on the kernel rows of games outside fold $k$. The squared error is scored, unweighted, on season $s$'s rows in fold $k$. A player unseen in training contributes zero. The runner asserts that no scored row is a fit row.
+- For fold $k$ and target $s$, the joint fit uses the kernel rows of games outside fold $k$. The squared error is scored, unweighted, on season $s$'s rows in fold $k$. A player unseen in training contributes zero. The runner asserts that no scored row is a fit row.
 - The criterion is the pooled mean over every target and fold.
 - The search is the #26 one-pass coordinate search (`multiseason.search_penalties`): a shared grid {1,000, 2,000, 4,000, 8,000, 16,000, 32,000} with up to five twofold extensions off an edge, then $\lambda_d$ and then $\lambda_o$ over the factors {1/4, 1/2, 2, 4} with up to three extensions. Ties go to the smaller penalty.
 
@@ -73,7 +80,7 @@ No outer-season row, EPM value, player-level quantity, SPM result or downstream 
 
 - Points per 100 possessions. Offense positive = more points scored by the player's team; defense positive = fewer points allowed. Total = offense + defense.
 - **Centring (primary).** Within each target season, `offense` and `defense` are shifted so that their means, weighted by the player's target-season offensive and defensive possessions, are zero over the labelled players: the average possession of season $s$ is 0. `offense_raw` and `defense_raw` keep the ADR-0012 fit-universe centring, and the per-season shift between them is reported.
-- **Columns** (private `targets.csv`): version, artifact label, reference, origin, whether the origin is final, target season, verification group, player, `offense`, `defense`, `total`, `offense_raw`, `defense_raw`, target-season offensive and defensive possessions, kernel-weighted offensive and defensive exposure, number of teams in the target season, and the bootstrap standard errors (final origin only).
+- **Columns** (private `targets.csv`): version, artifact label, reference, origin, whether the origin is final, target season, verification group, player, `offense`, `defense`, `total`, `offense_raw`, `defense_raw`, target-season offensive and defensive possessions, kernel-weighted offensive and defensive exposure, number of teams in the target season, `forward_support` (whether any later season has weight), `kernel_seasons` (the seasons with weight), and the bootstrap standard errors (final origin only).
 
 ## 6. References and rolling origins
 
@@ -91,12 +98,17 @@ One **origin closes each eligible season**. Its cutoff is the day after the last
 The contiguous reference uses the last five origins; the extended reference uses all ten. The runner refuses an origin that falls after the next eligible season's first game or after 2023-07-01. A fixed 1 July boundary would cut the 2019–20 and 2020–21 playoffs, which is why the cutoffs follow the calendar.
 
 - **Unavailable origins.** No target closes 2008–09 through 2014–15 or 2017–18 in the extended reference. These origins are marked unavailable. A consumer needing a target at such a date uses the latest earlier frozen set (2007–08 or 2016–17 closure) and must say so. In each reference the first season has no earlier target, so an evaluation of that season is unavailable.
-- **One-sided labels.** At the origin closing season $s$, the label of $s$ has no later data. It gains later neighbours at later origins. Each label records its kernel seasons and whether it has forward support. How much labels move is measured in §8.
+- **One-sided labels.** At the origin closing season $s$, the label of $s$ has no later data. It gains later neighbours at later origins. Each label row records its kernel seasons and `forward_support`. How much labels move is measured in §8. #30 must register how it treats one-sided labels before fitting.
 
 ## 7. Freezing, versioning and leakage
 
-- **Version.** `issue-28-v1`. A frozen target record holds the version, reference, kernel, cutoff, closed season, seasons, penalties, row count, scenario, the artifact label, a SHA-256 of every input it read, and a SHA-256 of each season's label table.
-- **Input digest.** It covers game ID, possession sequence, season, season type, played date, period, outcome, both lineups, every context covariate, the verification flag and both teams of every eligible row, independent of row order. `verify_frozen` recomputes it from any row collection. A difference raises `FrozenTargetError`.
+- **Version.** `issue-28-v1`. A frozen target record holds:
+  - the version, reference, cutoff, closed season, seasons, penalties, row count, scenario and the artifact label;
+  - the kernel name, half-life and cap, the offset mode (`joint`), the fold count and fold salt;
+  - the code commit and this protocol's SHA-256;
+  - a SHA-256 of every input it read, and a SHA-256 of each season's label table.
+  Only primary target sets (primary kernel, joint fit, CV penalties, all rows) are frozen targets.
+- **Input digest.** It covers game ID, possession sequence, season, season type, played date, period, outcome, both lineups, every context covariate, the verification flag and both teams (raw NBA team IDs, so a later season cannot change them) of every eligible row, independent of row order. `verify_frozen` recomputes it from any row collection. A difference raises `FrozenTargetError`.
 - **Revisions.** A revised row set, a newly eligible season (for example from #53 or #99) or any other input change produces a new target version (`issue-28-v2` and later) in a new output directory. Existing targets are never silently changed (ADR-0026).
 - **Capture-bound availability.** All source revisions were captured in 2026 (`retrospective_capture_bound`). Origins filter by played date only. Revision availability before 2026 is not evidenced, so no target is a strict as-of label in the [evaluation contract's](../validation-strategy.md) sense. Every result is labelled with this evidence tier.
 - **Leakage tests** (`tests/test_rapm_targets.py`, synthetic):
@@ -107,29 +119,36 @@ The contiguous reference uses the last five origins; the extended reference uses
   - `test_chronological_registration_trains_only_on_earlier_target_sets` and the end-to-end check that evaluation labels read no row before their training origin.
   - Guards refusing 2017–18, 2023–24, 2024–25, the gap seasons and the holdout, the strata check, and the refusal to run without the committed protocol on a clean tree.
   - `test_sensitivity_fits_are_never_frozen_targets`.
+  - `test_joint_fit_matches_a_dense_oracle` and `test_joint_fit_keeps_player_quality_out_of_correlated_context`. The second test uses a context flag tied to lineup strength with a true effect of zero. The joint fit keeps the flag coefficient below half the two-stage value and recovers player effects better.
 
 ## 8. Reliability, stability and exposure
 
 All at the final origin of each reference unless stated, offense and defense always separate.
 
 - **Split-half reliability.** The games of every season are alternated in (date, game ID) order into two halves (`multiseason.split_halves`), so the two fits share no possession. Each target is refitted on each half with the frozen penalties. A role's labels are paired for players with at least 250 possessions in that role in the target season in both halves (the #23 rule). The report gives Pearson $r$ and the Spearman–Brown full-sample reliability $2r/(1+r)$, pooled and by season, era (2005–08, 2015–17, 2018–23), verification group, exposure band (target-season on-court possessions, both roles: under 2,000, 2,000–5,000, 5,000–10,000, 10,000 or more), and roster status (one team or more than one in the target season).
-- **Bootstrap standard errors.** 100 game-clustered resamples (multinomial game counts over all games eligible at the origin, seed 28 with the target season and reference). Each replicate refits both stages with the frozen penalties and centres with the full-sample exposures. Each label gets a standard error; by band, the report gives the mean standard error and $1 - \overline{SE^2}/\mathrm{Var}(\text{label})$. Ridge shrinkage makes these standard errors describe the shrunken estimator, not the error against a true effect (Inferred).
-- **Label revision across origins.** For every season and earlier origin, the label against its final-origin value: correlation and RMS difference by role and band. This measures one-sided labels and how much a newly eligible season moves earlier labels.
+- **Bootstrap standard errors.** 100 game-clustered resamples (multinomial game counts over all games eligible at the origin, seed 28 with the target season and reference). Each replicate refits the joint model with the frozen penalties and centres with the full-sample exposures. Each label gets a standard error; by band, the report gives the mean standard error and $1 - \overline{SE^2}/\mathrm{Var}(\text{label})$. Ridge shrinkage makes these standard errors describe the shrunken estimator, not the error against a true effect (Inferred).
+- **Label revision across origins.** For every season and earlier origin, the label against its final-origin value: correlation and RMS difference by role and band. This is reported twice:
+  - as frozen, with each origin's own penalties;
+  - refitted at each earlier origin with the final-origin penalties, which separates the change from new data from the change from penalty reselection.
+  It measures one-sided labels and how much a newly eligible season moves earlier labels.
+- **Year-to-year persistence.** The season-only evaluation labels (§9) of consecutive eligible seasons share no possession. The report gives correlation and RMS difference by role and band, with the elapsed days between season midpoints (one year, or more across a gap).
 - **Reference agreement.** Contiguous against extended at the final origin, for 2018–19 to 2022–23: correlation and RMS difference by role and band.
 - **Exposure effects.** By band: label count, standard deviation, mean absolute label, mean bootstrap standard error and bootstrap reliability. Low-exposure labels are expected to be shrunk toward the season average (Inferred).
 - **Era and verification.** Per season: label count, the count with at least 250 possessions in each role, players with team changes, label spread overall and for that cohort, the raw-centring shift, and the fitted level effects and context coefficients of every fit.
 
-**Sensitivity scenarios** (final origin; each reruns the whole penalty search and never changes the primary targets):
+**Sensitivity scenarios** (final origin, contiguous reference only, to bound the runtime of the joint fit; each reruns the whole penalty search and never changes the primary targets):
 
-| Scenario | References | Change |
-| --- | --- | --- |
-| `K0` | both | Target season only (no borrowing) |
-| `K730` | both | Half-life 730 days, cap 1,460 days |
-| `regular_only` | both | Playoff rows removed |
-| `pooled_window` | contiguous | One unit-weight fit over all five seasons; every season's label is the same window effect (the literal "multi-season RAPM from the same seasons") |
-| `exclude_no_livedata` | contiguous | 2018–19 and 2019–20 removed (ADR-0020 stratum), so labels exist for 2020–21 to 2022–23 only |
+| Scenario | Change |
+| --- | --- |
+| `K730` | Half-life 730 days, cap 1,460 days |
+| `regular_only` | Playoff rows removed |
+| `pooled_window` | One unit-weight fit over all five seasons; every season's label is the same window effect (the literal "multi-season RAPM from the same seasons") |
+| `exclude_no_livedata` | 2018–19 and 2019–20 removed (ADR-0020 stratum), so labels exist for 2020–21 to 2022–23 only |
+| `two_stage_offset` | The revision-1 estimator: context and levels fitted first without players, players on the residual |
 
-Each reports its penalties, its cross-validation errors and the label shift against the primary targets by season, role and band.
+Each reports its penalties, its cross-validation errors and the label shift against the primary targets by season, role and band. The season-only `K0` fit is not a sensitivity: it is the evaluation label set for both references (§9).
+
+**Pooled-window labels have no rolling-origin versions.** #30 therefore cannot make them its primary training target without an amendment to this protocol and a new run.
 
 ## 9. Cohorts and the #30 registration
 
@@ -142,9 +161,11 @@ Each reports its penalties, its cross-validation errors and the label shift agai
 | Item | Rule |
 | --- | --- |
 | Training targets | The frozen target set at the origin closing the previous eligible season, which has only seasons before $e$ |
-| Evaluation label | The season-$e$ label fitted only on rows played on or after that origin (seasons $e$ and later, up to the final origin), with the final-origin penalties of the reference. It shares no possession with any training label |
+| Evaluation label | The season-only (`K0`) label of season $e$, from the scenario `evaluation_K0` at the final origin: a joint fit on season $e$'s rows alone. Its penalties come from the same in-window cross-validation, run on the `K0` fits over all target seasons of the reference. It shares no possession with any training label and means the same thing in every fold, including the last |
 | Unavailable | The first season of each reference (2018–19 contiguous, 2005–06 extended) |
 | Outer seasons | Any #30 use of 2023–24 or 2024–25 trains on the final-origin targets (closing 2022–23) under #30's own frozen protocol. #28 reads neither season |
+
+The evaluation labels are written to the private `evaluation_labels.csv`. The report also gives their agreement with the primary final-origin labels.
 
 A same-window SPM fit on the final-origin targets is a retrospective co-window calibration, as the [evaluation contract](../validation-strategy.md) describes. It is not an out-of-time result. The extended folds for 2015–16 and 2018–19 cross the gaps and must be reported as such.
 
@@ -159,13 +180,13 @@ A same-window SPM fit on the final-origin targets is a retrospective co-window c
 
 Private, in the run directory: `targets.csv`, `evaluation_labels.csv`, `sensitivity_labels.csv` and `frozen_targets.json`. Aggregate: `results.json` and `fit_log.json`. `manifest.json` holds the pinned inputs and verified digests, timing audits, coverage, the protocol verification, code commit, library versions, runtime, peak memory and output digests. Committed reports carry aggregates only, with no named players or rankings. Source data are attributed to NBA.com and stay private under the [pilot terms](../data-pilot.md).
 
-Expected scale, estimated from #26's real fit times (0.2 to 0.7 s per fit of 0.4 to 1.1 million rows) and the 2.4 GB loader peak: about 12,000 sparse fits and two to three hours. This is an estimate, not a measurement.
+Expected scale: about 11,000 sparse fits. The 2.4 GB loader peak was measured. The joint projection adds a dense rank-about-20 projection and a QR to each fit, so the estimate is one to two seconds per fit of 0.4 to 1.1 million rows (#26's intercept-only fits took 0.2 to 0.7 s), or about three to six hours. This is an estimate, not a measurement.
 
 ## 12. Open questions (not decided by the run)
 
 - Whether the season-centred label (`K365`) or a window-constant label (`pooled_window`) better serves SPM. This protocol fixes `K365` as primary and reports `pooled_window` only as a sensitivity. #30 must register which label it trains on before fitting.
 - Label reliability weights for SPM (EPM-U03). The targets supply exposures and bootstrap standard errors; #30 registers how to use them.
-- The two-stage context offset against a joint fit, and whether the home effect should vary by era (it is common within each fit).
+- Whether the home effect should vary by era (it is common within each fit). The two-stage alternative is reported as a sensitivity only.
 - Neutral sites are uncoded (every pilot has null flags), including the 2019–20 bubble.
 - The extended reference crosses a seven-season gap. Its 2005–08 labels describe a different era and box-score environment, so #30 must decide whether to pool them with modern seasons.
 
@@ -173,5 +194,28 @@ Expected scale, estimated from #26's real fit times (0.2 to 0.7 s per fit of 0.4
 | --- | --- |
 | Box-score SPM trained on long-window independent RAPM with home and score-state adjustment, playoffs included | **Documented** (EPM methodology) |
 | Sparse ridge solver, centring, dated clock | **Documented** in this repository ([#6](rapm-synthetic.md), [#64](rapm-dated-weights.md)) |
-| Season-centred elapsed-time kernel, two-stage offset with season levels, in-window CV penalties, origins, centring, reliability design, cohorts | **Original** |
+| Season-centred elapsed-time kernel, joint context and season-level fit, in-window CV penalties, origins, centring, reliability design, cohorts | **Original** |
 | Every number the run produces | **Experimental**, retrospective (`retrospective_capture_bound`) |
+
+## 13. Revision history
+
+Both revisions were committed before any real-data target fit. No real target, RAPM or SPM fit, and no outcome aggregate, informed either one.
+
+| Revision | Commit | Change |
+| --- | --- | --- |
+| 1 | `0195f99` | Initial protocol |
+| 2 | this commit | Changes after the independent protocol review of revision 1, listed below |
+
+Revision 2 changes:
+
+- **Evaluation label (review blocker 1).** Revision 1's evaluation label borrowed forward from seasons $e+1$ and $e+2$ with no past borrowing. It had no borrowing at all in the 2022–23 fold, and it used penalties chosen for a different kernel, so its meaning changed by fold. It is replaced by the season-only `K0` label with its own cross-validated penalties (§9).
+- **Joint context fit (review blocker 2).** Revision 1 fitted the context columns without players. That let them absorb rotation and quality composition, such as leading teams, closing lineups or second-quarter benches. The context and level columns are now unpenalized and fitted jointly with the players (§4). The fit is tested against a dense oracle, and the two-stage fit remains a sensitivity.
+- **Recommended changes adopted from the review:**
+  - §3 states that `K365` was specified in advance.
+  - Pooled-window labels have no rolling-origin versions (§8).
+  - `forward_support` and `kernel_seasons` are written to `targets.csv`, and #30 must register how it treats one-sided labels.
+  - Label revisions are also reported under the frozen final penalties.
+  - Year-to-year persistence of the non-overlapping `K0` labels is reported.
+  - The digest uses raw team IDs.
+  - Frozen records carry the kernel parameters, fold salt, offset mode, code commit and protocol digest.
+- **Runtime.** The `K730` and `regular_only` sensitivities run on the contiguous reference only.

@@ -5,9 +5,9 @@ methodology replication**, not a full historical EPM replication (ADR-0026).
 
 A target is a retrospective label, not a forecast. For each reference (``contiguous`` or
 ``extended``), each rolling origin and each eligible target season, the runner fits a
-season-centred, elapsed-time-weighted zero-prior ridge RAPM with a fitted context offset
-(home, score state, game time and season-by-season-type levels) and keeps offensive and
-defensive labels separately. Penalties are chosen at each origin by game-grouped
+season-centred, elapsed-time-weighted zero-prior ridge RAPM with unpenalized context columns
+(home, score state, game time and season-by-season-type levels) fitted jointly with the players,
+and keeps offensive and defensive labels separately. Penalties are chosen at each origin by game-grouped
 cross-validation inside the rows eligible at that origin. Origins only ever see rows played
 strictly before their cutoff, and every frozen target records the digest of its inputs.
 
@@ -31,6 +31,7 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.sparse.linalg import LinearOperator, lsqr  # type: ignore[import-untyped]
 
 from bil.models.rapm.baseline import EVIDENCE_TIER, _peak_memory_mib, _sha256
 from bil.models.rapm.multiseason import (
@@ -170,7 +171,8 @@ class Kernel:
 
 
 PRIMARY_KERNEL = Kernel("K365", 365.0, 730.0)
-SENSITIVITY_KERNELS = (Kernel("K0", None, 0.0), Kernel("K730", 730.0, 1460.0))
+SEASON_ONLY_KERNEL = Kernel("K0", None, 0.0)
+WIDE_KERNEL = Kernel("K730", 730.0, 1460.0)
 POOLED_KERNEL = Kernel("POOLED", None, float("inf"))
 
 
@@ -371,22 +373,113 @@ class OffsetModel:
         return out
 
 
+def level_columns(level: NDArray[np.int64]) -> tuple[tuple[int, ...], NDArray[np.float64]]:
+    """Indicator columns of every season-type level in the rows except the first (baseline)."""
+    levels = tuple(int(v) for v in np.unique(level).tolist())
+    if len(levels) == 1:
+        return levels, np.zeros((level.size, 0))
+    return levels, np.column_stack([(level == code).astype(np.float64) for code in levels[1:]])
+
+
 def fit_offset(
     context: NDArray[np.float64],
     level: NDArray[np.int64],
     response: NDArray[np.float64],
     weights: NDArray[np.float64],
 ) -> OffsetModel:
-    """Fit the offset on the fit rows; levels absent from them are not estimated."""
-    levels = tuple(int(v) for v in np.unique(level).tolist())
-    dummies = (
-        np.column_stack([(level == code).astype(np.float64) for code in levels[1:]])
-        if len(levels) > 1
-        else np.zeros((level.size, 0))
-    )
+    """Two-stage sensitivity only: the context and levels fitted without players."""
+    levels, dummies = level_columns(level)
     intercept, gamma = fit_context(np.column_stack([context, dummies]), response, weights)
     k = context.shape[1]
     return OffsetModel(intercept, gamma[:k], levels, gamma[k:])
+
+
+_CONVERGED = {0, 1, 2, 4, 5}
+_RANK_TOLERANCE = 1e-10
+
+
+def fit_joint(
+    design: Design,
+    index: NDArray[np.int64],
+    response: NDArray[np.float64],
+    weights: NDArray[np.float64],
+    unpenalized: NDArray[np.float64],
+    offense_ridge: float,
+    defense_ridge: float,
+) -> tuple[PlayerFit, NDArray[np.float64]]:
+    """Two-penalty player ridge with an unpenalized intercept and columns ``C``, fitted jointly.
+
+    Minimizes ``sum w (y - a - C g - X b)^2 + l_o |b_o|^2 + l_d |b_d|^2`` over ``a``, ``g`` and
+    ``b``. The weighted span of ``[1, C]`` is projected out of the player design and response
+    (Frisch-Waugh-Lovell), the penalized player problem is solved by sparse LSQR with each role
+    rescaled to a unit penalty, and ``a`` and ``g`` follow by weighted least squares on the
+    player residual. Columns of ``C`` that are zero in every fit row get coefficient 0. Each
+    player block has zero mean over its observed players, as the free intercept implies.
+    """
+    for role, ridge in (("offense", offense_ridge), ("defense", defense_ridge)):
+        if not np.isfinite(ridge) or ridge <= 0:
+            raise ValueError(f"{role} ridge must be positive and finite")
+    n = index.size
+    if n == 0 or response.shape != (n,) or weights.shape != (n,) or unpenalized.shape[0] != n:
+        raise ValueError("response, weights and unpenalized columns must align with the rows")
+    if np.any(weights <= 0) or not np.all(np.isfinite(weights)):
+        raise ValueError("fit weights must be positive and finite")
+    started = time.perf_counter()
+    keep = np.any(unpenalized != 0, axis=0)
+    root = np.sqrt(weights)
+    columns = np.column_stack((np.ones(n), unpenalized[:, keep])) * root[:, None]
+    q, r = np.linalg.qr(columns)
+    diagonal = np.abs(np.diag(r))
+    if diagonal.min() <= _RANK_TOLERANCE * diagonal.max():
+        raise ValueError("unpenalized columns are collinear with each other or the intercept")
+    m = design.size
+    players = design.players[index]
+    scales = np.concatenate(
+        (np.full(m, 1.0 / np.sqrt(offense_ridge)), np.full(m, 1.0 / np.sqrt(defense_ridge)))
+    )
+    scaled = players.multiply(root[:, None]).tocsr().multiply(scales).tocsr()
+    used = np.bincount(players.indices, minlength=2 * m) > 0
+
+    def project(values: NDArray[np.float64]) -> NDArray[np.float64]:
+        projected: NDArray[np.float64] = values - q @ (q.T @ values)
+        return projected
+
+    def matvec(coefficients: NDArray[np.float64]) -> NDArray[np.float64]:
+        return np.concatenate((project(scaled @ coefficients), coefficients))
+
+    def rmatvec(values: NDArray[np.float64]) -> NDArray[np.float64]:
+        back: NDArray[np.float64] = scaled.T @ project(values[:n])
+        return back + values[n:]
+
+    system = LinearOperator((n + 2 * m, 2 * m), matvec=matvec, rmatvec=rmatvec, dtype=np.float64)
+    response_scale = float(np.max(np.abs(response))) or 1.0
+    target = np.concatenate((project(root * (response / response_scale)), np.zeros(2 * m)))
+    result = lsqr(system, target, atol=1e-12, btol=1e-12)
+    solution, stop = result[0], result[1]
+    if stop not in _CONVERGED or not np.all(np.isfinite(solution)):
+        raise RuntimeError(f"joint RAPM solve failed to converge (LSQR stop {stop})")
+    effects = solution * scales * response_scale
+    for block in (slice(0, m), slice(m, 2 * m)):
+        active = used[block]
+        values = effects[block]
+        values[active] -= np.mean(values[active])
+        values[~active] = 0.0
+    residual = response - players @ effects
+    coefficients = np.linalg.solve(r, q.T @ (root * residual))
+    gamma = np.zeros(unpenalized.shape[1], dtype=np.float64)
+    gamma[keep] = coefficients[1:]
+    counts = np.asarray(design.on_court[index].sum(axis=0), dtype=np.float64).ravel()
+    exposure = counts[:m] + counts[m:]
+    info = {
+        "stop": float(stop),
+        "iterations": float(result[2]),
+        "scaled_residual_norm": float(result[3]),
+        "condition_estimate": float(result[6]),
+        "fit_seconds": time.perf_counter() - started,
+        "rows": float(n),
+    }
+    fit = PlayerFit(float(coefficients[0]), effects, exposure > 0, exposure, info)
+    return fit, gamma
 
 
 @dataclass
@@ -413,6 +506,7 @@ class OriginData:
     digest: str
     log: list[dict[str, Any]]
     label: str = ""
+    offset_mode: str = "joint"  # "joint" (primary) or "two_stage" (sensitivity)
     _kernels: dict[tuple[int, str], NDArray[np.float64]] = field(default_factory=dict)
     _offsets: dict[tuple[Any, ...], OffsetModel] = field(default_factory=dict)
 
@@ -435,6 +529,7 @@ def origin_data(
     mask: NDArray[np.bool_],
     log: list[dict[str, Any]],
     label: str = "",
+    offset_mode: str = "joint",
 ) -> OriginData:
     """Restrict to ``mask`` and build everything a set of target fits reads."""
     if not mask.any():
@@ -452,6 +547,7 @@ def origin_data(
         digest=input_digest(sub, teams[mask]),
         log=log,
         label=label,
+        offset_mode=offset_mode,
     )
 
 
@@ -467,7 +563,12 @@ def fit_season(
     cache_key: tuple[Any, ...] | None = None,
     note: str = "",
 ) -> SeasonFit:
-    """Fit the context offset, then the two-penalty player ridge, on the kernel rows."""
+    """Fit the players, context and season-type levels on the kernel rows.
+
+    The primary ``joint`` mode estimates the unpenalized context and level columns together
+    with the penalized players. ``two_stage`` (sensitivity only) fits them first, without
+    players, and the players on the residual.
+    """
     weights = od.kernel(target, kernel).copy()
     if keep is not None:
         weights[~keep] = 0.0
@@ -478,20 +579,37 @@ def fit_season(
         raise ValueError(f"no rows of target season {target} in the fit")
     w = weights[index]
     rows = od.rows
-    key = None if cache_key is None else (target, kernel.name, *cache_key)
-    if key is not None and key in od._offsets:
-        offset = od._offsets[key]
+    if od.offset_mode == "joint":
+        levels, dummies = level_columns(od.level[index])
+        players, gamma = fit_joint(
+            od.design,
+            index,
+            rows.y[index],
+            w,
+            np.column_stack([rows.context[index], dummies]),
+            offense_ridge,
+            defense_ridge,
+        )
+        k = rows.context.shape[1]
+        offset = OffsetModel(players.intercept, gamma[:k], levels, gamma[k:])
+    elif od.offset_mode == "two_stage":
+        key = None if cache_key is None else (target, kernel.name, *cache_key)
+        if key is not None and key in od._offsets:
+            offset = od._offsets[key]
+        else:
+            offset = fit_offset(rows.context[index], od.level[index], rows.y[index], w)
+            if key is not None:
+                od._offsets[key] = offset
+        response = rows.y[index] - offset.offset(rows.context[index], od.level[index])
+        players = fit_players(od.design, index, response, w, offense_ridge, defense_ridge)
     else:
-        offset = fit_offset(rows.context[index], od.level[index], rows.y[index], w)
-        if key is not None:
-            od._offsets[key] = offset
-    response = rows.y[index] - offset.offset(rows.context[index], od.level[index])
-    players = fit_players(od.design, index, response, w, offense_ridge, defense_ridge)
+        raise ValueError(f"unknown offset mode {od.offset_mode}")
     od.log.append(
         {
             "origin": od.label,
             "target": target,
             "kernel": kernel.name,
+            "offset_mode": od.offset_mode,
             "offense_ridge": offense_ridge,
             "defense_ridge": defense_ridge,
             "note": note,
@@ -648,11 +766,16 @@ def label_digest(table: Mapping[str, NDArray[Any]]) -> str:
 
 @dataclass(frozen=True, slots=True)
 class FrozenTarget:
-    """The record that pins a target set to the exact rows it was fitted on."""
+    """The record that pins a target set to the exact rows and rules it was fitted with."""
 
     version: str
     reference: str
     kernel: str
+    kernel_half_life_days: float | None
+    kernel_cap_days: float
+    offset_mode: str
+    cv_folds: int
+    fold_salt: str
     cutoff: str
     closes_season: int
     seasons: tuple[int, ...]
@@ -662,6 +785,8 @@ class FrozenTarget:
     label_digests: dict[int, str]
     rows: int
     scenario: str = "primary"
+    code_commit: str = ""
+    protocol_sha256: str = ""
     artifact_label: str = ARTIFACT_LABEL
 
 
@@ -675,18 +800,27 @@ def build_target_set(
     penalties: tuple[float, float] | None = None,
     available: NDArray[np.bool_] | None = None,
     scenario: str = "primary",
+    offset_mode: str = "joint",
+    provenance: Mapping[str, str] | None = None,
 ) -> tuple[FrozenTarget, dict[int, dict[str, NDArray[Any]]], OriginData, dict[str, Any]]:
     """Fit every eligible target season at one origin and freeze the result.
 
     Only rows of the reference seasons played strictly before the origin's cutoff are read,
-    so rows played later, or any change to them, cannot change the result. A sensitivity
-    scenario (``available`` or a non-primary kernel) is recorded and is never a frozen target.
+    so rows played later, or any change to them, cannot change the result. Any other fit
+    (a restricted row set, a non-primary kernel, the two-stage offset or fixed penalties)
+    must name its scenario and is never a frozen target.
     """
-    if (available is not None or kernel != PRIMARY_KERNEL) and scenario == "primary":
-        raise ValueError("a restricted or non-primary fit must name its sensitivity scenario")
+    primary_rules = (
+        available is None
+        and kernel == PRIMARY_KERNEL
+        and offset_mode == "joint"
+        and penalties is None
+    )
+    if not primary_rules and scenario == "primary":
+        raise ValueError("a non-primary fit must name its scenario")
     seasons = REFERENCES[origin.reference]
     mask = eligible_mask(rows, seasons, origin.cutoff, available)
-    od = origin_data(rows, teams, mask, log, label=origin.key)
+    od = origin_data(rows, teams, mask, log, label=origin.key, offset_mode=offset_mode)
     if int(np.max(od.rows.day)) >= origin.cutoff.toordinal():
         raise AssertionError("a target row is not strictly before its origin")
     search: dict[str, Any] = {}
@@ -703,6 +837,11 @@ def build_target_set(
         version=TARGET_VERSION,
         reference=origin.reference,
         kernel=kernel.name,
+        kernel_half_life_days=kernel.half_life_days,
+        kernel_cap_days=kernel.cap_days,
+        offset_mode=offset_mode,
+        cv_folds=CV_FOLDS,
+        fold_salt=FOLD_SALT,
         cutoff=origin.cutoff.isoformat(),
         closes_season=origin.closes_season,
         seasons=tuple(od.seasons),
@@ -712,28 +851,39 @@ def build_target_set(
         label_digests={s: label_digest(t) for s, t in tables.items()},
         rows=len(od.rows),
         scenario=scenario,
+        code_commit=(provenance or {}).get("code_commit", ""),
+        protocol_sha256=(provenance or {}).get("protocol_sha256", ""),
     )
-    search["fits"] = {
-        str(s): {
+    search["fits"] = {}
+    for s, f in fits.items():
+        kernel_seasons = sorted(np.unique(od.rows.season[f.index]).tolist())
+        forward = bool(np.any(od.rows.season[f.index] > s))
+        size = tables[s]["player_id"].size
+        tables[s]["forward_support"] = np.full(size, forward)
+        tables[s]["kernel_seasons"] = np.full(
+            size, ";".join(map(str, kernel_seasons)), dtype=object
+        )
+        search["fits"][str(s)] = {
             "intercept": f.players.intercept,
-            "offset_intercept": f.offset.intercept,
             "context": f.offset.context.tolist(),
             "level_effects": dict(
                 zip(map(str, f.offset.levels[1:]), f.offset.level_effects.tolist(), strict=True)
             ),
             "rows": int(f.index.size),
             "total_weight": float(f.weights.sum()),
-            "kernel_seasons": sorted(np.unique(od.rows.season[f.index]).tolist()),
-            "forward_support": bool(np.any(od.rows.season[f.index] > s)),
+            "kernel_seasons": kernel_seasons,
+            "forward_support": forward,
         }
-        for s, f in fits.items()
-    }
     return frozen, tables, od, search
 
 
 def verify_frozen(frozen: FrozenTarget, rows: Rows, teams: NDArray[np.int64]) -> None:
     """Raise unless the rows a frozen target reads are byte-for-byte those it was fitted on."""
-    if frozen.scenario != "primary" or frozen.kernel != PRIMARY_KERNEL.name:
+    if (
+        frozen.scenario != "primary"
+        or frozen.kernel != PRIMARY_KERNEL.name
+        or frozen.offset_mode != "joint"
+    ):
         raise FrozenTargetError("only primary target sets are frozen targets")
     cutoff = date.fromisoformat(frozen.cutoff)
     mask = eligible_mask(rows, REFERENCES[frozen.reference], cutoff)
@@ -891,7 +1041,7 @@ def bootstrap_labels(
     """Game-clustered bootstrap standard errors of each label (multinomial game counts).
 
     Each replicate redraws the games of the origin's rows with replacement, multiplies the
-    kernel weights by the game counts and refits the offset and players with the frozen
+    kernel weights by the game counts and refits the joint model with the frozen
     penalties. Labels are centred with the full-sample target-season exposures.
     """
     out: dict[int, dict[str, NDArray[np.float64]]] = {}
@@ -1004,6 +1154,42 @@ class ReferenceResult:
     summary: dict[str, Any]
 
 
+EVALUATION_SCENARIO = "evaluation_K0"
+
+
+def sensitivity_scenarios(
+    reference: str, rows: Rows
+) -> list[tuple[str, Kernel, NDArray[np.bool_] | None, str]]:
+    """Final-origin sensitivities: (name, kernel, available rows, offset mode)."""
+    if reference != "contiguous":
+        return []
+    return [
+        ("K730", WIDE_KERNEL, None, "joint"),
+        ("regular_only", PRIMARY_KERNEL, ~rows.playoff, "joint"),
+        ("pooled_window", POOLED_KERNEL, None, "joint"),
+        ("exclude_no_livedata", PRIMARY_KERNEL, ~rows.no_livedata, "joint"),
+        ("two_stage_offset", PRIMARY_KERNEL, None, "two_stage"),
+    ]
+
+
+def year_to_year(
+    tables: Mapping[int, Mapping[str, NDArray[Any]]], calendar: Mapping[int, tuple[date, date]]
+) -> dict[str, Any]:
+    """Consecutive eligible seasons' season-only labels: disjoint data, real elapsed years."""
+    seasons = sorted(tables)
+    out: dict[str, Any] = {}
+    for a, b in zip(seasons, seasons[1:], strict=False):
+        out[f"{a}->{b}"] = {
+            "elapsed_days_between_season_midpoints": (
+                calendar[b][0]
+                + (calendar[b][1] - calendar[b][0]) / 2
+                - (calendar[a][0] + (calendar[a][1] - calendar[a][0]) / 2)
+            ).days,
+            **compare_labels(tables[a], tables[b]),
+        }
+    return out
+
+
 def run_reference(
     rows: Rows,
     teams: NDArray[np.int64],
@@ -1012,6 +1198,7 @@ def run_reference(
     log: list[dict[str, Any]],
     *,
     bootstrap_replicates: int = BOOTSTRAP_REPLICATES,
+    provenance: Mapping[str, str] | None = None,
 ) -> ReferenceResult:
     """Every rolling origin, then reliability, evaluation labels and sensitivities at the last."""
     origins = origin_schedule(reference, calendar)
@@ -1021,7 +1208,7 @@ def run_reference(
     final_od: OriginData | None = None
     for origin in origins:
         record, origin_tables, od, search = build_target_set(
-            rows, teams, origin, PRIMARY_KERNEL, log
+            rows, teams, origin, PRIMARY_KERNEL, log, provenance=provenance
         )
         frozen.append(record)
         tables[origin.key] = origin_tables
@@ -1056,49 +1243,64 @@ def run_reference(
         reference=reference,
     )
 
-    # Label revision as later seasons arrive (one-sided labels at early origins).
+    # Label revision as later seasons arrive: as frozen (each origin's own penalties), and
+    # refitted with the final penalties so that data change is separated from penalty change.
     revision: dict[str, Any] = {}
+    revision_fixed: dict[str, Any] = {}
     for origin in origins[:-1]:
-        for season, table in tables[origin.key].items():
-            revision[f"{season}@{origin.cutoff.isoformat()}"] = compare_labels(
-                table, final_tables[season]
-            )
-
-    # Evaluation labels for #30: each season from rows on or after the previous origin only.
-    eval_tables: dict[int, dict[str, NDArray[Any]]] = {}
-    eval_meta: dict[str, Any] = {}
-    for previous, origin in zip(origins, origins[1:], strict=False):
-        later = final_od.rows.day >= previous.cutoff.toordinal()
-        fit = fit_season(
-            final_od, origin.closes_season, PRIMARY_KERNEL, *penalties, keep=later, note="eval"
+        _, fixed_tables, _, _ = build_target_set(
+            rows,
+            teams,
+            origin,
+            PRIMARY_KERNEL,
+            log,
+            penalties=penalties,
+            scenario="revision_final_penalties",
         )
-        if int(np.min(final_od.rows.day[fit.index])) < previous.cutoff.toordinal():
-            raise AssertionError("an evaluation label read a row before its training origin")
-        eval_tables[origin.closes_season] = labels(final_od, fit, later)
-        eval_meta[str(origin.closes_season)] = {
-            "training_origin": previous.key,
-            "rows_from": previous.cutoff.isoformat(),
-            "kernel_seasons": sorted(np.unique(final_od.rows.season[fit.index]).tolist()),
-            "labels": int(eval_tables[origin.closes_season]["player_id"].size),
-        }
+        for season, table in tables[origin.key].items():
+            key = f"{season}@{origin.cutoff.isoformat()}"
+            revision[key] = compare_labels(table, final_tables[season])
+            revision_fixed[key] = compare_labels(fixed_tables[season], final_tables[season])
+
+    # Evaluation labels for #30: season-only (K0) labels at the final origin with their own
+    # cross-validated penalties. Each uses only its own season's rows.
+    eval_record, eval_tables, _, eval_search = build_target_set(
+        rows, teams, origins[-1], SEASON_ONLY_KERNEL, log, scenario=EVALUATION_SCENARIO
+    )
+    for season, table in eval_tables.items():
+        if table["kernel_seasons"][0] != str(season):
+            raise AssertionError("an evaluation label read a row of another season")
+    eval_meta = {
+        "scenario": EVALUATION_SCENARIO,
+        "kernel": eval_record.kernel,
+        "offense_ridge": eval_record.offense_ridge,
+        "defense_ridge": eval_record.defense_ridge,
+        "cv_mse": eval_search.get("cv_mse"),
+        "label_counts": {str(s): int(t["player_id"].size) for s, t in eval_tables.items()},
+        "year_to_year": year_to_year(eval_tables, calendar),
+        "primary_vs_season_only": {
+            str(s): compare_labels(final_tables[s], t) for s, t in eval_tables.items()
+        },
+    }
 
     # Sensitivities at the final origin; each reselects its penalties by the same CV.
     sensitivity_tables: dict[str, dict[int, dict[str, NDArray[Any]]]] = {}
     sensitivity: dict[str, Any] = {}
-    scenarios: list[tuple[str, Kernel, NDArray[np.bool_] | None]] = [
-        (k.name, k, None) for k in SENSITIVITY_KERNELS
-    ]
-    scenarios.append(("regular_only", PRIMARY_KERNEL, ~rows.playoff))
-    if reference == "contiguous":
-        scenarios.append(("pooled_window", POOLED_KERNEL, None))
-        scenarios.append(("exclude_no_livedata", PRIMARY_KERNEL, ~rows.no_livedata))
-    for name, kernel, available in scenarios:
+    for name, kernel, available, mode in sensitivity_scenarios(reference, rows):
         record, scenario_tables, _, search = build_target_set(
-            rows, teams, origins[-1], kernel, log, available=available, scenario=name
+            rows,
+            teams,
+            origins[-1],
+            kernel,
+            log,
+            available=available,
+            scenario=name,
+            offset_mode=mode,
         )
         sensitivity_tables[name] = scenario_tables
         sensitivity[name] = {
             "kernel": kernel.name,
+            "offset_mode": mode,
             "offense_ridge": record.offense_ridge,
             "defense_ridge": record.defense_ridge,
             "rows": record.rows,
@@ -1122,6 +1324,7 @@ def run_reference(
         "exposure": exposure_summary(final_tables, errors),
         "seasons_final": season_summary(final_tables),
         "label_revision_vs_final": revision,
+        "label_revision_vs_final_fixed_penalties": revision_fixed,
         "evaluation_labels": eval_meta,
         "sensitivity": sensitivity,
     }
@@ -1144,8 +1347,11 @@ def chronological_registration(
                     "training_seasons": [
                         s for s in REFERENCES[reference] if s <= previous.closes_season
                     ],
-                    "evaluation_label": f"{reference}:eval:{origin.closes_season}",
-                    "evaluation_rows_from": previous.cutoff.isoformat(),
+                    "evaluation_label": (
+                        f"{reference}:{EVALUATION_SCENARIO}@{origins[-1].key}:"
+                        f"{origin.closes_season}"
+                    ),
+                    "evaluation_label_rows": f"season {origin.closes_season} only",
                 }
             )
         out[reference] = {
@@ -1203,9 +1409,13 @@ def check_strata(season: int, strata: Mapping[str, int]) -> None:
 
 
 def team_codes(offense_team: NDArray[Any], game: NDArray[np.int64]) -> NDArray[np.int64]:
-    """Offense and defense team code per row, the defense being the game's other team."""
-    _, offense = np.unique(np.asarray(offense_team).astype(str), return_inverse=True)
-    offense = offense.astype(np.int64)
+    """Raw numeric offense and defense team IDs per row; the defense is the game's other team.
+
+    Raw IDs, not codes built from every loaded season, so a later season cannot change them.
+    """
+    offense = np.array([int(str(t)) for t in np.asarray(offense_team).tolist()], dtype=np.int64)
+    if offense.size and int(np.min(offense)) <= 0:
+        raise ValueError("team IDs must be positive integers")
     games = int(np.max(game)) + 1
     low = np.full(games, np.iinfo(np.int64).max)
     high = np.full(games, np.iinfo(np.int64).min)
@@ -1229,6 +1439,10 @@ def verify_protocol(
         raise ProtocolError(str(exc).replace("addendum", "protocol")) from exc
 
 
+def _cell(value: Any) -> Any:
+    return value.item() if isinstance(value, np.generic) else value
+
+
 def _write_tables(
     path: Path, tables: Iterable[tuple[Mapping[str, Any], Mapping[str, NDArray[Any]]]]
 ) -> None:
@@ -1241,7 +1455,7 @@ def _write_tables(
                 keys = list(meta) + columns
                 writer.writerow(keys)
             for i in range(table["player_id"].size):
-                writer.writerow([*meta.values(), *(table[c][i].item() for c in columns)])
+                writer.writerow([*meta.values(), *(_cell(table[c][i]) for c in columns)])
 
 
 def main_run(
@@ -1253,6 +1467,7 @@ def main_run(
 ) -> dict[str, Any]:
     """The single phase-2 run: refuses without the committed protocol on a clean tree."""
     freeze = verify_protocol(protocol, protocol_sha256, repo)
+    provenance = {"code_commit": freeze["head_commit"], "protocol_sha256": freeze["sha256"]}
     started = time.perf_counter()
     output_dir.mkdir(parents=True, exist_ok=False)
     temp = output_dir / "duckdb_tmp"
@@ -1289,7 +1504,7 @@ def main_run(
     sens_out: list[tuple[Mapping[str, Any], Mapping[str, NDArray[Any]]]] = []
     finals: dict[str, dict[int, dict[str, NDArray[Any]]]] = {}
     for reference in REFERENCES:
-        result = run_reference(rows, teams, reference, calendar, log)
+        result = run_reference(rows, teams, reference, calendar, log, provenance=provenance)
         results["references"][reference] = result.summary
         frozen.extend(result.frozen)
         final_key = result.summary["final_origin"]
@@ -1316,11 +1531,31 @@ def main_run(
                 }
                 outputs.append((meta, {**table, **extra}))
         for season, table in sorted(result.eval_tables.items()):
-            eval_out.append(({"reference": reference, "evaluation_season": season}, table))
+            eval_out.append(
+                (
+                    {
+                        "version": TARGET_VERSION,
+                        "artifact_label": ARTIFACT_LABEL,
+                        "reference": reference,
+                        "scenario": EVALUATION_SCENARIO,
+                        "origin": final_key,
+                        "evaluation_season": season,
+                    },
+                    table,
+                )
+            )
         for name, by_season in result.sensitivity_tables.items():
             for season, table in sorted(by_season.items()):
                 sens_out.append(
-                    ({"reference": reference, "scenario": name, "target_season": season}, table)
+                    (
+                        {
+                            "artifact_label": ARTIFACT_LABEL,
+                            "reference": reference,
+                            "scenario": name,
+                            "target_season": season,
+                        },
+                        table,
+                    )
                 )
     common = {
         str(s): compare_labels(finals["contiguous"][s], finals["extended"][s])
