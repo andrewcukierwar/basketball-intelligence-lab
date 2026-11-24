@@ -36,3 +36,12 @@ Apply the six nonblocking review findings in #80 without changing behaviour on r
 ## Blockers and remaining risks
 
 Independent review not yet done.
+
+## Independent review
+
+A fresh Opus reviewer approved 4ae9f48 with no blocking findings. It confirmed the following:
+- All six acceptance items are done.
+- Downstream consumers are safe when quarantined games have null home and away fields.
+- `evidence` on the 2022–23 build `issue-19-v6` exits 0, with liveData-unavailable count 0 and Bentes agreement 2/2 and 33/33.
+
+Following its first nonblocking note, the lead made `rapm_rows._tally` coalesce a null final to 0. A future undesignated game would otherwise raise `TypeError`. Only the unit test reaches the new `starter_agreement` raise, because both inferred team-periods in 2022–23 are in period 1.
