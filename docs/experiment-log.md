@@ -251,7 +251,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0015 — Multi-season RAPM: temporal weighting, split penalties and outer validation, 2018–19 through 2024–25
 
-- **Status:** Completed. Development and outer runs each ran once. Independent review not yet run.
+- **Status:** Completed. Development and outer runs each ran once. Independently reviewed (approved).
 - **Date:** 2026-11-24.
 - **Research question:** Which window or exponential decay, with separate offense and defense penalties, best predicts held-out possession scoring in chronological development folds? Does the frozen choice beat the league mean and the #24 context-only comparator in 2023–24 and 2024–25?
 - **Category:** Experimental (retrospective replay, realized lineups), Original design.

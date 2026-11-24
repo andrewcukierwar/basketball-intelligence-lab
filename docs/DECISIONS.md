@@ -325,7 +325,7 @@ V2 remains the event source of record.
 ## ADR-0025 — Two-season unit-weight window with split penalties for the multi-season RAPM baseline
 
 - **Date:** 2026-11-24
-- **Status:** Proposed for the M2 baseline ([#26](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/26)). Independent review pending.
+- **Status:** Proposed for the M2 baseline ([#26](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/26)). Independently reviewed (approved). Awaiting maintainer acceptance.
 - **Evidence class:** Original BIL design, Experimental evidence.
 - **Context:** Multi-season RAPM needs a temporal weighting and penalties chosen without outer-season or EPM information. #77's split penalties are not merged. ADR-0015 leaves the half-life free and the weights unnormalized.
 - **Decision:**
@@ -337,7 +337,7 @@ V2 remains the event source of record.
   - Outer seasons: −23.4 (−26.5 to −20.3) against the league mean and +8.8 (+4.1 to +13.7) against the context-only comparator, regular season. Player RAPM with a context offset beats context by 24.7. [Report](research/rapm-multiseason.md)
 - **Consequences:**
   - The defense penalty is twice the offense penalty, and defense-only predictions still do not beat the league mean.
-  - Player RAPM alone is not better than context-only possession scoring on the canonical rows. Later informed-RAPM work should compare against the context offset model, not plain RAPM.
+  - Player RAPM alone is not better than context-only possession scoring on the canonical rows. Proposal, informed by outer-validation evidence: later informed-RAPM work could compare against the context offset model rather than plain RAPM.
   - The selection is a near-tie, so `W3`, `H365` and `H730` are acceptable alternatives on this evidence.
 - **Links:** [Protocol](research/rapm-multiseason-protocol.md), [Addendum](research/rapm-multiseason-outer-addendum.md), [ADR-0015](decisions/0015-dated-rapm-clock-and-decay.md), [ADR-0019](#adr-0019--keep-run-outs-in-rapm-model-rows-and-exclude-only-verified-pseudo-possessions)
 

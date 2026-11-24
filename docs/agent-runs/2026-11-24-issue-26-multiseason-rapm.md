@@ -70,7 +70,7 @@ Fit multi-season zero-prior RAPM, compare windows and exponential decay with sep
 | Development run (clean tree, `ec4f127`) | 1,156 s, peak RSS 3.10 GB. 3,970 fits, all converged, median 0.24 s. The largest fit (1.07 M rows) took 0.67 s |
 | Outer run (clean tree, `57fe88e`, addendum checks passed) | 11.7 s, peak RSS 2.93 GB, 20 fits |
 
-Independent review has not been run.
+A fresh Opus reviewer approved with no blocking findings. It recomputed the 2023–24 regular-season delta (−21.30, an exact match) and verified the phase ordering from commit and file timestamps. It also confirmed that one development run and one outer run were made, and that `src` is unchanged after ec4f127. Non-blocking: the excluded league-slope bootstrap leaves a `NaN` in results.json, and future runners should assert their constants against the addendum.
 
 ## Blockers and remaining risks
 

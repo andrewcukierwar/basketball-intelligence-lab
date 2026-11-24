@@ -152,7 +152,7 @@ These are the frozen `W2` RAPM model ($\lambda_o$ = 4,000, $\lambda_d$ = 8,000) 
 | 2024–25 regular | 1,230 | 1,205 | 25 | 208,155 | 30,714 (14.8%) |
 | 2024–25 playoffs | 84 | 84 | 0 | 13,785 | 0 |
 
-Every eligible canonical row was scored. Most unseen-player possessions come from players new to the league, or absent from the two-season window, early in a season. Playoff fits include the whole regular season, so no playoff possession has an unseen player.
+Every eligible canonical row was scored. Unseen players are concentrated in the first outer block, R1: about 51% of R1 possessions include one (50.8% in 2023–24 and 52.4% in 2024–25), against 3–4% in later blocks. **Inferred:** most of these are players new to the league or absent from the two-season window. Playoff fits include the whole regular season, so no playoff possession has an unseen player.
 
 Timing audits passed for all seven seasons, with 0 leaks and 0 ledger disagreements. Outcome digests for each outer season and type are in the manifest. For example, the 2023–24 regular season is `2a86f96e…8103` and the 2024–25 regular season is `7c9d9844…a796`.
 
@@ -249,4 +249,4 @@ The outer run took 11.7 s wall with peak resident 2.93 GB. Of that, 1.4 s assemb
 - **Neutral sites are not coded.** Neutral-site flags are null in every pilot. The 2019–20 bubble games and the five 2024–25 `v2_home_designation` games are coded by their nominal home team.
 - **Possession intervals only.** Bootstrap intervals resample games or weeks within a set and do not model dependence between refit blocks.
 - **The context comparator's advantage is structural.** It rests largely on run-out possessions at period ends, which the canonical rows keep under ADR-0019 (#82). Whether player RAPM should be judged against that comparator, or on the `no_action` cohort, is a maintainer question.
-- **No independent review yet.** This report has not been independently reviewed.
+- **Independent review.** A fresh Opus reviewer approved with no blocking findings. Its independent script reproduced the 2023–24 regular-season delta against the league mean, −21.30 (95% −25.51 to −17.09). It verified the phase ordering: development protocol, development run, frozen addendum, then a single outer run. Two non-blocking issues remain. A league-slope bootstrap that the addendum excludes leaves one literal `NaN` in results.json. The runner restates the bootstrap and calibration constants instead of asserting them against the addendum.
