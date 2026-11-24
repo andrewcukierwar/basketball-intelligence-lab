@@ -16,10 +16,11 @@ Use the canonical half-open sequence intervals. Find every same-period stint who
 | --- | --- | --- |
 | `pilot_excluded` | Pilot status is excluded, including parser-excluded period-ending intervals. | 0 |
 | `unresolved_control` | Pilot status is unresolved. | 0 |
-| `multiple_lineups` | Pilot status is accepted and more than one distinct actual offense/defense lineup pair appears inside the possession. | 0 |
-| `eligible` | Pilot status is accepted and one actual lineup pair covers the entire possession. | 1 |
+| `no_action` | Pilot status is accepted and no `shot`, `free_throw`, `turnover`, `foul` or `violation` event lies inside the possession's half-open sequence interval. | 0 |
+| `multiple_lineups` | Pilot status is accepted, the possession has such an event, and more than one distinct actual offense/defense lineup pair appears inside it. | 0 |
+| `eligible` | Pilot status is accepted, the possession has such an event, and one actual lineup pair covers the entire possession. | 1 |
 
-Check the source status first, then the lineup rule. Match the offense and defense IDs to the home and away sides for each eligible row. Each role has five distinct NBA player IDs, and the roles are disjoint. Invalid status, identities, coverage or score links in the accepted input invalidate the build. Retain valid pilot offense relabels under their documented adjudication stratum. A repeated offense already covered by the pilot's retention or flagrant exception follows the same rules.
+Check the source status first, then the no-action rule, then the lineup rule. The no-action rule reads only the possession's own events, never its outcome label, end reason or score, so it cannot leak a later result. A no-action possession is a run-out or `period_end` possession with no player-attributable outcome. It scores 0 control points, and the builder blocks if it does not. It stays in the disposition and reconciliation ledgers with exposure 0, as [ADR-0019](../DECISIONS.md) decides. Rows that carry no exposure (every reason except `eligible`) have NULL offense and defense lineup IDs, because a lineup is not defined for them. The overlap counts remain in the ledger. Match the offense and defense IDs to the home and away sides for each eligible row. Stints within a period must be contiguous: sorted by start, each begins exactly where the previous one ends, so a gap and an overlap of equal size cannot cancel in the coverage check. Each role has five distinct NBA player IDs, and the roles are disjoint. Invalid status, identities, coverage or score links in the accepted input invalidate the build. Retain valid pilot offense relabels under their documented adjudication stratum. A repeated offense already covered by the pilot's retention or flagrant exception follows the same rules.
 
 Use one full opportunity per eligible row and unit base weight. The baseline contains all eligible score states, including late and lopsided games. Leave context weighting, garbage-time filtering and sensitivity analysis to registered modeling comparisons. Report the exposure lost to multiple lineups. This conservative restriction can change the sample mix across teams and game states. It avoids assigning all points to one of several lineups or treating within-possession fragments as independent opportunities.
 
@@ -44,18 +45,22 @@ A live retained-ball sequence can continue within its original possession. Prese
 | Artifact | Grain and required evidence |
 | --- | --- |
 | Model rows | One per eligible `(game_id, stream_revision, possession_seq)`. Record game revision, played date, season and season type, period and sequence boundaries, offense and defense IDs, sorted player IDs for each role, model points, unit exposure and weight, and stream availability and basis. |
-| Possession dispositions | One per canonical possession with the same key, pilot status, final reason, assigned control points and modeling exposure. This covers eligible rows as well as exclusions. |
+| Possession dispositions | One per canonical possession with the same key, pilot status, final reason, action-event count, assigned control points and an explicit `exposure` column (1 for eligible, else 0). This covers eligible rows as well as exclusions. |
 | Scoring reconciliation | Classify each source `(game_id, stream_revision, seq, scoring_team_id)` once. Retain the linked possession key when present, disposition and signed points. |
 | Game reconciliation | One row per expected game, with stream and disposition, season type, adjudication strata and aggregate counts. Preserve the quarantine reason where present. |
 | Manifest | Contract revision and code commit; pilot manifest and source snapshot digests; row counts and SHA-256 for each output; unit exposure and retrospective evidence tier; game and season-type coverage plus counts by adjudication stratum. |
 
 Verify these identities for every game before summing across games.
 
-1. Canonical possession count equals eligible plus multiple-lineup plus pilot-excluded plus unresolved-control counts. Pilot-accepted count equals eligible plus multiple-lineup counts. Every eligible key has one model row with exposure and base weight both equal to 1.
+1. Canonical possession count equals eligible plus multiple-lineup plus no-action plus pilot-excluded plus unresolved-control counts. Pilot-accepted count equals eligible plus multiple-lineup plus no-action counts. No-action possessions score 0. Every eligible key has one model row with exposure and base weight both equal to 1.
 2. Sum of modeled points equals the eligible disposition's assigned control points, by scoring team. That category plus all other assigned control points, unassigned dead-ball points and unresolved points equals the signed score-allocation total. It reconciles to the final score independently on each side.
 3. Modeled team offensive exposure sums to the eligible possession count. Player-role exposure sums to five times that count in each role. Quarantined games enter only the expected-game and quarantine denominators.
 
 The extractor retains NBA player IDs as canonical decimal strings. Convert them to positive integers at the #6 estimator boundary, where the solver builds its numeric player universe. The first extractor emits per-possession rows. If a later fit groups rows, only identical complete design vectors may share a group. Let their observation weights sum to $W$ and their weighted response mean be $\bar y$. The group's loss at prediction $f$ is $W(\bar y-f)^2$ plus $\sum_i w_i(y_i-\bar y)^2$. The latter is independent of coefficients. Keep raw total weights and the same penalty to preserve the minimizer. Include that constant if comparing objective values. Context columns and cutoff assignment must also match. Forecast evaluation retains the original row grain.
+
+## No-action possessions (issue #82)
+
+The first build (`issue-59-v1`) kept no-action possessions as eligible rows. The `issue-82-v1` build excludes them. In the pinned 2022–23 pilot, 1,039 accepted possessions have no action event (968 regular season, 71 playoffs): 1,003 were eligible and 36 were multiple-lineup. All score 0, so total modeled points (249,091) and all other point totals are unchanged. Model rows fall from 224,039 to 223,036. The profile below is the original #59 count. The [no-action report](rapm-no-action-2022-23.md) gives the current counts and the effect on the baseline.
 
 ## Initial pilot exposure profile
 

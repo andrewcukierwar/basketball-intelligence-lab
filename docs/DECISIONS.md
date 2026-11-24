@@ -275,3 +275,14 @@ V2 remains the event source of record.
 **Evidence:** Primary source, tests, ablation and evaluation  
 **Consequences:** Tradeoffs and limitations  
 **Links:** Relevant issues, PRs and research reports
+
+## ADR-0019 — Exclude no-action possessions from RAPM model rows
+
+- **Date:** 2026-11-23
+- **Status:** Accepted for the historical RAPM row set (`issue-82-v1`, [#82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)).
+- **Evidence class:** Original BIL design.
+- **Context:** The review of #24 found that possessions starting near a period's end drive most of the measured time-of-period effect. Many are run-outs that contain no shot, free throw, turnover, foul or violation and score 0.
+- **Decision:** Give an accepted possession the disposition `no_action` when no `shot`, `free_throw`, `turnover`, `foul` or `violation` event lies inside its own sequence interval. Use only events inside the possession. Do not use its end reason, outcome or score. Exclude these from model rows (exposure 0) but keep them in the disposition and reconciliation ledgers. The check applies after the pilot-status check and before the lineup rule.
+- **Evidence:** In 2022–23, 996 of the 6,028 possessions starting with 24 s or less left contain no action, and 962 start on `period_end`. Across the whole pilot, 1,039 accepted possessions have no action event (1,003 eligible and 36 multiple-lineup). All score 0, so the points reconcile unchanged. The #24 review measured an in-sample end-of-period gain of 26.5 that falls to 5.6 without them.
+- **Consequences:** The baseline estimates scoring when a possession has a player-attributable outcome, so held-out MSE and the time effect are no longer inflated by a possession-definition artifact. Whole-game total use must add back the zero-point run-outs separately. Whether the exclusion helps or changes RAPM is measured under a frozen addendum protocol, not assumed.
+- **Links:** [Row contract](research/rapm-historical-rows.md), [Addendum protocol](research/rapm-no-action-protocol.md)

@@ -29,17 +29,18 @@ from bil.evaluation.eligibility import played_before
 from bil.models.rapm.baseline import (
     BOOTSTRAP_RESAMPLES,
     BOOTSTRAP_SEED,
+    DEFAULT_PIN,
     EVIDENCE_TIER,
-    PINNED_BUILD_ID,
-    PINNED_DIGESTS,
     PLAYOFF_CUTOFF,
     SELECTION_FOLDS,
     Observation,
+    RowSetPin,
     _git,
     _peak_memory_mib,
     _sha256,
     bootstrap_delta,
     estimate_shift,
+    pin_from_manifest,
     verify_pins,
 )
 from bil.models.rapm.context import fit_context_only, fit_context_rapm
@@ -545,10 +546,12 @@ def timing_audit(connection: Any, raw: Sequence[tuple[Any, ...]]) -> dict[str, i
     return audit
 
 
-def load(row_dir: Path, pilot_dir: Path) -> tuple[ContextRows, dict[str, int]]:
+def load(
+    row_dir: Path, pilot_dir: Path, pin: RowSetPin = DEFAULT_PIN
+) -> tuple[ContextRows, dict[str, int]]:
     import duckdb
 
-    verify_pins(row_dir)
+    verify_pins(row_dir, pin)
     verify_pilot(pilot_dir, row_dir)
     connection = duckdb.connect()
     register(connection, row_dir, pilot_dir)
@@ -592,9 +595,15 @@ def _strata_counts(rows: ContextRows) -> dict[str, Any]:
     return out
 
 
-def run(row_dir: Path, pilot_dir: Path, output_dir: Path, protocol: Path) -> dict[str, Any]:
+def run(
+    row_dir: Path,
+    pilot_dir: Path,
+    output_dir: Path,
+    protocol: Path,
+    pin: RowSetPin = DEFAULT_PIN,
+) -> dict[str, Any]:
     started = time.perf_counter()
-    rows, audit = load(row_dir, pilot_dir)
+    rows, audit = load(row_dir, pilot_dir, pin)
     y_all = np.array([100.0 * o.possession.points for o in rows.observations])
     blowout = late_blowout(rows)
     fit_log: list[dict[str, Any]] = []
@@ -780,8 +789,8 @@ def run(row_dir: Path, pilot_dir: Path, output_dir: Path, protocol: Path) -> dic
         "issue": 24,
         "evidence_tier": EVIDENCE_TIER,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "row_set_build_id": PINNED_BUILD_ID,
-        "row_set_digests": PINNED_DIGESTS,
+        "row_set_build_id": pin.build_id,
+        "row_set_digests": pin.digests,
         "pilot_manifest_sha256": PILOT_MANIFEST_SHA256,
         "pilot_digests": PILOT_DIGESTS,
         "protocol": {"path": str(protocol), "sha256": _sha256(protocol)},
@@ -815,8 +824,17 @@ def main(argv: Sequence[str] | None = None) -> None:
         type=Path,
         default=Path(__file__).resolve().parents[4] / "docs/research/rapm-context-protocol.md",
     )
+    cli.add_argument(
+        "--pin-manifest-sha256",
+        help="pin a later row set by manifest digest instead of the frozen #59 default",
+    )
     args = cli.parse_args(argv)
-    manifest = run(args.row_dir, args.pilot_dir, args.output_dir, args.protocol)
+    pin = (
+        pin_from_manifest(args.row_dir, args.pin_manifest_sha256)
+        if args.pin_manifest_sha256
+        else DEFAULT_PIN
+    )
+    manifest = run(args.row_dir, args.pilot_dir, args.output_dir, args.protocol, pin)
     print(json.dumps({k: manifest[k] for k in ("runtime_seconds", "peak_memory_mib", "outputs")}))
 
 

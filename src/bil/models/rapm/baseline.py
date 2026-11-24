@@ -37,6 +37,17 @@ PINNED_DIGESTS = {
     "game_reconciliation.parquet": "c0c4fee3398d28691023f2fbc937d424bc7095abda2117f1ec56909ab80eb0e2",
 }
 EVIDENCE_TIER = "retrospective_capture_bound"
+
+
+@dataclass(frozen=True)
+class RowSetPin:
+    """Frozen identity of a row set: manifest build id and the digests that must match."""
+
+    build_id: str
+    digests: dict[str, str]
+
+
+DEFAULT_PIN = RowSetPin(PINNED_BUILD_ID, PINNED_DIGESTS)
 PENALTY_GRID = (250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0, 32000.0)
 ROUTINE_STRATA = frozenset(
     {"same_clock_free_throw_substitution", "technical_free_throw", "overtime"}
@@ -410,13 +421,27 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def verify_pins(row_dir: Path) -> None:
-    for name, expected in PINNED_DIGESTS.items():
+def pin_from_manifest(row_dir: Path, manifest_sha256: str) -> RowSetPin:
+    """Pin a later row set by its manifest digest, which lists the other artifact digests."""
+    actual = _sha256(row_dir / "manifest.json")
+    if actual != manifest_sha256:
+        raise ValueError(
+            f"manifest.json SHA-256 {actual} does not match the frozen {manifest_sha256}"
+        )
+    manifest = json.loads((row_dir / "manifest.json").read_text())
+    listed = {a["filename"]: a["sha256"] for a in manifest["output_artifacts"]}
+    digests = {"manifest.json": manifest_sha256}
+    digests.update({name: listed[name] for name in PINNED_DIGESTS if name != "manifest.json"})
+    return RowSetPin(manifest["build_id"], digests)
+
+
+def verify_pins(row_dir: Path, pin: RowSetPin = DEFAULT_PIN) -> None:
+    for name, expected in pin.digests.items():
         actual = _sha256(row_dir / name)
         if actual != expected:
             raise ValueError(f"{name} SHA-256 {actual} does not match the frozen {expected}")
     manifest = json.loads((row_dir / "manifest.json").read_text())
-    if manifest["build_id"] != PINNED_BUILD_ID or manifest["evidence_tier"] != EVIDENCE_TIER:
+    if manifest["build_id"] != pin.build_id or manifest["evidence_tier"] != EVIDENCE_TIER:
         raise ValueError("row-set manifest build_id or evidence tier differs from the frozen pin")
 
 
@@ -463,9 +488,11 @@ def _git(*args: str) -> str:
     ).stdout.strip()
 
 
-def run(row_dir: Path, output_dir: Path, protocol: Path) -> dict[str, Any]:
+def run(
+    row_dir: Path, output_dir: Path, protocol: Path, pin: RowSetPin = DEFAULT_PIN
+) -> dict[str, Any]:
     started = time.perf_counter()
-    verify_pins(row_dir)
+    verify_pins(row_dir, pin)
     observations, strata = load_rows(row_dir)
     flagged = frozenset().union(*(g for name, g in strata.items() if name not in ROUTINE_STRATA))
     fit_info: list[dict[str, float]] = []
@@ -617,8 +644,8 @@ def run(row_dir: Path, output_dir: Path, protocol: Path) -> dict[str, Any]:
         "issue": 23,
         "evidence_tier": EVIDENCE_TIER,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "row_set_build_id": PINNED_BUILD_ID,
-        "row_set_digests": PINNED_DIGESTS,
+        "row_set_build_id": pin.build_id,
+        "row_set_digests": pin.digests,
         "protocol": {"path": str(protocol), "sha256": _sha256(protocol)},
         "code_commit": _git("rev-parse", "HEAD"),
         "working_tree_clean": status == "",
@@ -650,8 +677,17 @@ def main(argv: Sequence[str] | None = None) -> None:
         type=Path,
         default=Path(__file__).resolve().parents[4] / "docs/research/rapm-baseline-protocol.md",
     )
+    cli.add_argument(
+        "--pin-manifest-sha256",
+        help="pin a later row set by manifest digest instead of the frozen #59 default",
+    )
     args = cli.parse_args(argv)
-    manifest = run(args.row_dir, args.output_dir, args.protocol)
+    pin = (
+        pin_from_manifest(args.row_dir, args.pin_manifest_sha256)
+        if args.pin_manifest_sha256
+        else DEFAULT_PIN
+    )
+    manifest = run(args.row_dir, args.output_dir, args.protocol, pin)
     print(
         json.dumps(
             {
