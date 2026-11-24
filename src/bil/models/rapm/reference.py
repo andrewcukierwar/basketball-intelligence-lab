@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from math import isfinite
 
 import numpy as np
@@ -24,6 +25,7 @@ class Possession:
     defense: tuple[int, ...]
     points: float
     weight: float = 1.0
+    played_date: date | None = None  # Eastern calendar date; read only by dated fits
 
 
 @dataclass(frozen=True, slots=True)

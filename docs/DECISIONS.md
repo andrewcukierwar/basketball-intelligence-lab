@@ -4,6 +4,8 @@ Maintain append-only decision records. Each entry should identify the date, stat
 
 Additional record: [ADR-0014, prior-centered RAPM](decisions/0014-prior-centered-rapm.md).
 
+Additional record: [ADR-0015, dated RAPM clock and decay](decisions/0015-dated-rapm-clock-and-decay.md).
+
 ## ADR-0001 — Methodology replication rather than output imitation
 
 **Date:** 2026-11-22  
