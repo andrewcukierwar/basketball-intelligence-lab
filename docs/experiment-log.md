@@ -184,7 +184,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0010 — Context for game-agnostic and game-optimized skill forecasts, 2022–23
 
-- **Status:** Run once under a frozen protocol. Independent review not yet run.
+- **Status:** Run once under a frozen protocol. Independently reviewed (approved; #87).
 - **Date:** 2026-11-23.
 - **Research question:** Does a fitted pregame context adjustment (home, team rest, opponent allowed rates, own-team rate, league trend) improve the frozen #32 skill forecast on later 2022–23 games, factor by factor, using only evidence available at the prediction origin?
 - **Category:** Experimental (retrospective replay, one season).
@@ -205,7 +205,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0012 — M1 quality policy revision and season missingness diagnostic, 2017–18 through 2024–25
 
-- **Status:** Completed. Independent review not yet run.
+- **Status:** Completed. Independently reviewed (approved; #92).
 - **Date:** 2026-11-24.
 - **Research question:** Under the revised M1 policy (ADR-0022), which seasons meet the hard limits, and are quarantined games and unresolved possessions missing systematically by team, date, player, exposure, game state or cause? How much does the primary cohort (2018–19 through 2022–23) depend on the conditionally authorized seasons, overtime periods and weaker-verification strata?
 - **Category:** Original (data-quality diagnostic, no model).
@@ -240,7 +240,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0014 — Split penalties, random-exclusion control and per-fit diagnostics for the RAPM baseline, 2022–23
 
-- **Status:** Run once under a frozen protocol. Independent review not yet run.
+- **Status:** Run once under a frozen protocol. Independently reviewed (approved; #100).
 - **Date:** 2026-11-24.
 - **Research question:** Do separate offense and defense ridge penalties improve held-out possession scoring over the single #23 penalty, and is the effect of excluding the 170 adjudication-stratum games unusual against excluding the same number of random ordinary games?
 - **Category:** Experimental (retrospective replay, one season).
