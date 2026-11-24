@@ -2,7 +2,7 @@
 
 [Issue #27](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/27) consolidates the M2 evidence for BIL's independent offensive/defensive RAPM baseline. This is a synthesis of existing reports. It fits and scores nothing new, and every number below is copied from the linked source report, ADR or experiment-log entry. Source data are attributed to NBA.com and stay private under the [pilot terms](../data-pilot.md). This document is aggregate only, with no player estimates or rankings.
 
-**The M2 gate is not closed by this document.** Section 7 is a recommendation that waits for maintainer sign-off.
+**Maintainer decision 2026-11-24 ([ADR-0026](../DECISIONS.md#adr-0026--maintainer-decisions-of-2026-11-24-m2-acceptance-informed-rapm-comparators-and-partial-history-spm-targets)):** M2 is accepted as sufficient for downstream model development, and the empirical limitations in section 7 stay on record. ADR-0025 and ADR-0013 are accepted. #27 closes once the independent reproducibility replay of the ADR-0025 configuration passes. Section 7 below keeps the original proposal unchanged.
 
 **Evidence tier.** Every empirical result is `retrospective_capture_bound`: a chronological replay on stable-lineup possessions with realized lineups, not a pregame forecast and not a strict rolling-origin backtest ([validation strategy](../validation-strategy.md)). No EPM value was read or used anywhere in M2. 2025–26 was not read.
 

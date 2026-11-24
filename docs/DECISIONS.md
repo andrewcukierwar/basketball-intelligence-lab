@@ -196,7 +196,7 @@ V2 remains the event source of record.
 ## ADR-0013 — Limit the first historical RAPM fit to stable-lineup possessions
 
 - **Date:** 2026-11-23
-- **Status:** Proposed for the M2 baseline.
+- **Status:** **Accepted** (maintainer decision 2026-11-24) as the initial stable-lineup RAPM convention. The excluded multiple-lineup possessions are materially nonrandom. Alternative representations, such as stint-level or fractional exposure, are a bounded future research question ([#110](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/110)), and it does not block current work.
 - **Decision:** Use one unit-weight row per pilot-accepted possession with a single actual lineup pair. Take offensive points from the canonical control ledger. Preserve multiple-lineup intervals and unassigned scores in the reconciliation artifacts.
 - **Evidence:** The #19 pilot has 224,039 stable-lineup and 32,417 multiple-lineup accepted possessions. Control scoring rates differ materially between those groups. The contract fixture checks same-clock lineup changes, official score credit and retained-ball allocations.
 - **Consequences:** All fitted opportunities have exactly one five-on-five design vector. The cohort excludes 12.64% of accepted possessions. The baseline estimates stable-lineup scoring, and future comparisons can test broader representations.
@@ -238,7 +238,7 @@ V2 remains the event source of record.
 ## ADR-0019 — Keep run-outs in RAPM model rows and exclude only verified pseudo-possessions
 
 - **Date:** 2026-11-23
-- **Status:** **Accepted. Maintainer decision 2026-11-23, principle B:** exclude only verified pseudo-possessions that offer no live-ball opportunity, keep run-outs, and never condition eligibility on later actions or realized outcomes. Applies to the historical RAPM row set ([#82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)). **Departure from the literal option:** the maintainer selected option (b), excluding the 962 possessions that start on `period_end`, conditional on verifying that the start event is sufficient evidence and that no legitimate live-ball possession is removed. Verification failed, because all 962 had 3–24 s of live-ball clock after a change of control. Applying the maintainer's stated principle, the canonical set therefore departs from literal option (b) and adds no exclusion beyond the pilot's under-3 s rule. Literal (b) is kept as the `period_end_start` sensitivity variant. The maintainer may override this. A focused independent re-review approved this canonical revision (abed529) before PR #91 merged.
+- **Status:** **Accepted. Maintainer decision 2026-11-23, principle B:** exclude only verified pseudo-possessions that offer no live-ball opportunity, keep run-outs, and never condition eligibility on later actions or realized outcomes. Applies to the historical RAPM row set ([#82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)). **Departure from the literal option:** the maintainer selected option (b), excluding the 962 possessions that start on `period_end`, conditional on verifying that the start event is sufficient evidence and that no legitimate live-ball possession is removed. Verification failed, because all 962 had 3–24 s of live-ball clock after a change of control. Applying the maintainer's stated principle, the canonical set therefore departs from literal option (b) and adds no exclusion beyond the pilot's under-3 s rule. Literal (b) is kept as the `period_end_start` sensitivity variant. A focused independent re-review approved this canonical revision (abed529) before PR #91 merged. **Maintainer confirmation 2026-11-24:** the maintainer explicitly approved the departure from literal option (b). The original authorization was conditional, and the evidence shows those possessions are legitimate playing opportunities. Keep the current canonical row set, retain genuine run-outs and held balls, and preserve both alternative exclusion definitions as sensitivity variants. The pilot's under-3 s pseudo-possession convention stays for now, with its limitations documented. Eligibility rules are never chosen by which one gives the most favorable model comparison.
 - **Evidence class:** Original BIL design.
 - **Context:** The review of #24 found that possessions starting near a period's end drive most of the measured time-of-period effect. Many are run-outs that score 0. The first implementation excluded every possession with no action event. Independent review judged that a material change, because it filters rows by how each possession turned out.
 - **Decision:**
@@ -307,7 +307,18 @@ V2 remains the event source of record.
 ## ADR-0023 — Repair late-entered event order from data.nba entry order (opt-in)
 
 - **Date:** 2026-11-23
-- **Status:** Proposed for [#90](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/90). Implemented behind `build --order-repair`, off by default. No default build changes.
+- **Status:** Proposed for [#90](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/90). Implemented behind `build --order-repair`, off by default. No default build changes. **Maintainer decision 2026-11-24:** further development and evaluation are authorized under the conditions below ([#99](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/99)). Canonical use is approved only after an independent review validates these safeguards. Until then, repaired outputs are experimental.
+- **Maintainer conditions (2026-11-24):**
+  - Raw source records and original timestamps stay immutable.
+  - Ordering must be supported by evidence. Corrected clocks are constrained to valid neighboring clocks where justified.
+  - Substantive events may shift by at most 24 s at first. A larger correction is rejected, never silently truncated. Staying under the ceiling does not by itself make a correction valid.
+  - Instant replays and non-substantive metadata are handled separately and must not distort basketball event chronology.
+  - Changes to shots, free throws, turnovers, rebounds and substitutions need stronger corroboration, especially where possession attribution or lineup exposure could change.
+  - Every modification is recorded: original and corrected clock, signed shift, event type, justification and source evidence.
+  - The hard reconciliation checks stay unchanged, with added verification of possession and lineup attribution. The report must say which checks become less informative because repaired clocks are monotone by construction.
+  - Repaired games form a separately identifiable lower-trust stratum.
+  - The repair applies to failed games first. It never replaces an accepted game merely because it leaves fewer unresolved possessions, which withdraws the "second use" above. It is not applied to seasons that already pass by default.
+  - 2017–18 stays outside the primary cohort unless it meets every ADR-0022 hard requirement.
 - **Evidence class:** Original BIL design, applying ADR-0010's rule that evidence feeds may adjudicate only narrow, checkable decisions.
 - **Context:** V2 sorts events by clock. A late stat correction keeps its original clock, so V2 can place it before an event that preceded it. 168 of 180 2017–18 quarantines are event-order failures (166 of 178 in the regular season), and their rate follows the rate of such events, which is highest from October to mid-November. V3 order equals V2 order in 37% of them. data.nba `ord` records entry order and is present from 2017–18.
 - **Decision (proposed):** After the V2 attempt and the V3-primary retry both fail, retry in data.nba entry order. Require `ord` for every event, distinct and period-monotone. Within each period keep the longest non-increasing run of clocks (earliest-entered on ties) and give every other event its predecessor's clock. Never re-clock period boundaries. Run every unchanged check on the new stream, label it `datanba_event_order` (lower trust), and record the largest shift. A second use offers the repair to accepted games with unresolved possessions and keeps it only when it leaves fewer. That selection optimizes the hard-gate metric (unresolved possessions), so a reduction in 2017–18's 0.283% is partly selected, not independently found.
@@ -325,7 +336,7 @@ V2 remains the event source of record.
 ## ADR-0025 — Two-season unit-weight window with split penalties for the multi-season RAPM baseline
 
 - **Date:** 2026-11-24
-- **Status:** Proposed for the M2 baseline ([#26](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/26)). Independently reviewed (approved). Awaiting maintainer acceptance.
+- **Status:** **Accepted** (maintainer decision 2026-11-24) as the frozen multi-season zero-prior RAPM reference ([#26](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/26)). Independently reviewed (approved). The near-tie findings and alternative configurations are preserved. No further resources go to distinguishing near-identical candidates without a concrete research hypothesis.
 - **Evidence class:** Original BIL design, Experimental evidence.
 - **Context:** Multi-season RAPM needs a temporal weighting and penalties chosen without outer-season or EPM information. #77's split penalties are not merged. ADR-0015 leaves the half-life free and the weights unnormalized.
 - **Decision:**
@@ -340,6 +351,33 @@ V2 remains the event source of record.
   - Player RAPM alone is not better than context-only possession scoring on the canonical rows. Proposal, informed by outer-validation evidence: later informed-RAPM work could compare against the context offset model rather than plain RAPM.
   - The selection is a near-tie, so `W3`, `H365` and `H730` are acceptable alternatives on this evidence.
 - **Links:** [Protocol](research/rapm-multiseason-protocol.md), [Addendum](research/rapm-multiseason-outer-addendum.md), [ADR-0015](decisions/0015-dated-rapm-clock-and-decay.md), [ADR-0019](#adr-0019--keep-run-outs-in-rapm-model-rows-and-exclude-only-verified-pseudo-possessions)
+
+## ADR-0026 — Maintainer decisions of 2026-11-24: M2 acceptance, informed-RAPM comparators and partial-history SPM targets
+
+- **Date:** 2026-11-24
+- **Status:** Accepted (maintainer decision).
+- **Evidence class:** Maintainer decision on Experimental evidence ([M2 report](research/rapm-m2-report.md)).
+- **Decisions:**
+  - **M2.** M2 is accepted as sufficient for downstream model development, and its empirical limitations are documented. [#27](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/27) closes after an independent reproducibility replay of the ADR-0025 configuration. The replay compares output artifacts and aggregate results under documented tolerances and is not used for further model selection. The record keeps numerical correctness, demonstrated predictive validity and unresolved limitations distinct.
+  - **Comparators for informed RAPM.** Context-adjusted zero-prior RAPM (RAPM with the context offset) becomes an additional primary comparator. Standalone RAPM, context-only and league-average comparators are kept. Evaluation covers both possession-level and team-level performance, and the same configuration is not assumed to win every objective.
+  - **SPM targets ([#28](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/28)).** Provisional independent long-window RAPM training targets are authorized on the currently eligible seasons: 2005–06 through 2007–08, 2015–16, 2016–17, and 2018–19 through 2022–23. Two references are evaluated: a contiguous 2018–19 through 2022–23 reference and an extended eligible-history reference.
+    - The target objective, weighting, regularization and reliability are specified separately from ADR-0025's two-season predictive configuration.
+    - Historical gaps, real elapsed time, player exposure, era differences, roster changes and verification strata are handled explicitly. A missing season never counts as time not elapsed.
+    - Earlier targets never use future games or revisions.
+    - Offensive and defensive targets stay separate, and their reliability, stability and exposure effects are quantified.
+    - Chronological evaluation and common comparison cohorts are registered.
+    - Every artifact is labelled a **partial-history methodology replication**, not a full historical EPM replication.
+  - **Same-clock rule ([#111](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/111)).** A bounded investigation and implementation of a generalized same-clock shot, tip and rebound ordering rule is authorized. The rule is derived from basketball event semantics and source evidence, never from permutation search to satisfy reconciliation. It is validated with hand-adjudicated examples, synthetic edge cases, deterministic reconstruction, regression on previously valid seasons and independent verification. Ambiguous sequences are quarantined. The rule is applied to 2008–09 through 2011–12 and other relevant seasons, and eligibility is reassessed under ADR-0022.
+  - **#53.** SPM development does not wait for #53. Newly eligible seasons enter through versioned datasets and controlled incremental experiments, and existing targets are never silently changed.
+  - **Holdout.** The 2025–26 confirmatory holdout is not accessed or scored. It stays reserved for the registered R1 release protocol.
+  - **Autonomy.** Agents may make reversible, bounded engineering and experimental decisions within the existing research standards. They escalate changes to:
+    - hard correctness requirements;
+    - material model estimands;
+    - confirmatory holdout boundaries;
+    - source authorization;
+    - irreversible or inadequately validated methodology.
+    A negative experimental result is an acceptable outcome.
+- **Links:** [ADR-0013](#adr-0013--limit-the-first-historical-rapm-fit-to-stable-lineup-possessions), [ADR-0019](#adr-0019--keep-run-outs-in-rapm-model-rows-and-exclude-only-verified-pseudo-possessions), [ADR-0023](#adr-0023--repair-late-entered-event-order-from-datanba-entry-order-opt-in), [ADR-0025](#adr-0025--two-season-unit-weight-window-with-split-penalties-for-the-multi-season-rapm-baseline), [#110](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/110), [#111](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/111)
 
 ## Decision template
 
