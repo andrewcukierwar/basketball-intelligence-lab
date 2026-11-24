@@ -275,7 +275,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0018 — Same-clock shot, tip and rebound ordering rule, 2008–09 through 2011–12 and older seasons
 
-- **Status:** Proposed pending independent review of PR #114. Each build ran once per version. The first subagent review did not replay the rule on real data. The second review found one blocker, fixed in this version (see the report).
+- **Status:** Completed. Independent Opus re-review approved code 1055a39f after replaying 2010–11 and 2015–16 at that commit. Each build ran once per version. The first subagent review did not replay the rule on real data. The second review found one blocker, fixed in this version (see the report).
 - **Date:** 2026-11-24.
 - **Research question:** Does a deterministic same-clock rule, derived from event semantics and not tuned on reconciliation, recover games that fail on a rebound with no missed shot before it, without changing any accepted game and without relaxing any check?
 - **Category:** Experimental, Original design. No EPM output was used.
