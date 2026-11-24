@@ -59,7 +59,7 @@ The extractor retains NBA player IDs as canonical decimal strings. Convert them 
 
 ## Initial pilot exposure profile
 
-An exploratory join against the pinned #19 pilot measured the maximum cohort under this rule. The row builder and manifest in #59 complete the full ledger reconciliation.
+An exploratory join against the pinned #19 pilot measured the maximum cohort under this rule. The row builder in #59 (`python -m bil.data.rapm_rows`, see the [pilot guide](../data-pilot.md#build-the-historical-rapm-row-set)) reproduces these counts and reconciles every possession and score allocation to the pilot ledgers.
 
 | Season type | Pilot-accepted possessions | Multiple-lineup exclusions | Eligible possessions |
 | --- | ---: | ---: | ---: |
