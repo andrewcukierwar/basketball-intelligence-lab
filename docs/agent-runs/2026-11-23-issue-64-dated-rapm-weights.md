@@ -23,7 +23,6 @@ Strict `<` on Eastern calendar dates, whole-day age, no weight normalization (de
 
 ## Verification performed
 
-See the final commands below; results are recorded in the section that follows.
 
 | Check | Actual result |
 | --- | --- |
@@ -37,3 +36,7 @@ No independent review. Half-life and penalty choice are untested on real data. A
 ## Next actions
 
 Independent review; then choose half-life and penalties without EPM outputs in a later issue.
+
+## Independent review
+
+A fresh Opus reviewer approved commit 77073d9 with no blocking findings and reran pytest (113 passed, 2 skipped), ruff, ruff format and strict mypy. The lead then added the knowledge-time caveat and qualified the 0.5-day oracle case in the research doc.

@@ -32,6 +32,8 @@ result.fit, result.included, result.excluded_same_or_later
 
 Rows failing the cutoff are removed before any weight is computed and before the design is built, so they affect neither the response, the weights nor the player universe (a player seen only on or after `as_of` has no output coefficient). The solver keeps no module-level state or cache; `fit_dated_prior_rapm` neither mutates its inputs nor remembers earlier calls, and the tests check that fits at two different `as_of` dates interleaved with a repeat fit return identical results. Any future cache of designs or fits must key on `as_of` and the eligible-row identity, not on the full row set.
 
+The dated fit enforces only the played-date clock. It does not apply the knowledge-time clock (`observed_at < cutoff`) that `bil.evaluation.eligibility` enforces for revised or late-arriving data. Before any real-data use, callers must pre-filter rows to those observable before the cutoff.
+
 ## Numerical evidence
 
 Run `uv run pytest -q -s tests/test_rapm_dated.py`. The fixture is 96 generated noisy possessions with base weights from 1/3 to 5/3, spread over 60 days around `as_of`, of which the later part is excluded. The oracle forms the dense weighted normal equations `(X'WX + P)b = X'Wy + Pm`, with an unpenalized intercept, its own date filter and its own `2 ** (-age / h)` weights, and solves with `numpy.linalg.pinv`. It shares no code with the sparse solver. Penalties are 7.5 (offense) and 62.5 (defense) with the nonzero priors of the #61 fixture. Tolerance: `1e-8` absolute on coefficients and on fitted rates, in points per 100 possessions.
@@ -44,7 +46,7 @@ Run `uv run pytest -q -s tests/test_rapm_dated.py`. The fixture is 96 generated 
 | 3 | 1.1292e-11 | 1.9043e-11 | 6.9939 |
 | 0.5 | 6.7502e-14 | 2.2649e-13 | 14.6605 |
 
-The condition number is for the weighted, intercept-included augmented matrix `[sqrt(W)X; sqrt(P)]` in original coordinates. Limit cases: `half_life_days=None` equals `fit_prior_rapm` on the pre-filtered rows exactly, a half-life of `1e9` agrees with no decay within `1e-5`, and a half-life of 1 day with age 1 equals an undated fit with halved weights. Rows with ages beyond roughly `1074 * half_life` underflow `0.5 ** x` and raise, so very short half-lives suit only short windows.
+The condition number is for the weighted, intercept-included augmented matrix `[sqrt(W)X; sqrt(P)]` in original coordinates. Limit cases: `half_life_days=None` equals `fit_prior_rapm` on the pre-filtered rows exactly, a half-life of `1e9` agrees with no decay within `1e-5`, and a half-life of 1 day with age 1 equals an undated fit with halved weights. At a 0.5-day half-life every eligible weight is at most 2^-2 of its base weight, so that fit sits close to the priors and its tight agreement is weak evidence. The 3- and 30-day rows carry the substantive comparison. Rows with ages beyond roughly `1074 * half_life` underflow `0.5 ** x` and raise, so very short half-lives suit only short windows.
 
 Not established: sensitivity of the dated solver to degenerate designs (the #61 conditioning cases still apply), behavior when the fitted universe changes between as-of dates, and any choice of half-life.
 
