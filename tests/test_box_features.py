@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -241,12 +242,26 @@ def test_build_on_synthetic_logs(tmp_path: Path) -> None:
             str(bad / PLAYER_LOG)
         )
         (bad / "snapshot.json").write_text("{}")
-        build_box_features(bad, tmp_path / "bad-out", "0" * 40, snapshot=snapshot)
-    manifest = build_box_features(source, out, "0" * 40, snapshot=snapshot)
+        build_box_features(bad, tmp_path / "bad-out", "0" * 40, snapshot=snapshot, expected=None)
+    manifest = build_box_features(source, out, "0" * 40, snapshot=snapshot, expected=None)
     observed = manifest["reconciliation"]["observed"]
     assert observed["appearances"] == 2
     assert observed["same_window_sql_mismatches"] == 0
-    assert observed["asof_prior_count_mismatches"] == 0
+    assert observed["asof_sql_mismatches"] == 0
+    assert observed["same_window_sql_groups"] == observed["same_window_rows"] == 13
+    assert manifest["reconciliation"]["failed_checks"] == []
+    assert manifest["source_pins_verified"] is False
+    assert len(set(manifest["snapshot_ids"].values())) == 3
+    window = manifest["views"]["same_window_features"]["windows"][0]
+    assert (window["start_date"], window["end_date"]) == ("2023-01-01", "2023-01-02")
+    retro = manifest["coverage"]["asof_retrospective_features"]["regular"]
+    assert (
+        retro["rows"],
+        retro["cold_start_rows"],
+        retro["players"],
+        retro["players_with_history"],
+    ) == (2, 1, 1, 1)
+    assert retro["features"]["fg3_pct"]["null_value_rows"] == 1
     assert (
         manifest["views"]["asof_strict_features"]["cohort_status"]
         == "unavailable_historical_strict"
@@ -260,3 +275,73 @@ def test_build_on_synthetic_logs(tmp_path: Path) -> None:
         f"SELECT max(eligible_appearances) FROM '{out}/asof_strict_features.parquet'"
     ).fetchall()
     assert strict == [(0,)]
+
+
+@pytest.mark.parametrize("seed", ["history", "window"])
+def test_seeded_reconciliation_mismatch_fails_and_removes_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seed: str
+) -> None:
+    duckdb = pytest.importorskip("duckdb")
+    from bil.data.pilot_sources import sha256_file
+    from bil.features import box_build
+
+    source = tmp_path / "source"
+    source.mkdir()
+    duckdb.sql(
+        "SELECT * FROM (VALUES (2023, '0022200001', '10', '20', DATE '2023-01-01', true), "
+        "(2023, '0022200001', '20', '10', DATE '2023-01-01', false), "
+        "(2023, '0022200002', '10', '20', DATE '2023-01-02', true), "
+        "(2023, '0022200002', '20', '10', DATE '2023-01-02', false)) "
+        "t(season, game_id, team_id, opp_team_id, game_date, home)"
+    ).write_parquet(str(source / box_build.TEAM_LOG))
+    values = ", ".join(
+        f"(2023, '{g}', '7', '10', '20', DATE '{d}', 30.0, 2, 4, 1, 2, 0, 0, 5, 1, 1, 2, 0, 0, 0, 1, 2)"
+        for g, d in (("0022200001", "2023-01-01"), ("0022200002", "2023-01-02"))
+    )
+    duckdb.sql(
+        f"SELECT * FROM (VALUES {values}) t(season, game_id, player_id, team_id, opp_team_id, "
+        "game_date, min, fgm, fga, fg3m, fg3a, ftm, fta, pts, oreb, dreb, reb, ast, tov, stl, blk, pf)"
+    ).write_parquet(str(source / box_build.PLAYER_LOG))
+    (source / "snapshot.json").write_text("{}")
+    snapshot: Any = {
+        "artifacts": [
+            {
+                "name": n,
+                "artifact_id": n,
+                "sha256": sha256_file(source / n),
+                "retrieved_at": "2026-11-23T18:04:04+00:00",
+            }
+            for n in (box_build.TEAM_LOG, box_build.PLAYER_LOG)
+        ]
+    }
+
+    def bump(value: Any) -> Any:
+        return replace(value, numerator=(value.numerator or 0) + 1)
+
+    if seed == "history":
+        real = box_build.history_rows
+
+        def seeded_history(rows: Any) -> Any:
+            for row, values, summary in real(rows):
+                yield row, {**values, "fg3_pct": bump(values["fg3_pct"])}, summary
+
+        monkeypatch.setattr(box_build, "history_rows", seeded_history)
+    else:
+        real_aggregate = box_build.aggregate
+
+        def seeded_aggregate(rows: Any) -> Any:
+            accumulator = real_aggregate(rows)
+            original = accumulator.values
+
+            def values() -> Any:
+                result = original()
+                return {**result, "ft_pct": bump(result["ft_pct"])}
+
+            accumulator.values = values  # type: ignore[method-assign]
+            return accumulator
+
+        monkeypatch.setattr(box_build, "aggregate", seeded_aggregate)
+    out = tmp_path / "out"
+    with pytest.raises(ValueError, match="Reconciliation failed"):
+        box_build.build_box_features(source, out, "0" * 40, snapshot=snapshot, expected=None)
+    assert not out.exists()

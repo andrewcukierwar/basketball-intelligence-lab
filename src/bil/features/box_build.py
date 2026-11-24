@@ -12,7 +12,7 @@ import math
 import re
 import shutil
 from collections import Counter, defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import date
 from hashlib import sha256
 from importlib.metadata import version
@@ -220,16 +220,26 @@ def _identities(raw: dict[str, Any], problems: Counter[str]) -> None:
             problems["identity:" + "/".join(names)] += 1
 
 
+# Independent SQL restatement of the contract table: (numerator, denominator, scale).
+SQL_FEATURES: dict[str, tuple[str, str, int]] = {
+    "fg2_pct": ("fgm - fg3m", "fga - fg3a", 1),
+    "fg3_pct": ("fg3m", "fg3a", 1),
+    "ft_pct": ("ftm", "fta", 1),
+    "fg3_share": ("fg3a", "fga", 1),
+    **{f"{k}_per_36": (k, "ms", MS_PER_36) for k in ("fga", "fta", "ast", "tov", "oreb")},
+    **{f"{k}_per_36": (k, "ms", MS_PER_36) for k in ("dreb", "stl", "blk", "pf")},
+}
+
+
 def reconcile(
     connection: duckdb.DuckDBPyConnection,
     directory: Path,
+    output: Path,
     rows: list[Appearance],
-    same_window_rows: dict[tuple[str, str], tuple[dict[str, FeatureValue], dict[str, int | None]]],
-) -> tuple[dict[str, int], dict[tuple[str, str], int]]:
-    """Compare the Python views with independent DuckDB aggregates over the raw parquet."""
-    scoped = "left(game_id, 3) IN ('002', '004')"
-    player_log = str(directory / PLAYER_LOG)
-    observed: dict[str, int] = {"appearances": len(rows), "games": len({r.game_id for r in rows})}
+    expected: Mapping[str, int] | None,
+) -> dict[str, Any]:
+    """Compare the written Parquet views, all features, with independent SQL over the raw logs."""
+    observed: dict[str, Any] = {"appearances": len(rows), "games": len({r.game_id for r in rows})}
     for kind in SEASON_TYPES:
         subset = [r for r in rows if r.season_type == kind]
         observed[f"appearances_{kind}"] = len(subset)
@@ -243,52 +253,88 @@ def reconcile(
     observed["zero_fta"] = sum(r.fta == 0 for r in rows)
     observed["zero_minutes"] = sum(r.minutes_ms == 0 for r in rows)
 
-    # Independent SQL pass over the raw file: per-player totals by season type.
-    sql_totals = {
-        (player, kind): (minutes, points, fg2m, fg2a, fg3m, fg3a, ftm, fta, ast)
-        for player, kind, minutes, points, fg2m, fg2a, fg3m, fg3a, ftm, fta, ast in (
-            connection.execute(
-                "SELECT player_id, CASE left(game_id, 3) WHEN '002' THEN 'regular' ELSE 'playoffs' END, "
-                "sum(round(min * 60000)::BIGINT), sum(pts), sum(fgm - fg3m), sum(fga - fg3a), "
-                f"sum(fg3m), sum(fg3a), sum(ftm), sum(fta), sum(ast) FROM read_parquet(?) WHERE {scoped} "
-                "GROUP BY 1, 2",
-                [str(player_log)],
-            ).fetchall()
-        )
-    }
-    mismatches = 0
-    for (player, kind), (values, summary) in same_window_rows.items():
-        sql = sql_totals[(player, kind)]
-        python = (
-            summary["minutes_ms"],
-            summary["points"],
-            values["fg2_pct"].numerator,
-            values["fg2_pct"].denominator,
-            values["fg3_pct"].numerator,
-            values["fg3_pct"].denominator,
-            values["ft_pct"].numerator,
-            values["ft_pct"].denominator,
-            values["ast_per_36"].numerator,
-        )
-        mismatches += tuple(python) != tuple(sql)
-    observed["same_window_player_season_type_rows"] = len(same_window_rows)
-    observed["same_window_sql_mismatches"] = mismatches
-    observed["same_window_sql_groups"] = len(sql_totals)
+    connection.execute(
+        "CREATE OR REPLACE TEMP TABLE r AS SELECT *, CASE left(game_id, 3) WHEN '002' "
+        "THEN 'regular' ELSE 'playoffs' END AS kind, round(min * 60000)::BIGINT AS ms "
+        "FROM read_parquet(?) WHERE left(game_id, 3) IN ('002', '004')",
+        [str(directory / PLAYER_LOG)],
+    )
+    window_file = str(output / "same_window_features.parquet")
+    asof_file = str(output / "asof_retrospective_features.parquet")
+    # Same-window: totals per (player, season type, feature) over components both known.
+    union = " UNION ALL ".join(
+        f"SELECT player_id, kind, '{code}' AS code, "
+        f"sum({n}) FILTER (WHERE ({n}) IS NOT NULL AND ({d}) IS NOT NULL)::BIGINT AS n, "
+        f"sum({d}) FILTER (WHERE ({n}) IS NOT NULL AND ({d}) IS NOT NULL)::BIGINT AS d, "
+        f"count(*) FILTER (WHERE ({n}) IS NOT NULL AND ({d}) IS NOT NULL) AS covered, "
+        f"count(*) AS eligible FROM r GROUP BY 1, 2"
+        for code, (n, d, _) in SQL_FEATURES.items()
+    )
+    scale = " ".join(f"WHEN '{c}' THEN {k}" for c, (_, _, k) in SQL_FEATURES.items())
+    connection.execute(f"CREATE OR REPLACE TEMP TABLE e AS {union}")
+    groups = connection.execute("SELECT count(*) FROM e").fetchall()[0][0]
+    written = connection.execute("SELECT count(*) FROM read_parquet(?)", [window_file]).fetchall()[
+        0
+    ][0]
+    bad = connection.execute(
+        f"SELECT count(*) FROM e FULL JOIN read_parquet(?) o ON o.player_id = e.player_id "
+        "AND o.feature_code = e.code AND o.window_id = e.kind || '-2022-23' "
+        "WHERE o.player_id IS NULL OR e.player_id IS NULL "
+        "OR o.numerator IS DISTINCT FROM e.n OR o.denominator IS DISTINCT FROM e.d "
+        "OR o.covered_appearances <> e.covered OR o.eligible_appearances <> e.eligible "
+        f"OR abs(coalesce(o.value, -1) - coalesce(CASE WHEN e.d > 0 THEN e.n * (CASE e.code {scale} END)::DOUBLE / e.d END, -1)) > 1e-9",
+        [window_file],
+    ).fetchall()[0][0]
+    observed["same_window_sql_groups"] = groups
+    observed["same_window_rows"] = written
+    observed["same_window_sql_mismatches"] = bad
 
-    # Independent chronological-join check: prior same-type appearance counts per game row.
-    prior = {
-        (game_id, player): count
-        for game_id, player, count in connection.execute(
-            "WITH a AS (SELECT game_id, player_id, game_date, left(game_id, 3) AS kind FROM "
-            f"read_parquet(?) WHERE {scoped}) "
-            "SELECT x.game_id, x.player_id, count(y.game_id) FROM a x LEFT JOIN a y "
-            "ON x.player_id = y.player_id AND x.kind = y.kind AND y.game_date < x.game_date "
-            "GROUP BY 1, 2",
-            [str(player_log)],
-        ).fetchall()
+    # As-of: cumulative sums over strictly earlier played dates of the same season type.
+    sums = ", ".join(
+        f"sum({n}) FILTER (WHERE ({n}) IS NOT NULL AND ({d}) IS NOT NULL AND y.game_id IS NOT NULL)::BIGINT AS n_{c}, "
+        f"sum({d}) FILTER (WHERE ({n}) IS NOT NULL AND ({d}) IS NOT NULL AND y.game_id IS NOT NULL)::BIGINT AS d_{c}, "
+        f"count(*) FILTER (WHERE ({n}) IS NOT NULL AND ({d}) IS NOT NULL AND y.game_id IS NOT NULL) AS c_{c}"
+        for c, (n, d, _) in SQL_FEATURES.items()
+    )
+    sums = re.sub(r"\b(fgm|fga|fg3m|fg3a|ftm|fta|ast|tov|oreb|dreb|stl|blk|pf|ms)\b", r"y.\1", sums)
+    connection.execute(
+        "CREATE OR REPLACE TEMP TABLE h AS SELECT x.game_id, x.player_id, "
+        f"count(y.game_id) AS cnt, {sums} FROM r x LEFT JOIN r y ON x.player_id = y.player_id "
+        "AND x.kind = y.kind AND y.game_date < x.game_date GROUP BY 1, 2"
+    )
+    asof_bad = 0
+    asof_rows = 0
+    for code, (_, _, k) in SQL_FEATURES.items():
+        asof_rows += connection.execute("SELECT count(*) FROM h").fetchall()[0][0]
+        asof_bad += connection.execute(
+            f"SELECT count(*) FROM h FULL JOIN (SELECT * FROM read_parquet(?) WHERE feature_code = '{code}') o "
+            "ON o.game_id = h.game_id AND o.player_id = h.player_id "
+            f"WHERE o.game_id IS NULL OR h.game_id IS NULL OR o.numerator IS DISTINCT FROM h.n_{code} "
+            f"OR o.denominator IS DISTINCT FROM h.d_{code} OR o.covered_appearances <> h.c_{code} "
+            "OR o.eligible_appearances <> h.cnt "
+            f"OR abs(coalesce(o.value, -1) - coalesce(CASE WHEN h.d_{code} > 0 THEN h.n_{code} * {k}::DOUBLE / h.d_{code} END, -1)) > 1e-9",
+            [asof_file],
+        ).fetchall()[0][0]
+    observed["asof_sql_rows_checked"] = asof_rows
+    observed["asof_sql_mismatches"] = asof_bad
+    observed["strict_rows_with_history"] = connection.execute(
+        "SELECT count(*) FROM read_parquet(?) WHERE eligible_appearances > 0 OR value IS NOT NULL",
+        [str(output / "asof_strict_features.parquet")],
+    ).fetchall()[0][0]
+    failures = [
+        key
+        for key in ("same_window_sql_mismatches", "asof_sql_mismatches", "strict_rows_with_history")
+        if observed[key]
+    ]
+    if observed["same_window_sql_groups"] != observed["same_window_rows"]:
+        failures.append("same_window_groups_vs_rows")
+    mismatched = sorted(k for k, v in (expected or {}).items() if observed[k] != v)
+    return {
+        "observed": observed,
+        "expected": dict(expected or {}),
+        "mismatched_expectations": mismatched,
+        "failed_checks": failures,
     }
-    observed["asof_prior_count_rows"] = len(prior)
-    return observed, prior
 
 
 def _feature_rows(
@@ -352,10 +398,15 @@ def build_box_features(
     code_commit: str,
     *,
     snapshot: Snapshot | None = None,
+    expected: Mapping[str, int] | None = EXPECTED,
 ) -> dict[str, Any]:
-    """Create a new output directory. `snapshot` is only injected by tests; the CLI verifies pins."""
+    """Create a new output directory, or remove it and raise if any reconciliation check fails.
+
+    `snapshot` is only injected by tests; the CLI verifies the pinned source hashes.
+    """
     if re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
         raise ValueError("Record a full Git commit for the feature build")
+    pins_verified = snapshot is None
     snapshot = load_snapshot(snapshot_dir) if snapshot is None else snapshot
     sources = {row["name"]: row for row in snapshot["artifacts"]}
     logs = [sources[TEAM_LOG], sources[PLAYER_LOG]]
@@ -365,35 +416,40 @@ def build_box_features(
         available_at=capture,
         evidence_ref=f"snapshot.json#retrieved_at={capture.isoformat()}",
     )
-    snapshot_id = _snapshot_id(logs)
+    snapshot_sha = sha256_file(snapshot_dir / "snapshot.json")
+    snapshot_ids = {
+        view: _snapshot_id(logs, snapshot_sha, view, policy) for view, policy in VIEW_POLICY.items()
+    }
     output.mkdir(mode=0o700, parents=True)
     try:
         with TemporaryDirectory(dir=output.parent) as temp, duckdb.connect() as connection:
             connection.execute("SET TimeZone = 'UTC'")
             staging = Path(temp)
             rows, _ = load_appearances(connection, snapshot_dir)
-            tables = _views(rows, snapshot_id, provenance)
-            window_values = tables.pop("_window_values")
+            tables = _views(rows, snapshot_ids, provenance)
+            windows = tables.pop("_windows")
             strict_exclusions = tables.pop("_strict_exclusions")
-            reconciliation, prior = reconcile(connection, snapshot_dir, rows, window_values)
-            reconciliation["asof_prior_count_mismatches"] = _prior_mismatches(
-                tables["asof_retrospective_features"], prior
-            )
-            expected = {k: EXPECTED[k] for k in EXPECTED}
-            mismatched = sorted(k for k in expected if reconciliation[k] != expected[k])
             artifacts = [
                 _write_parquet(connection, name, tables[name], staging, output) for name in TABLES
             ]
+            reconciliation = reconcile(connection, snapshot_dir, output, rows, expected)
+            coverage = _coverage(connection, output)
+            if reconciliation["failed_checks"] or reconciliation["mismatched_expectations"]:
+                raise ValueError(
+                    "Reconciliation failed: "
+                    f"{reconciliation['failed_checks'] + reconciliation['mismatched_expectations']}"
+                )
         tables_by_name = {a["filename"]: a for a in artifacts}
         manifest: dict[str, Any] = {
             "schema_version": 1,
             "season_start_year": 2022,
             "feature_definition_version": FEATURE_VERSION,
-            "snapshot_id": snapshot_id,
+            "snapshot_ids": snapshot_ids,
+            "source_pins_verified": pins_verified,
             "code_commit": code_commit,
             "generated_at": utc_now(),
             "duckdb_version": version("duckdb"),
-            "source_snapshot_sha256": sha256_file(snapshot_dir / "snapshot.json"),
+            "source_snapshot_sha256": snapshot_sha,
             "source_artifacts": logs,
             "attribution": ATTRIBUTION,
             "terms": NBA_TERMS,
@@ -409,10 +465,7 @@ def build_box_features(
             "views": {
                 "same_window_features": {
                     "mode": "same_window",
-                    "windows": [
-                        {"window_id": "regular-2022-23", "season_types": ["regular"]},
-                        {"window_id": "playoffs-2022-23", "season_types": ["playoffs"]},
-                    ],
+                    "windows": windows,
                     "note": "Retrospective: includes every finalized game in the window.",
                 },
                 "asof_retrospective_features": {
@@ -431,11 +484,8 @@ def build_box_features(
                     "note": "Source gives only a 2026 capture bound and no finalization instants.",
                 },
             },
-            "reconciliation": {
-                "observed": reconciliation,
-                "expected": expected,
-                "mismatched_expectations": mismatched,
-            },
+            "reconciliation": reconciliation,
+            "coverage": coverage,
             "output_artifacts": tables_by_name,
         }
         write_json(output / "manifest.json", manifest)
@@ -445,17 +495,79 @@ def build_box_features(
     return manifest
 
 
-def _snapshot_id(logs: list[Any]) -> str:
+VIEW_POLICY = {
+    "same_window_features": "same_window;types=declared window;all finalized games in window",
+    "asof_retrospective_features": (
+        "dated_retrospective;history=same season type as target;game_date<rating_date"
+    ),
+    "asof_strict_features": (
+        "strict_rolling;history=same season type as target;resolve_revisions;"
+        "available_at<=C,finalized_at<C,game_date<rating_date"
+    ),
+}
+
+
+def _snapshot_id(logs: list[Any], snapshot_sha: str, view: str, policy: str) -> str:
     payload = {
         "feature_version": FEATURE_VERSION,
+        "source_snapshot_sha256": snapshot_sha,
         "sources": sorted((row["name"], row["sha256"]) for row in logs),
+        "view": view,
+        "cohort_and_history_policy": policy,
         "season_types": list(SEASON_TYPES),
-        "rule": "retrospective:game_date<rating_date;strict:resolve_revisions",
     }
     return sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
-def _views(rows: list[Appearance], snapshot_id: str, provenance: Provenance) -> dict[str, Any]:
+def _coverage(connection: duckdb.DuckDBPyConnection, output: Path) -> dict[str, Any]:
+    """Per-view, per-season-type player coverage, cold starts and per-feature missingness."""
+    result: dict[str, Any] = {}
+    for view, kind_column, key in (
+        ("same_window_features", "season_types", "player_id"),
+        ("asof_retrospective_features", "history_season_type", "game_id, player_id"),
+        ("asof_strict_features", "history_season_type", "game_id, player_id"),
+    ):
+        path = str(output / f"{view}.parquet")
+        per_kind: dict[str, Any] = {}
+        for (kind,) in connection.execute(
+            f"SELECT DISTINCT {kind_column} FROM read_parquet(?) ORDER BY 1", [path]
+        ).fetchall():
+            first = FEATURES[0].code
+            rows, cold, players, with_history = connection.execute(
+                f"SELECT count(*), count(*) FILTER (WHERE eligible_appearances = 0), "
+                "count(DISTINCT player_id), count(DISTINCT player_id) "
+                "FILTER (WHERE eligible_appearances > 0) FROM read_parquet(?) "
+                f"WHERE {kind_column} = ? AND feature_code = ?",
+                [path, kind, first],
+            ).fetchall()[0]
+            features = {}
+            for code, n, eligible, covered, null_value, null_numerator in connection.execute(
+                "SELECT feature_code, count(*), count(*) FILTER (WHERE eligible_appearances > 0), "
+                "count(*) FILTER (WHERE covered_appearances > 0), "
+                "count(*) FILTER (WHERE value IS NULL), count(*) FILTER (WHERE numerator IS NULL) "
+                f"FROM read_parquet(?) WHERE {kind_column} = ? GROUP BY 1 ORDER BY 1",
+                [path, kind],
+            ).fetchall():
+                features[code] = {
+                    "rows": n,
+                    "rows_with_eligible_history": eligible,
+                    "rows_with_covered_components": covered,
+                    "null_value_rows": null_value,
+                    "null_numerator_rows": null_numerator,
+                }
+            per_kind[kind] = {
+                "key": key,
+                "rows": rows,
+                "cold_start_rows": cold,
+                "players": players,
+                "players_with_history": with_history,
+                "features": features,
+            }
+        result[view] = per_kind
+    return result
+
+
+def _views(rows: list[Appearance], ids: dict[str, str], provenance: Provenance) -> dict[str, Any]:
     tables: dict[str, Any] = {name: [] for name in TABLES}
     tables["appearances"] = [
         {
@@ -470,19 +582,26 @@ def _views(rows: list[Appearance], snapshot_id: str, provenance: Provenance) -> 
         }
         for r in rows
     ]
-    window_values: dict[tuple[str, str], Any] = {}
+    windows: list[dict[str, Any]] = []
     for kind in SEASON_TYPES:
         eligible = [r for r in rows if r.season_type == kind]
         if not eligible:
             continue
         start, end = min(r.game_date for r in eligible), max(r.game_date for r in eligible)
+        windows.append(
+            {
+                "window_id": f"{kind}-2022-23",
+                "season_types": [kind],
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+            }
+        )
         by_player: dict[str, list[Appearance]] = defaultdict(list)
         for r in same_window(rows, start, end, [kind]):
             by_player[r.player_id].append(r)
         for player, group in sorted(by_player.items()):
             accumulator = aggregate(group)
             values, summary = accumulator.values(), accumulator.summary()
-            window_values[(player, kind)] = (values, summary)
             base = {
                 "window_id": f"{kind}-2022-23",
                 "season_types": kind,
@@ -490,7 +609,7 @@ def _views(rows: list[Appearance], snapshot_id: str, provenance: Provenance) -> 
                 "end_date": end,
             }
             tables["same_window_features"] += _feature_rows(
-                base, snapshot_id, player, values, summary
+                base, ids["same_window_features"], player, values, summary
             )
     for row, values, summary in history_rows(rows):
         rating = row.game_date
@@ -502,7 +621,7 @@ def _views(rows: list[Appearance], snapshot_id: str, provenance: Provenance) -> 
             "history_season_type": row.season_type,
         }
         tables["asof_retrospective_features"] += _feature_rows(
-            base, snapshot_id, row.player_id, values, summary
+            base, ids["asof_retrospective_features"], row.player_id, values, summary
         )
     revisions = capture_bound_revisions(rows, provenance)
     exclusions: Counter[str] = Counter()
@@ -526,18 +645,11 @@ def _views(rows: list[Appearance], snapshot_id: str, provenance: Provenance) -> 
             "cohort_status": "unavailable_historical_strict",
         }
         tables["asof_strict_features"] += _feature_rows(
-            base, snapshot_id, row.player_id, empty.values(), empty.summary()
+            base, ids["asof_strict_features"], row.player_id, empty.values(), empty.summary()
         )
-    tables["_window_values"] = window_values
+    tables["_windows"] = windows
     tables["_strict_exclusions"] = dict(sorted(exclusions.items()))
     return tables
-
-
-def _prior_mismatches(feature_rows: list[dict[str, Any]], prior: dict[Any, int]) -> int:
-    seen: dict[tuple[str, str], int] = {}
-    for row in feature_rows:
-        seen[(row["game_id"], row["player_id"])] = row["eligible_appearances"]
-    return sum(seen.get(key) != count for key, count in prior.items()) + abs(len(seen) - len(prior))
 
 
 def main() -> None:
@@ -546,10 +658,11 @@ def main() -> None:
     cli.add_argument("output_dir", type=Path)
     cli.add_argument("--code-commit", required=True)
     args = cli.parse_args()
-    manifest = build_box_features(args.snapshot_dir, args.output_dir, args.code_commit)
+    try:
+        manifest = build_box_features(args.snapshot_dir, args.output_dir, args.code_commit)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     print(json.dumps(manifest["reconciliation"], indent=2, sort_keys=True))
-    if manifest["reconciliation"]["mismatched_expectations"]:
-        raise SystemExit("Reconciliation differs from the #63 profile; see manifest")
 
 
 if __name__ == "__main__":
