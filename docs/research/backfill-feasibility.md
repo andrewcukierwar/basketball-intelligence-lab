@@ -88,7 +88,7 @@ One representative season per era of the [#51 batch plan](nba-feed-coverage.md#b
 | V2/V3 baseline | 2012–13 to 2015–16 | V2, V3, no data.nba | 2014–15 (2012–13 lacks 16 V3 games, 2015–16 has V3 period anomalies) |
 | V2/V3 baseline | 2008–09 to 2011–12 | same | 2010–11 (2009–10 has a pbpstats.com gap) |
 | V2/V3 baseline | 2004–05 to 2007–08 | same | 2005–06 |
-| V2/V3 baseline | 2001–02 to 2003–04 | same | not built |
+| V2/V3 baseline | 2001–02 to 2003–04 | same | 2002–03 (probed in #105) |
 
 ### Setup (`pilot_sources.py` and loaders, minimal and tested)
 
@@ -136,11 +136,15 @@ Evidence is one season per era, so viability is an estimate. A batch is "viable"
 | 2. 2004–05 to 2007–08 | 4 seasons | **Likely viable** from the 2005–06 result | Small to medium. One session: 4 pins, 4 builds of about 1 min, strata review | Check 2005–06 V3 anomaly games in sibling seasons |
 | 3. 2012–13 to 2015–16 | 4 seasons | **Probably viable** (2014–15 passes except one playoff game). 2012–13 may fall near 97% because 16 games have no V3 | Medium. One session | Playoff denominators of 80 games make a one-game miss a warning under the revised policy |
 | 4. 2008–09 to 2011–12 | 4 seasons | **Uncertain.** 2010–11 regular is 96.5% from a same-clock rebound pattern | Medium to large if a new repair rule is needed (separate ADR), small to just build and record | Decide whether to accept coverage warnings or write the rule first |
-| 5. 2001–02 to 2003–04 | 3 seasons | **Unknown.** Not probed | Small first probe, then as batch 2 | Run one build before committing the batch |
+| 5. 2001–02 to 2003–04 | 3 seasons | **Probed (#105): 2002–03 builds cleanly but misses the playoff floor by one game.** Likely 1 to 2 of 3 seasons viable | Small. One session | See the 2002–03 results below |
 | 6. 2017–18 remediation | 2017–18 | **Not viable yet.** The repair reaches 96.6% coverage, 5 games short, and 0.283% unresolved against 0.1% | Medium. Decide ADR-0023, then diagnose the residual unresolved rate | Needs the maintainer's decision on re-clocking late-entered events |
 | 7. Other `ord` seasons | 2018–19 to 2021–22, 2022–23 to 2024–25 | **Optional.** All pass or are conditioned already | Small experiment | Measure whether the repair lowers unresolved shares in these seasons before any default change |
 
 Recommended order: batches 1, 2 and 3 first, since they need no pipeline change. Batch 5 as a one-season probe at the same time. Batch 4 after a decision on a same-clock rebound rule. Batch 6 in parallel with an ADR-0023 decision. A first-pass total of about 4 to 6 sessions, including independent review, is a rough estimate (**Inferred** from the build times and diffs here).
+
+### 2002–03 probe results (#105)
+
+2002–03 built on the default path with no pipeline change beyond pins: 1,171 of 1,189 regular games (98.5%) and 85 of 88 playoff games (96.6%), unresolved 0.038% for the season. It **fails the ADR-0022 playoff coverage floor by one game**, the same shape as 2004–05, 2013–14 and 2014–15, so it has no row set. Quarantine causes are the older-era mix (6 `missing_period_end` and 8 `player_plus_minus_mismatch` of 21), with no new schema gap, 18 inferred team-periods all agreeing with Bentes, and verification limited to V3 and Bentes (no liveData or data.nba). The era is therefore buildable with the existing code. Whether a given season is eligible depends on a handful of playoff games out of about 85, so each of 2001–02 and 2003–04 is roughly a coin flip on the playoff gate (**Inferred**: 2004–05 to 2007–08 and 2002–03 quarantined 3, 1, 1, 0 and 3 playoff games, and the floor tolerates 2). 2001–02 additionally has 3 regular games with incomplete V3 period scores, which will quarantine and cost about 0.25 points of regular coverage. Recommendation: file a 2001–02 and 2003–04 batch, as a data-only record, and expect to report them as eligible or unavailable by one or two playoff games. 2002–03 itself is unavailable under the current hard gates.
 
 ## Reproduce
 
