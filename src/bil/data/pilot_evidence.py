@@ -17,6 +17,7 @@ from tempfile import TemporaryDirectory
 import duckdb
 
 from bil.data.pilot_inputs import archive_rows, v3_games
+from bil.data.pilot_sources import lineup_stat_names
 
 FEEDS = {
     "pbpstats": ("GAMEID", ("GAMEID", "PERIOD", "STARTTIME", "ENDTIME", "OPPONENT")),
@@ -42,7 +43,6 @@ FEEDS = {
         ),
     ),
 }
-BENTES = ("lineup_stats_regular_2023.parquet", "lineup_stats_playoffs_2023.parquet")
 LOWER_TRUST = (
     "livedata_starters",
     "v3_period_defect",
@@ -61,7 +61,12 @@ def _literal(path: Path) -> str:
     return "'" + str(path).replace("'", "''") + "'"
 
 
-def stage_feeds(connection: duckdb.DuckDBPyConnection, evidence: Path, staging: Path) -> None:
+def stage_feeds(
+    connection: duckdb.DuckDBPyConnection,
+    evidence: Path,
+    staging: Path,
+    season_start_year: int = 2022,
+) -> None:
     """Load the archived evidence CSVs into DuckDB tables keyed by ten-digit game IDs."""
     for name, (game_key, columns) in FEEDS.items():
         path = staging / f"{name}.csv"
@@ -69,13 +74,13 @@ def stage_feeds(connection: duckdb.DuckDBPyConnection, evidence: Path, staging: 
             writer = csv.writer(target)
             writer.writerow(columns)
             for suffix in ("", "_po"):
-                for row in archive_rows(evidence / f"{name}{suffix}_2022.tar.xz"):
+                for row in archive_rows(evidence / f"{name}{suffix}_{season_start_year}.tar.xz"):
                     writer.writerow([row.get(column, "") for column in columns])
         connection.execute(
             f"create or replace table {name} as select * replace (lpad({game_key}, 10, '0') as {game_key}) "
             f"from read_csv({_literal(path)}, all_varchar = true)"
         )
-    files = ", ".join(_literal(evidence / name) for name in BENTES)
+    files = ", ".join(_literal(evidence / name) for name in lineup_stat_names(season_start_year))
     connection.execute(
         f"""
         create or replace table bentes as
@@ -354,12 +359,14 @@ def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object
 
 
 def period_score_agreement(
-    connection: duckdb.DuckDBPyConnection, snapshot: Path
+    connection: duckdb.DuckDBPyConnection, snapshot: Path, season_start_year: int = 2022
 ) -> dict[str, object]:
     """Compare archived V3 period-end scores with liveData and data.nba period-end scores."""
     v3 = {}
     for suffix in ("", "_po"):
-        for game_id, game in v3_games(snapshot / f"nbastatsv3{suffix}_2022.tar.xz").items():
+        for game_id, game in v3_games(
+            snapshot / f"nbastatsv3{suffix}_{season_start_year}.tar.xz"
+        ).items():
             for period, score in game.periods.items():
                 v3[(game_id, period)] = score
 
@@ -403,14 +410,16 @@ def period_score_agreement(
     }
 
 
-def compare(build: Path, snapshot: Path, evidence: Path) -> dict[str, object]:
+def compare(
+    build: Path, snapshot: Path, evidence: Path, season_start_year: int = 2022
+) -> dict[str, object]:
     with TemporaryDirectory() as temp, duckdb.connect() as connection:
-        stage_feeds(connection, evidence, Path(temp))
+        stage_feeds(connection, evidence, Path(temp), season_start_year)
         stage_build(connection, build)
         return {
             "lineups_vs_bentes": lineup_agreement(connection),
             "possession_offense": possession_agreement(connection),
             "event_order_vs_datanba": order_agreement(connection),
             "inferred_starters": starter_agreement(connection),
-            "period_scores": period_score_agreement(connection, snapshot),
+            "period_scores": period_score_agreement(connection, snapshot, season_start_year),
         }

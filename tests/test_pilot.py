@@ -51,7 +51,7 @@ def test_snapshot_checks_bytes_and_never_overwrites(
     source = pilot_sources.Source(
         "mock.csv", original.as_uri(), sha256(content).hexdigest(), len(content), "synthetic"
     )
-    monkeypatch.setattr(pilot_sources, "SOURCES", (source,))
+    monkeypatch.setattr(pilot_sources, "season_sources", lambda _year: (source,))
     target = tmp_path / "snapshot"
     captured = pilot_sources.capture_snapshot(target)
     assert pilot_sources.load_snapshot(target) == captured
@@ -235,9 +235,12 @@ def test_build_routes_duckdb_spills_to_private_staging(
         assert connection.execute("SELECT current_setting('temp_directory')").fetchone() == (
             str(staging / "duckdb-spill"),
         )
+        assert args[-1] == 2023
         return []
 
-    monkeypatch.setattr(pilot, "load_snapshot", lambda _path: {"artifacts": []})
+    monkeypatch.setattr(
+        pilot, "load_snapshot", lambda _path: {"artifacts": [], "season_start_year": 2023}
+    )
     monkeypatch.setattr(pilot, "_season_games", games)
     pilot.build_pilot(tmp_path, output, "0" * 40)
     assert sorted(path.name for path in tmp_path.iterdir()) == ["output", "snapshot.json"]
@@ -560,7 +563,8 @@ def test_check_build_passes_synthetic_output_and_catches_defects(tmp_path: Path)
                 "COPY logs TO ? (FORMAT PARQUET)", [str(snapshot / "player_game_logs.parquet")]
             )
         (output / "manifest.json").write_text(
-            json.dumps({"output_artifacts": artifacts}), encoding="utf-8"
+            json.dumps({"output_artifacts": artifacts, "season_start_year": 2022}),
+            encoding="utf-8",
         )
         return output
 
@@ -795,3 +799,137 @@ def test_unresolved_possession_takes_unanimous_feed_offense_without_repeating() 
         game, roster, raw, events, possessions, "fixture", frozenset({1}), {6: 100}, report
     )
     assert rows["possession"][1]["status"] == "unresolved" and report["relabeled_possessions"] == 0
+
+
+def test_season_sources_follow_each_provider_year_convention() -> None:
+    sources = {source.name: source for source in pilot_sources.season_sources(2023)}
+    # Shufinskiy names by starting year; Bill Mill by ending year under a season-neutral name.
+    expected = {"nbastats_2023.tar.xz", "nbastatsv3_po_2023.tar.xz", "datanba_po_2023.tar.xz"}
+    assert expected <= set(sources)
+    team = sources["team_game_logs.parquet"]
+    assert team.uri.endswith("/team_game_logs/season=2024/data.parquet")
+    assert team.local_name == "team_game_logs_2024.parquet"
+    evidence = [source.name for source in pilot_sources.season_evidence_sources(2024)]
+    assert evidence[-2:] == [
+        "lineup_stats_regular_2025.parquet",
+        "lineup_stats_playoffs_2025.parquet",
+    ]
+    assert "pbpstats_po_2024.tar.xz" in evidence
+    # Every season pins distinct bytes for every input.
+    digests = [
+        source.sha256
+        for year in pilot_sources.SEASONS
+        for source in pilot_sources.season_sources(year)
+    ]
+    assert len(set(digests)) == len(digests)
+
+
+@pytest.mark.parametrize("year", [2025, 2026, 2021])
+def test_unpinned_and_holdout_seasons_are_refused(tmp_path: Path, year: int) -> None:
+    for make in (pilot_sources.season_sources, pilot_sources.season_evidence_sources):
+        with pytest.raises(ValueError, match="holdout" if year >= 2025 else "No pinned"):
+            make(year)
+    target = tmp_path / "snapshot"
+    with pytest.raises(ValueError):
+        pilot_sources.capture_snapshot(target, season_start_year=year, local=tmp_path)
+    assert not target.exists()
+    # A snapshot that records a refused season is rejected before any payload is read.
+    target.mkdir()
+    record = {
+        "schema_version": 1,
+        "season_start_year": year,
+        "attribution": pilot_sources.ATTRIBUTION,
+        "terms": pilot_sources.NBA_TERMS,
+        "artifacts": [],
+    }
+    (target / "snapshot.json").write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises(ValueError):
+        pilot_sources.load_snapshot(target)
+
+
+def test_local_capture_copies_verified_bytes_without_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def offline(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("local capture must not open a network connection")
+
+    monkeypatch.setattr(pilot_sources, "urlopen", offline)
+    local = tmp_path / "audit"
+    local.mkdir()
+    content = b"box"
+    (local / "team_game_logs_2024.parquet").write_bytes(content)
+    source = pilot_sources.Source(
+        "team_game_logs.parquet",
+        "https://example.invalid/team",
+        sha256(content).hexdigest(),
+        len(content),
+        "synthetic",
+        local_name="team_game_logs_2024.parquet",
+    )
+    target = tmp_path / "snapshot"
+    captured = pilot_sources.capture_snapshot(target, (source,), 2023, local)
+    assert (target / "team_game_logs.parquet").read_bytes() == content
+    assert captured["season_start_year"] == 2023
+    assert captured["local_capture"].endswith("audit")
+    assert captured["artifacts"][0]["retrieved_at"].endswith("+00:00")
+    assert pilot_sources.load_snapshot(target, (source,), 2023) == captured
+    with pytest.raises(ValueError, match="Invalid source snapshot"):
+        pilot_sources.load_snapshot(target, (source,), 2024)
+
+    # Changed or missing local bytes fail and leave no partial snapshot behind.
+    (local / "team_game_logs_2024.parquet").write_bytes(b"bot")
+    with pytest.raises(ValueError, match="Source bytes differ"):
+        pilot_sources.capture_snapshot(tmp_path / "changed", (source,), 2023, local)
+    (local / "team_game_logs_2024.parquet").unlink()
+    with pytest.raises(FileNotFoundError, match="team_game_logs_2024.parquet"):
+        pilot_sources.capture_snapshot(tmp_path / "missing", (source,), 2023, local)
+    assert not (tmp_path / "changed").exists() and not (tmp_path / "missing").exists()
+
+
+def test_checks_and_evidence_read_the_recorded_season_files(tmp_path: Path) -> None:
+    from bil.data import pilot_evidence
+    from bil.data.pilot_check import _same_offense_violations
+
+    # Only 2023–24 files exist, so reading a 2022 name would fail.
+    raw = b"GAME_ID,EVENTNUM,EVENTMSGTYPE,EVENTMSGACTIONTYPE\n22300001,50,6,14\n"
+    with tarfile.open(tmp_path / "nbastats_2023.tar.xz", "w:xz") as archive:
+        member = tarfile.TarInfo("events.csv")
+        member.size = len(raw)
+        archive.addfile(member, io.BytesIO(raw))
+    for suffix in ("", "_po"):
+        _v3_archive(
+            tmp_path / f"nbastatsv3{suffix}_2023.tar.xz",
+            [] if suffix else [["22300001", "1", "20", "1", "", "", "period", "end", "31", "20"]],
+        )
+    for name, (game_key, columns) in pilot_evidence.FEEDS.items():
+        for suffix in ("", "_po"):
+            row = ["22300001" if column == game_key else "" for column in columns]
+            _csv_archive(tmp_path / f"{name}{suffix}_2023.tar.xz", list(columns), [row])
+    with duckdb.connect() as connection:
+        for name in pilot_sources.lineup_stat_names(2023):
+            connection.execute(
+                "copy (select '0022300001' as game_id, 0 as secs_game_start, "
+                "720 as secs_game_end, '1 A, 2 B, 3 C, 4 D, 5 E' as lineup_team) "
+                f"to '{tmp_path / name}' (format parquet)"
+            )
+        connection.execute(
+            """
+            create table possession as
+            select '0022300001' as game_id, 1 as stream_revision, * from (values
+                (1, 1, 1, 3, '100', 'accepted'), (2, 1, 3, 6, '100', 'accepted')
+            ) as rows(possession_seq, period, start_seq, end_seq, offense_team_id, status);
+            create table event as
+            select '0022300001' as game_id, 1 as stream_revision,
+                   1 as seq, 'foul' as kind, '50' as source_event_id;
+            """
+        )
+        # The flagrant foul is found in the 2023–24 V2 archive.
+        assert _same_offense_violations(connection, tmp_path, 2023) == 0
+        pilot_evidence.stage_feeds(connection, tmp_path, tmp_path, 2023)
+        staged = connection.execute("select game_id, ids from bentes").fetchall()
+        assert staged == [("0022300001", ["1", "2", "3", "4", "5"])] * 2
+        assert connection.execute("select GAMEID from pbpstats limit 1").fetchone() == (
+            "0022300001",
+        )
+        scores = pilot_evidence.period_score_agreement(connection, tmp_path, 2023)
+        assert scores["periods_compared"] == 0
