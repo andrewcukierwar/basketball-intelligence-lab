@@ -49,3 +49,9 @@ Build same-window (retrospective) and eligible as-of box-score feature views for
 ## Next actions
 
 Review the branch, then decide whether the SPM fit should pool or separate season types in as-of history and add the RAPM-target intersection counts.
+
+## Independent review
+
+A fresh Opus reviewer recomputed all 13 features independently with SQL over the raw logs. The same-window view and the as-of retrospective view both had 0 mismatches. The reviewer requested two changes: gate the build on reconciliation, and record coverage and missingness in the manifest. Both were fixed in 3527ec5.
+
+A focused re-review approved the fixes. Four seeded faults each fail the build and remove the output. The reviewer checked the manifest coverage fields in `issue-62-v2` against its own SQL, and confirmed that `expected=None` cannot be reached from the CLI.
