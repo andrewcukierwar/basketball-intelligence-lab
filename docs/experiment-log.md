@@ -115,3 +115,13 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Results:** Noiseless rotation recovers all 24 effects within $2\times10^{-5}$ points per 100 possessions, with effect RMSE $5.501\times10^{-6}$. Identical lineup columns split effects equally and produce 3.079 held-out expected-rate RMSE. At ridge 0.01, the expected-rate RMSE is 76.031 with 48 rows and 6.899 with 4,000. The 48-row intercept-only model returns 9.366. [Full results and tolerances](research/rapm-synthetic.md#verification-and-sensitivity)
 - **Limitations:** One fixed seed, additive effects and independent possession outcomes. The test set scores the generated conditional expectation. The sensitivity grid sets no NBA penalty or minimum exposure threshold.
 - **Next decision:** Specify how the private possession pilot becomes a RAPM row set and preserve reconciliation and chronology in the subsequent M2 design.
+
+### EXP-0006 — OpenRAPM solver agreement
+
+- **Status:** All four benchmark fixtures passed.
+- **Date:** 2026-11-23.
+- **Research question:** Do sparse LSQR and OpenRAPM's weighted normal equations agree when both solve the same two-role ridge objective?
+- **Category:** Experimental (synthetic).
+- **Inputs and configuration:** Pinned OpenRAPM commit `8cfb3df786ceb1cd362a67c4683c37a473ee9c2b`, shared generated rows and unpenalized intercept. The four cases cover unequal weights, common rescaling of weights and penalty, and paired players under weak and strong regularization.
+- **Results:** Maximum differences were `3.429e-10` for player coefficients, `1.695e-10` for the intercept and `6.790e-10` for fitted rates, in points per 100 possessions. The absolute limit was `1e-8`.
+- **Scope:** Numerical agreement for a shared objective. NBA row construction, model calibration and published ratings require separate evidence. [Full results and command](research/rapm-open-benchmark.md)

@@ -1,0 +1,27 @@
+{
+  "revisions": [
+    {
+      "key": "past-possession",
+      "revision": 1,
+      "source_artifact_id": "fit-source",
+      "kind": "observation",
+      "content_sha256": "9214215add4f6495a4f3b3041f3ec8ab74c16740c208e833f4b00e8235472475",
+      "availability_basis": "published",
+      "available_at": "2023-06-15T14:00:00Z",
+      "evidence_ref": "synthetic-publication/past-possession",
+      "observed_date": "2023-06-14",
+      "finalized_at": "2023-06-15T03:00:00Z"
+    }
+  ],
+  "selected": [
+    [
+      "past-possession",
+      1
+    ]
+  ],
+  "training_mode": "historical_estimator",
+  "calibration_window": [
+    "2022-07-01",
+    "2023-07-01"
+  ]
+}
