@@ -124,3 +124,14 @@
 - Update issue/PR status accurately; distinguish done, blocked, and awaiting review or approval.
 - Report what shipped, evidence, deviations, risks, and the next actionable step.
 - Prefer meaningful delivery over procedural activity; never equate busywork with progress.
+
+## Autonomous PR integration
+
+- Agents are authorized to merge in-scope pull requests without human approval.
+- Obtain independent review and resolve all blocking findings before merging.
+- Confirm all acceptance criteria are satisfied and required CI checks pass.
+- Verify the exact reviewed commit before merging.
+- Integrate PRs in dependency order and revalidate against the latest main branch.
+- Never bypass required checks or branch protection.
+- Escalate material architectural changes, security-sensitive changes, destructive operations and scope expansions.
+- After merging, update the associated issues and continue executing newly unblocked tasks without waiting for human intervention.
