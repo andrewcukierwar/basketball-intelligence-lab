@@ -43,3 +43,15 @@ Synthesize the M2 evidence into one report, update the EPM uncertainty register,
 1. Independent review of the report (fresh context), then a PR when authorized.
 2. Maintainer: decide ADR-0025, ADR-0019 departure, ADR-0013, ADR-0023, the #53 remainder, the informed-RAPM comparator and the 2025–26 registration.
 3. Optional follow-up: add EXP entries for #23 and #24.
+
+## Independent review
+
+A fresh Opus fact-checker approved after checking about 75 claims, with no blocking errors. It found that the repository still recorded the ADR-0019 re-review as pending. The re-review had in fact approved abed529 before PR #91 merged, so the lead recorded it in ADR-0019, EXP-0011 and the #74/#82 handoff. The lead also applied the reviewer's eight minor corrections:
+- the fitted-rate delta;
+- the development seasons count;
+- the 2010–11 probe;
+- the warning labels;
+- the scope of the ADR status;
+- the EPM-U labels;
+- the Bentes coverage;
+- the residual end-of-period effect as an open item.
