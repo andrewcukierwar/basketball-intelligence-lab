@@ -49,3 +49,18 @@ Freeze the loss, bounds and per-statistic tying. Fit exponential decay and leagu
 - Independent review of `33fd3d0` and the docs commit against the protocol.
 - Run the same frozen protocol on the 2023–24 and 2024–25 outer folds once #52's builds are accepted, including the offseason gap where clocks differ most. Do not touch 2025–26.
 - Candidate follow-ups for triage: a draft or debut registry for true rookie status, player-clustered or two-way bootstrap, and tying half-lives across clocks or statistics given the flat decay surface.
+
+## Independent review
+
+A fresh Opus reviewer approved with no blocking findings. It verified:
+- the fold nesting and as-of sums, by hand and through the oracle and scored-block-mutation tests;
+- that the protocol commit precedes the evaluated commit;
+- the `fg3_pct`, `ft_pct` and `ast_per_36` outer-block deltas, from the private predictions.
+
+A player-clustered bootstrap kept every pooled regular-season interval away from zero.
+
+Nonblocking items:
+- Some inner clock choices underperform a fixed clock. This is now documented.
+- The small groups are hedged as game-clustered only.
+- Record the protocol SHA-256 in future manifests.
+
