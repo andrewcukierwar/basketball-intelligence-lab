@@ -1,7 +1,7 @@
 # Safeguarded event-order repair `order-repair-v2`, 2017–18 ([#99](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/99))
 
 - **Evidence class:** Experimental, Original design (applies the maintainer conditions of 2026-11-24 in ADR-0023). No EPM output was used. No model was fitted.
-- **Status:** Proposed ([ADR-0029](../DECISIONS.md)). **Not validated for canonical use.** The independent review of the first version found two blockers, addressed here and awaiting re-review. Outputs stay experimental.
+- **Status:** Proposed ([ADR-0029](../DECISIONS.md)). **Not validated for canonical use.** The independent re-review approved merging the safeguarded version in [PR #119](https://github.com/andrewcukierwar/basketball-intelligence-lab/pull/119) as an experimental option.
 - **Code:** `src/bil/data/pilot_order_v2.py`, `build --order-repair-v2`, commit `76bb03d4`. Build `data/processed/2017-18/issue-99-order-repair-v2-c` passes 26 of 26 `check` invariants (superseded first-version builds: `-a`, `-b`). Version 1 (`--order-repair`) is unchanged for failed games. The scratch build `issue-90-order-repair-v2` used v1's removed second use and can be rebuilt only at its old commit.
 
 ## The rule
@@ -65,7 +65,7 @@ Corrected clocks are monotone by construction, so `unsupported_reorder` and `unr
 
 ## ADR-0022 eligibility
 
-2017–18 stays **excluded**. Regular-season coverage is 86.7% (1,067 of 1,230, floor 97%) and the full-season unresolved share is 0.388% (limit 0.1%). `scripts/season_quality.py --run-checks` classifies it as `fails_hard_limit` (output `data/quality/issue-99-2017-18-v2c`, not committed). Nothing was relaxed. The repair cannot close either gap: reaching 97% needs 1,193 regular games (126 more), and the unresolved share is dominated by accepted games the repair never touches.
+2017–18 stays **excluded**. Regular-season coverage is 86.7% (1,067 of 1,230, floor 97%) and the full-season unresolved share is 0.388% (limit 0.1%). `scripts/season_quality.py --run-checks` classifies it as `fails_hard_limit` (output `data/processed/quality/issue-99-2017-18-v2c`, not committed). Nothing was relaxed. The repair cannot close either gap: reaching 97% needs 1,193 regular games (126 more), and the unresolved share is dominated by accepted games the repair never touches.
 
 ## Residual unresolved possessions (diagnosis, not fixed)
 
@@ -81,7 +81,7 @@ Candidate causes, in order of size: same-clock free-throw and substitution order
 
 ## Limitations
 
-- The 27 recoveries rest on corroboration by V3 or rebound semantics. V3 and `ord` derive from the same upstream log.
+- The 15 recoveries rest on corroboration by V3 or rebound semantics. V3 and `ord` derive from the same upstream log.
 - The ceiling and the corroboration tiers are a first policy. The 24 s ceiling is the maintainer's value. The tier definitions are mine and are proposals for review.
 - The comparison with an unrepaired build is impossible by construction. Plausibility rests on Bentes, pbpstats.com and data.nba.
 - `event.parquet` has no per-event re-clock flag. Adding a column would change the shared output schema of every build. The log CSV and the `order_repair_v2_*` issue rows identify every moved event instead.
