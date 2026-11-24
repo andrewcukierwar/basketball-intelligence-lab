@@ -32,6 +32,7 @@ from bil.data.pilot_inputs import RawEvent
 RULE_VERSION = "same-clock-v1"
 FG_MISS, FT, REBOUND = "2", "3", "4"
 SKIPPABLE = ("8", "9")  # substitutions and timeouts
+JUMP_BALL = "10"
 BOUNDARY = ("12", "13")
 
 
@@ -68,9 +69,18 @@ def _team(event: RawEvent) -> str:
 
 
 def _has_miss_before(sequence: list[RawEvent]) -> bool:
-    """Whether the last event is a missed shot, looking back over subs and timeouts."""
+    """Whether the last event is a missed shot, as the pinned parser reads it.
+
+    Subs and timeouts are skipped, and so is one jump ball: a rebound after a held-ball tip
+    belongs to the shot before the jump ball, which the pinned parser accepts.
+    """
+    jump_ball_seen = False
     for event in reversed(sequence):
-        if event.fields["EVENTMSGTYPE"] in SKIPPABLE:
+        kind = event.fields["EVENTMSGTYPE"]
+        if kind in SKIPPABLE:
+            continue
+        if kind == JUMP_BALL and not jump_ball_seen:
+            jump_ball_seen = True
             continue
         return _is_miss(event)
     return False

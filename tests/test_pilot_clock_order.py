@@ -170,3 +170,21 @@ def test_two_same_team_candidates_are_ambiguous_and_the_game_is_declined() -> No
         ev(7, 2, "4:58", A, "MISS tip early"),
     )
     assert reorder_same_clock(raw) == Declined("ambiguous_candidates", "1", "4:58", 3)
+
+
+def test_rebound_after_a_jump_ball_that_follows_a_miss_is_not_an_orphan() -> None:
+    raw = stream(
+        ev(1, 2, "5:00", A, "MISS shot BLOCK"),
+        ev(2, 10, "5:00", A, "Jump Ball"),
+        ev(3, 4, "5:00", A, "REBOUND"),
+    )
+    assert reorder_same_clock(raw) is None
+
+
+def test_rebound_after_a_jump_ball_without_a_miss_is_still_an_orphan() -> None:
+    raw = stream(
+        ev(1, 1, "5:00", A, "made"),
+        ev(2, 10, "5:00", A, "Jump Ball"),
+        ev(3, 4, "5:00", A, "REBOUND"),
+    )
+    assert reorder_same_clock(raw) == Declined("no_candidate", "1", "5:00", 3)
