@@ -39,3 +39,11 @@ No independent review has been run. Low power at small quarantine counts, and th
 ## Next actions
 
 Independent review of the diff; maintainer decision on 2018–19 materiality; run the diagnostic again on any rebuilt season (including a #53 remediation of 2017–18) into a new output directory.
+
+## Independent review
+
+A fresh Opus reviewer recomputed the revised classification for 2018–19 and 2024–25, the sensitivity rows, and a rerun under the original flag rule. All of them matched. It requested two changes:
+- fix the floor on the bootstrap p-value;
+- disclose that the flag rule was revised after the first run.
+
+Both were fixed in 903ca38. A focused re-review approved, and the reviewer's own 20,000-replicate rerun reproduced the v2 flags exactly. The lead corrected two stale v1 intervals in the report.
