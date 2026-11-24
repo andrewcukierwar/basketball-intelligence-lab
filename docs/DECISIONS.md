@@ -202,7 +202,7 @@ V2 remains the event source of record.
 - **Consequences:** All fitted opportunities have exactly one five-on-five design vector. The cohort excludes 12.64% of accepted possessions. The baseline estimates stable-lineup scoring, and future comparisons can test broader representations.
 - **Links:** [Historical row contract](research/rapm-historical-rows.md), [Issue #20](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/20)
 
-## ADR-0014 — Fixed-constant baselines and season-type-keyed history for skill targets
+## ADR-0016 — Fixed-constant baselines and season-type-keyed history for skill targets
 
 - **Date:** 2026-11-23
 - **Status:** Accepted for the #31 baselines.

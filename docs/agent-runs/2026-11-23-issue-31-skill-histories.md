@@ -14,7 +14,7 @@ Build player-game targets, strictly earlier baselines and exposure-weighted scor
 - `src/bil/features/skill_history.py`: pure engine. One-date-at-a-time processing, so same-day games never see each other. Career, season, last-10 (covered games), 30- and 90-day decay and league baselines. Target and history statuses (observed, zero exposure, missing component, no prior, no covered, zero-exposure history). `strict_prior_counts` through `resolve_revisions`. Chronological `Scorer` (weighted MSE, binomial and Poisson log loss).
 - `src/bil/features/skill_build.py`: loader reuse from `box_build`, three Parquet tables, manifest with `content_id`, snapshot IDs, opportunity and appearance digests, coverage, and a gated reconciliation (independent DuckDB self-joins over the raw logs for every baseline, target and headline score, plus player-day duplicates, career equals season, no strict history, and #62 appearance equality). `box_build._write_parquet` gained an optional `columns` argument.
 - `tests/test_skill_history.py` (15 tests): brute-force reference for every baseline on a synthetic multi-player, two-season set, same-day exclusion, rookie and zero-exposure and missing cases, recency weights by hand, last-N window, season boundary, playoff separation, scorer hand calculation, strict counts against revisions, an end-to-end build, source-revision digest changes, and seeded prediction and target mismatches that fail the build and remove the output.
-- Docs: `docs/research/skill-histories.md`, `docs/data-pilot.md` section, ADR-0014.
+- Docs: `docs/research/skill-histories.md`, `docs/data-pilot.md` section, ADR-0016.
 - Private output (not in Git): `data/processed/2022-23/issue-31-v1/`.
 
 ## Key decisions and discoveries
