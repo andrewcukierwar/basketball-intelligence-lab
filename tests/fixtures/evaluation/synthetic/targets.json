@@ -1,0 +1,20 @@
+{
+  "targets": [
+    {
+      "key": "a:margin",
+      "status": "generated",
+      "cohort_id": "synthetic-regular",
+      "game_id": "synthetic-game-a",
+      "season_start_year": 2025,
+      "season_type": "regular"
+    },
+    {
+      "key": "b:margin",
+      "status": "generated",
+      "cohort_id": "synthetic-regular",
+      "game_id": "synthetic-game-b",
+      "season_start_year": 2025,
+      "season_type": "regular"
+    }
+  ]
+}

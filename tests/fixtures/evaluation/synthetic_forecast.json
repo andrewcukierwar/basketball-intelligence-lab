@@ -144,27 +144,27 @@
     {
       "artifact_id": "features-keys",
       "kind": "selection",
-      "uri": "fixture:features-keys",
-      "sha256": "f7372f2ff435630b28c5a2d8074ed89498f2d8c8b8484171b02819d6354e146d",
-      "size_bytes": 23,
+      "uri": "synthetic/features-keys.json",
+      "sha256": "b62a950e50481b845034acaa9e3ff762a5e862fd8d6736980aebb4a4d4217fd6",
+      "size_bytes": 962,
       "source_artifact_id": null,
       "rights_ref": null
     },
     {
       "artifact_id": "rapm-fit-keys",
       "kind": "selection",
-      "uri": "fixture:rapm-fit-keys",
-      "sha256": "5c0a5ae59eaaee42371678a99e712594ed4d6e927f3ab9f22ac35d8c6254c76c",
-      "size_bytes": 23,
+      "uri": "synthetic/rapm-fit-keys.json",
+      "sha256": "2d4b6253659de7e4fa402baa8dfc64be55d2dfc8e4162c24d3fe096c0ec9153c",
+      "size_bytes": 660,
       "source_artifact_id": null,
       "rights_ref": null
     },
     {
       "artifact_id": "spm-fit-keys",
       "kind": "selection",
-      "uri": "fixture:spm-fit-keys",
-      "sha256": "67463c294cb7efaa13a5e1ce906f3e3a1e1fe6194ba874e8e5610d47b60d96e2",
-      "size_bytes": 22,
+      "uri": "synthetic/spm-fit-keys.json",
+      "sha256": "026d3d559060cd3a9999c9fb007f9dcc58d20ffcc4a6d551111fcb1768b80031",
+      "size_bytes": 1127,
       "source_artifact_id": null,
       "rights_ref": null
     },
@@ -189,18 +189,18 @@
     {
       "artifact_id": "targets",
       "kind": "cohort",
-      "uri": "fixture:targets",
-      "sha256": "e4b70fb1ac3239d141a17016841771362b26e242c8f4f1aa28bfa9d3e0aa1798",
-      "size_bytes": 17,
+      "uri": "synthetic/targets.json",
+      "sha256": "8f1e885bbf1afcb52a5e40b461185214bc93d85b9e336e5bfba7dda9f6a726fb",
+      "size_bytes": 438,
       "source_artifact_id": null,
       "rights_ref": null
     },
     {
       "artifact_id": "predictions",
       "kind": "predictions",
-      "uri": "fixture:predictions",
-      "sha256": "63138dddaa88845cae2a86c9e20c827a83ad906f25892d956f645d908308736b",
-      "size_bytes": 21,
+      "uri": "synthetic/predictions.json",
+      "sha256": "b25e5769b2ce277cbb46421765f5422101b3a622768aefcc5dc5063d225c2d7c",
+      "size_bytes": 296,
       "source_artifact_id": null,
       "rights_ref": null
     }
@@ -214,7 +214,7 @@
       "source_artifact_ids": [
         "feature-source"
       ],
-      "max_known_available_at": "2025-11-03T04:59:00Z",
+      "max_known_available_at": "2025-11-03T05:00:00Z",
       "unknown_availability_count": 0,
       "selected_count": 2,
       "exclusions": []
@@ -229,7 +229,7 @@
       ],
       "max_known_available_at": "2023-06-15T14:00:00Z",
       "unknown_availability_count": 0,
-      "selected_count": 9,
+      "selected_count": 1,
       "exclusions": []
     },
     {
@@ -242,7 +242,7 @@
       ],
       "max_known_available_at": "2025-06-20T12:00:00Z",
       "unknown_availability_count": 0,
-      "selected_count": 11,
+      "selected_count": 2,
       "exclusions": []
     }
   ],

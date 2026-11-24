@@ -1,0 +1,36 @@
+{
+  "revisions": [
+    {
+      "key": "past-game",
+      "revision": 1,
+      "source_artifact_id": "feature-source",
+      "kind": "observation",
+      "content_sha256": "b7b1c3adcbfed46f8bee059500ef322b4cde30c488618e37f7fddf73672ce799",
+      "availability_basis": "published",
+      "available_at": "2025-11-03T04:59:00Z",
+      "evidence_ref": "synthetic-publication/past-game",
+      "observed_date": "2025-11-02",
+      "finalized_at": "2025-11-03T04:50:00Z"
+    },
+    {
+      "key": "target-schedule",
+      "revision": 1,
+      "source_artifact_id": "feature-source",
+      "kind": "schedule",
+      "content_sha256": "d2658487c3dea2f957d3bb03c5a068552290a1d4b54b15e03f16021cf09595e4",
+      "availability_basis": "published",
+      "available_at": "2025-11-03T05:00:00Z",
+      "evidence_ref": "synthetic-publication/target-schedule"
+    }
+  ],
+  "selected": [
+    [
+      "past-game",
+      1
+    ],
+    [
+      "target-schedule",
+      1
+    ]
+  ]
+}
