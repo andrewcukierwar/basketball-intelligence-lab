@@ -88,6 +88,8 @@ class PlayerBox:
     team_id: int
     minutes_ms: int
     plus_minus: int
+    free_throws_made: int | None = None
+    free_throws_attempted: int | None = None
 
 
 @dataclass
@@ -231,6 +233,8 @@ def v2_substitutions(raw: dict[int, RawEvent]) -> Counter[tuple[str, str, str]]:
 def box_scores(
     connection: duckdb.DuckDBPyConnection,
     directory: Path,
+    *,
+    include_free_throws: bool = False,
 ) -> tuple[dict[str, GameBox], dict[str, dict[int, PlayerBox]]]:
     team_rows = connection.execute(
         """
@@ -263,9 +267,10 @@ def box_scores(
             game_id, home[1], int(home[2]), int(away[2]), home[5], away[5], not undesignated
         )
     players: dict[str, dict[int, PlayerBox]] = defaultdict(dict)
-    for game_id, player_id, team_id, minutes, plus_minus in connection.execute(
-        """
-        SELECT game_id, player_id, team_id, min, plus_minus
+    ft_columns = "ftm, fta" if include_free_throws else "NULL, NULL"
+    for game_id, player_id, team_id, minutes, plus_minus, ftm, fta in connection.execute(
+        f"""
+        SELECT game_id, player_id, team_id, min, plus_minus, {ft_columns}
         FROM read_parquet(?)
         WHERE left(game_id, 3) IN ('002', '004')
         """,
@@ -274,7 +279,7 @@ def box_scores(
         person = int(player_id)
         if person <= 0 or person in players[game_id]:
             raise ValueError(f"Invalid player box-score keys for {game_id}")
-        player = PlayerBox(int(team_id), round(minutes * 60_000), plus_minus)
+        player = PlayerBox(int(team_id), round(minutes * 60_000), plus_minus, ftm, fta)
         game = games.get(game_id)
         if game is None or player.team_id not in (game.home_id, game.away_id):
             raise ValueError(f"Invalid player box-score team for {game_id}")

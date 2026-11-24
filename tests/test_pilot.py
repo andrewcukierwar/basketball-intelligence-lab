@@ -239,7 +239,11 @@ def test_build_routes_duckdb_spills_to_private_staging(
         assert connection.execute("SELECT current_setting('temp_directory')").fetchone() == (
             str(staging / "duckdb-spill"),
         )
-        assert args[-1] == 2023 and options == {"order_repair": False, "same_clock_rule": False}
+        assert args[-1] == 2023 and options == {
+            "order_repair": False,
+            "same_clock_rule": False,
+            "free_throw_miss_rule": False,
+        }
         return []
 
     monkeypatch.setattr(
