@@ -1,7 +1,7 @@
 # Agent run: safeguarded order repair `order-repair-v2` for 2017–18
 
 - **Date:** 2026-11-24
-- **Status:** Awaiting review
+- **Status:** Awaiting re-review. The first review found the repair not validated for canonical use.
 - **Related issues:** [#99](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/99), parent [#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53)
 - **Branch / commit / PR:** `claude/issue-99-order-repair-v2`, code `d50e7695`, PR linked from #99. Not merged.
 
@@ -19,10 +19,10 @@ Implement the ADR-0023 maintainer conditions as a new versioned repair, rebuild 
 
 ## Key findings
 
-- 27 of 172 offered games recovered (v1: 137). 118 declined uncorroborated, 7 incomplete `ord`, 4 over the ceiling, 16 rejected by reconciliation. The largest applied shift is 11 s.
-- 2017–18: regular coverage 87.7% and unresolved 0.388%. It stays ineligible under ADR-0022.
-- Repaired games match Bentes on 99.979% of lineup seconds and the rest of the season on possession counts.
-- Residual unresolved possessions: 884, of which 16 are in repaired games. 80% touch a same-clock group, 38% have a nearby data.nba `ord` descent (in accepted games the repair may not touch), 58% are in technical-free-throw games. Not fixed.
+- First version: 27 recovered, but review found 3 of 5 shifts of 5 s or more wrong. After the fixes (counter monotonicity, jump-ball corroboration, reject unresolved at moved events): 15 of 172 recovered (v1: 138 in total, 137 order-class). 118 uncorroborated, 14 counter inversion, 7 incomplete `ord`, 4 over the ceiling, 14 rejected. Largest applied shift 4 s.
+- 2017–18: regular coverage 86.7% and unresolved 0.388%. It stays ineligible under ADR-0022.
+- Repaired games match Bentes on 99.978% of lineup seconds (not independent of rewritten substitution clocks). No unresolved possession touches a moved event.
+- Residual unresolved possessions (first-version build): 884, of which 16 were in repaired games. 80% touch a same-clock group, 38% have a nearby data.nba `ord` descent (in accepted games the repair may not touch), 58% are in technical-free-throw games. Not fixed.
 - The same-clock rule applied to 0 games in this season.
 
 ## Failed or abandoned approaches
@@ -41,6 +41,8 @@ Implement the ADR-0023 maintainer conditions as a new versioned repair, rebuild 
 | Independent review | Not run. Required before canonical use |
 
 ## Blockers and risks
+
+- `event.parquet` has no per-event flag (schema change). `issue-90-order-repair-v2` is rebuildable only at its old commit.
 
 - Corroboration is the maintainer's open call: relaxing it for same-clock substitutions would recover more games but rely on `ord` alone.
 - Private outputs are under `data/processed/2017-18/issue-99-*` and `data/quality/issue-99-2017-18-v2a`. Nothing under `data/` is committed.

@@ -1,8 +1,8 @@
 # Safeguarded event-order repair `order-repair-v2`, 2017–18 ([#99](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/99))
 
 - **Evidence class:** Experimental, Original design (applies the maintainer conditions of 2026-11-24 in ADR-0023). No EPM output was used. No model was fitted.
-- **Status:** Proposed ([ADR-0029](../DECISIONS.md)). Canonical use needs independent review, then lead acceptance under the maintainer conditions. Outputs are experimental until then.
-- **Code:** `src/bil/data/pilot_order_v2.py`, `build --order-repair-v2`, commit `d50e7695`. Builds: `data/processed/2017-18/issue-99-order-repair-v2-a` (v2) and `-b` (v2 plus `--same-clock-rule`). Both pass 26 of 26 `check` invariants. Version 1 (`--order-repair`) is unchanged for failed games.
+- **Status:** Proposed ([ADR-0029](../DECISIONS.md)). **Not validated for canonical use.** The independent review of the first version found two blockers, addressed here and awaiting re-review. Outputs stay experimental.
+- **Code:** `src/bil/data/pilot_order_v2.py`, `build --order-repair-v2`, commit `76bb03d4`. Build `data/processed/2017-18/issue-99-order-repair-v2-c` passes 26 of 26 `check` invariants (superseded first-version builds: `-a`, `-b`). Version 1 (`--order-repair`) is unchanged for failed games. The scratch build `issue-90-order-repair-v2` used v1's removed second use and can be rebuilt only at its old commit.
 
 ## The rule
 
@@ -13,52 +13,59 @@
 5. A moved shot, free throw, turnover, rebound or substitution needs corroboration, otherwise the game is declined. Either V3 action order places the event between its nearest unmoved `ord` neighbours that V3 lists (`data.nba ord + V3 action order`), or, for a rebound only, `ord` puts it after a missed shot or free throw, skipping substitutions, timeouts and replays (`data.nba ord + rebound follows a missed shot`). Other types need only `ord`.
 6. Every modification is logged (`order_repair_v2_log.csv`, summarized in the manifest under `order_repair_v2`, with its SHA-256) and appears as `quality_issue` rows `order_repair_v2_applied`, `_declined` and `_rejected`. Declined and rejected games log what they would have changed.
 7. Repaired games carry the stratum `datanba_event_order_v2`, which is included in the evidence comparison's lower-trust list.
-8. The repair runs only after the V2, V3-primary and optional same-clock attempts fail. v1's second use, which offered the repair to accepted games with unresolved possessions, is removed. It selected on the hard-gate metric.
+8. The repair runs only after the V2, V3-primary and optional same-clock attempts fail, so in code it touches only failed games. Not applying it to seasons that already pass is a procedural rule: nobody should run the flag for such a season, and a game that passes without it is never offered it. v1's second use, which offered the repair to accepted games with unresolved possessions, is removed. It selected on the hard-gate metric.
 
-## Results, 2017–18
+## Review outcome and the second version of the rules
+
+Independent review of the first version (commit `d50e7695`, builds `-a` and `-b`) concluded the repair is **not validated for canonical use**. Of its 5 applied shifts of 5 s or more, 3 were wrong in feed evidence: a defensive rebound placed before a tip miss and the offensive rebound after it (`0021700067` event 187, -11 s, creating 2 unresolved possessions), and players' printed Off/Def rebound counters running backwards (`0021700269` events 10 and 601, `0021700216` event 84). The V3 tier corroborated none of the clock changes. Every re-clock rested on "follows a miss" or on `ord` alone. Commit `76bb03d4` adds these safeguards, and the results below are from build `-c`:
+
+- The printed running totals (`Off:/Def:` rebounds, `PTS`, `P#.T#` fouls) must stay monotone in the repaired order at every moved event, otherwise the game is declined (`counter_inversion`).
+- Jump balls (type 10) change possession and need the same corroboration as shots.
+- A repaired stream with an unresolved possession touching a moved event (the possession containing it or the event next to it) is rejected.
+
+The team and possession sequence is checked by these three rules and by the unchanged reconciliation. There is no separate team-sequence rule. Builds `-a` and `-b` are superseded and kept only as the reviewed record.
+
+## Results, 2017–18 (build `-c`)
 
 | Quantity | Value |
 | --- | --- |
 | Quarantined games before the repair | 180 (178 regular, 2 playoffs). 168 are order-class. |
 | Games offered the repair | 172 |
-| Recovered (applied, all checks pass) | 27 (v1 recovered 137) |
-| Declined, by first reason | 118 uncorroborated, 7 incomplete `ord`, 4 shift over 24 s |
-| Rejected: repaired stream failed reconciliation | 16 |
-| Regular season accepted | 1,079 of 1,230 (87.7%). Default 1,052 (85.5%) |
+| Recovered (applied, all checks pass) | 15 (version 1 recovered 138 in total, 137 of them order-class) |
+| Declined | 118 uncorroborated, 14 counter inversion, 7 incomplete `ord`, 4 shift over 24 s |
+| Rejected by the reconciliation or an unresolved possession at a moved event | 14 |
+| Regular season accepted | 1,067 of 1,230 (86.7%). Default 1,052 (85.5%) |
 | Playoffs | 80 of 82, unchanged |
-| Unresolved possessions, full season | 0.388% (884 of 227,616). Default 0.391% |
-| `pilot check` | 26 of 26 for both v2 builds |
+| Unresolved possessions, full season | 0.388% (875 of 225,248). Default 0.391% |
+| `pilot check` | 26 of 26 |
 
-The same-clock rule (`-b`) applied to 0 of 163 offered games in this season, so the two builds are identical in outcome. Its quarantines in this season are not the missed-shot-rebound pattern.
+The same-clock rule applied to 0 of 163 offered games in the first version, so it was not rerun with the new safeguards. Its quarantines in this season are not the missed-shot-rebound pattern.
 
-**Uncorroborated declines.** Of the events that failed corroboration, substitutions (144 event rows) and turnovers (76) dominate, then field goals (93). They are mostly same-clock events whose data.nba order differs from V2 and where V3 agrees with V2. Games reach this retry only after the V3-primary parse failed, so V3 is a weaker witness here than in the games it recovered earlier. The rule declines these on purpose. The 118 declines are the cost of the corroboration requirement, not a defect to tune away. Relaxing it to recover more games would be a maintainer decision and would mean accepting `ord` alone for substitutions and turnovers.
-
-**Shift distribution.** Applied (67 modifications): 28 reorderings with no clock change, 63 within 5 s, median 1 s, maximum 11 s, 27 earlier and 12 later. Declined proposals (578): median 1 s, 8 above 24 s (largest 208 s) in 4 games. Rejected (31): maximum 3 s. v1 gave 17 events more than 60 s. Under v2 none of the applied events moves more than 11 s.
-
-**Applied modifications by type:** rebound 33, free throw 18, foul 9, violation 3, missed shot 2, turnover 1, substitution 1.
+**Shift distribution.** Applied (33 modifications): 15 reorderings with no clock change, all within 5 s, median 1 s, maximum 4 s, 14 earlier and 4 later. Version 1 gave 17 events more than 60 s. Applied by type: rebound 17, free throw 8, missed shot 2, violation 3, turnover 1, substitution 1, foul 1. The 14 rebound moves are the least corroborated tier (a preceding missed shot). A reviewer should treat them as plausible and not validated.
 
 ## Possession and lineup verification
 
-`scripts/order_repair_verification.py` compares the 27 repaired games with the other 1,132 accepted regular games. The unrepaired attempt cannot serve as a comparator, because it failed a hard check and produced no rows. Possession counts and lineup seconds are compared with independent feeds instead. All feeds share the NBA's event log, so this is consistency evidence.
+`scripts/order_repair_verification.py` compares the 15 repaired games with the 1,132 other accepted games (1,052 regular season and 80 playoff). The unrepaired attempt cannot serve as a comparator, because it failed a hard check and produced no rows. All feeds share the NBA's event log, so this is consistency evidence.
 
-| Measure | Repaired (27 games) | Other accepted (1,132) |
+| Measure | Repaired (15 games) | Other accepted (1,132) |
 | --- | --- | --- |
-| Lineup seconds equal to Bentes | 99.979% | 99.972% |
+| Lineup seconds equal to Bentes | 99.978% | 99.972% |
 | Lowest single-game lineup share | 99.93% | 99.85% |
-| Accepted possession count equals pbpstats.com | 20 of 27 (74%) | 871 of 1,132 (77%) |
-| Within 2 possessions of pbpstats.com | 23 of 27 | 942 of 1,132 |
-| Live-ball offense equals data.nba | 99.835% (6,651 of 6,662) | 99.830% |
-| Unresolved possessions | 16 of 5,361 (0.30%) | 868 of 222,255 (0.39%) |
+| Accepted possession count equals pbpstats.com | 12 of 15 | 871 of 1,132 (77%) |
+| Live-ball offense equals data.nba | 99.813% (3,735 of 3,742) | 99.830% |
+| Unresolved possessions | 7 of 2,993 | 868 of 222,255 |
 
-Repaired games look like the others on these measures. Lineup seconds and the box plus-minus reconciliation are the strongest checks, since they are independent of the event clocks that the repair rewrote. The data.nba offense comparison is circular for ordering, because the repair uses the same feed's `ord`.
+**Event-local check (the aggregate table cannot show this).** 33 moved events touch 50 possessions, none unresolved. All 112 live-ball events within 3 events of a moved event agree with data.nba on offense. In the reviewed first version, 4 of 16 unresolved possessions in repaired games touched moved events. The in-build rejection rule now removes any such game. These local checks use data.nba, which shares `ord`'s lineage. They are necessary and not sufficient.
+
+**Lineup seconds are not independent of the rewritten clocks.** Substitution clocks can be rewritten, so a lineup-seconds match shows consistency with the box minutes, not independence from the repair. In this build only one substitution moved. The box minutes and plus-minus reconciliation remain the independent guards.
 
 ## Checks that lose power on repaired games
 
-Corrected clocks are monotone by construction, so `unsupported_reorder` and `unresolved_clock_reset` cannot fire on a moved event. Event order, within a clock, is chosen from `ord`, so any check that the parser applies to order is no longer an independent test of the repair. Minutes, plus-minus, score, lineup and period-score reconciliation keep their full power. Plus-minus and minutes are insensitive to some same-clock reorderings, so an ordering error that changes no total cannot be ruled out.
+Corrected clocks are monotone by construction, so `unsupported_reorder` and `unresolved_clock_reset` cannot fire on a moved event. Event order within a clock is chosen from `ord`, so any parser order check is no longer an independent test of the repair. Minutes, plus-minus, score, lineup and period-score reconciliation keep their full power. Plus-minus and minutes are insensitive to some same-clock reorderings, so an ordering error that changes no total cannot be ruled out.
 
 ## ADR-0022 eligibility
 
-2017–18 stays **excluded**. Regular-season coverage is 87.7% (floor 97%) and the full-season unresolved share is 0.388% (limit 0.1%). `scripts/season_quality.py --run-checks` classifies it as `fails_hard_limit` (output `data/quality/issue-99-2017-18-v2a`, not committed). Nothing was relaxed. The repair cannot close either gap: reaching 97% needs 1,193 regular games (114 more), and the unresolved share is dominated by accepted games the repair never touches.
+2017–18 stays **excluded**. Regular-season coverage is 86.7% (1,067 of 1,230, floor 97%) and the full-season unresolved share is 0.388% (limit 0.1%). `scripts/season_quality.py --run-checks` classifies it as `fails_hard_limit` (output `data/quality/issue-99-2017-18-v2c`, not committed). Nothing was relaxed. The repair cannot close either gap: reaching 97% needs 1,193 regular games (126 more), and the unresolved share is dominated by accepted games the repair never touches.
 
 ## Residual unresolved possessions (diagnosis, not fixed)
 
@@ -77,3 +84,5 @@ Candidate causes, in order of size: same-clock free-throw and substitution order
 - The 27 recoveries rest on corroboration by V3 or rebound semantics. V3 and `ord` derive from the same upstream log.
 - The ceiling and the corroboration tiers are a first policy. The 24 s ceiling is the maintainer's value. The tier definitions are mine and are proposals for review.
 - The comparison with an unrepaired build is impossible by construction. Plausibility rests on Bentes, pbpstats.com and data.nba.
+- `event.parquet` has no per-event re-clock flag. Adding a column would change the shared output schema of every build. The log CSV and the `order_repair_v2_*` issue rows identify every moved event instead.
+- Residual counts above are from the first-version build `-a`. Build `-c` has 875 unresolved possessions and the same causes.
