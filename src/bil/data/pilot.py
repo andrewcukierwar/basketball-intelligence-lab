@@ -202,6 +202,10 @@ def _issue_row(
     }
 
 
+def _unresolved(rows: Rows) -> int:
+    return sum(row["status"] == "unresolved" for row in rows["possession"])
+
+
 def _build_game(
     game: GameBox,
     roster: dict[int, PlayerBox],
@@ -351,6 +355,18 @@ def _build_game(
                     if isinstance(first, PeriodScoreMismatch):
                         periods_match, periods_reconciled = False, first.reconciled
                     raise first from None
+        if order_repair and reordered is None and cross.order:
+            # Also offer data.nba entry order to accepted games with unresolved possessions,
+            # and keep it only when it leaves fewer of them. All checks apply to both streams.
+            current = _unresolved(choice.result.rows)
+            candidate = repair_order(raw, cross.order) if current else None
+            if candidate is not None:
+                try:
+                    alternative = reconstruct(False, candidate.events, list(candidate.events))
+                except GameIssue:
+                    alternative = None
+                if alternative is not None and _unresolved(alternative.result.rows) < current:
+                    choice, raw, reordered = alternative, candidate.events, candidate
         built = choice.result
         parsed, rows, v3_order = built.events, built.rows, built.v3_order
         periods_reconciled = built.periods_reconciled

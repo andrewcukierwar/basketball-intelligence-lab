@@ -62,6 +62,7 @@ LOWER_TRUST = (
     "v2_home_designation",
     "no_livedata",
     "no_datanba",
+    "datanba_event_order",
 )
 PERIOD_START = "case when {p} <= 4 then ({p} - 1) * 720000 else 2880000 + ({p} - 5) * 300000 end"
 
