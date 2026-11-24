@@ -1,0 +1,33 @@
+{
+  "revisions": [
+    {
+      "key": "a:margin",
+      "revision": 1,
+      "source_artifact_id": "score-source",
+      "kind": "outcome",
+      "content_sha256": "bd9425be392e872debbb35efdca8bf2b2e6b2a17b18c833eaf83a7e36d5b242b",
+      "availability_basis": "published",
+      "available_at": "2025-11-04T14:00:00Z",
+      "evidence_ref": "synthetic-publication/a:margin",
+      "observed_date": "2025-11-03",
+      "finalized_at": "2025-11-04T03:00:00Z"
+    }
+  ],
+  "selected": [
+    [
+      "a:margin",
+      1
+    ]
+  ],
+  "outcomes": [
+    {
+      "key": "a:margin",
+      "revision": 1,
+      "value": 10.0,
+      "actual_tip_at": "2025-11-04T01:00:00Z",
+      "game_id": "synthetic-game-a",
+      "season_start_year": 2025,
+      "season_type": "regular"
+    }
+  ]
+}

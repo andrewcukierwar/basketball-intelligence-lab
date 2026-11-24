@@ -1,0 +1,43 @@
+{
+  "revisions": [
+    {
+      "key": "spm-stat",
+      "revision": 1,
+      "source_artifact_id": "fit-source",
+      "kind": "observation",
+      "content_sha256": "8687688fe7f6df0e2e2beb50fedda8fb48f46c483538dc8dad0ffc0636d0114d",
+      "availability_basis": "published",
+      "available_at": "2025-06-20T12:00:00Z",
+      "evidence_ref": "synthetic-publication/spm-stat",
+      "observed_date": "2023-06-14",
+      "finalized_at": "2023-06-15T03:00:00Z"
+    },
+    {
+      "key": "rapm-label",
+      "revision": 1,
+      "source_artifact_id": "fit-source",
+      "kind": "outcome",
+      "content_sha256": "5821620242f7fac327f7d82dca0d98af8ff7a853304753fff3e05c2aeb1a02c7",
+      "availability_basis": "published",
+      "available_at": "2023-07-02T12:00:00Z",
+      "evidence_ref": "synthetic-publication/rapm-label",
+      "observed_date": "2023-06-30",
+      "finalized_at": "2023-07-01T04:00:00Z"
+    }
+  ],
+  "selected": [
+    [
+      "rapm-label",
+      1
+    ],
+    [
+      "spm-stat",
+      1
+    ]
+  ],
+  "training_mode": "historical_estimator",
+  "calibration_window": [
+    "2022-07-01",
+    "2023-07-01"
+  ]
+}
