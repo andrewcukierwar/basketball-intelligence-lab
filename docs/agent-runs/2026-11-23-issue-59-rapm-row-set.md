@@ -50,3 +50,14 @@ These reproduce the #58 profile exactly (224,039 and 32,417 of 256,456 accepted;
 
 - Independent fresh-context review of the diff and a re-run of the real build against the pinned manifest.
 - Then #20 can feed `model_row` into the #6 estimator, converting player IDs to integers at that boundary.
+
+## Independent review
+
+A fresh Opus reviewer approved commit 8d2f68d with no blocking findings. Its checks against the private pilot used its own event-level DuckDB recomputation:
+- Final scores, 295,450 points over 1,292 games: 0 mismatches.
+- All 259,263 possession dispositions agreed.
+- Lineup IDs agreed. The offense-point gap of 761 equals the unassigned dead-ball allocations inside eligible intervals.
+- Three stratum cells, recomputed by hand, matched.
+- A fresh rebuild gave an identical `build_id` and identical Parquet digests.
+
+Its non-blocking suggestions (an explicit `exposure` column, NULL lineup IDs on ineligible rows, and a self-contained contiguity check) are tracked as a follow-up issue.
