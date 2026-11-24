@@ -334,3 +334,18 @@ Do not overwrite negative or unexpected results. New experiments should be appen
   - [Report](research/same-clock-rebound-order.md)
 - **Limitations / interpretation:** Moves are verified by reconciliation and by Bentes order (itself derived from V2), not by an independent order feed. 44 of 55 declined games in the target seasons are a separate free-throw marker defect. Same-team ties are declined.
 - **Next decision:** Independent review, then whether to file the missing-`MISS ` free-throw rule.
+
+### EXP-0019 — Safeguarded data.nba event-order repair `order-repair-v2`, 2017–18
+
+- **Status:** Completed. Independent review of the first version found the repair not validated for canonical use. Fixes in `76bb03d4` await re-review.
+- **Date:** 2026-11-24.
+- **Research question:** Can the maintainer-conditioned repair recover 2017–18 event-order quarantines with a 24 s ceiling, replay separation, corroboration and a full log, and does 2017–18 then meet the ADR-0022 hard requirements?
+- **Category:** Experimental, Original design. No EPM output was used.
+- **Code SHA / run ID:** `76bb03d4`. Build `issue-99-order-repair-v2-c`, `quality/issue-99-2017-18-v2c` (first version: `d50e7695`, builds `-a` and `-b`).
+- **Datasets/checksums and cutoff:** Pinned 2017–18 snapshot and evidence from `issue-25-v1`. No 2025–26 or later file was read.
+- **Train / validation / test periods:** None. Dataset construction, no model.
+- **Baselines:** The default build `issue-25-v1` and v1 (`issue-90-order-repair-v1`).
+- **Metrics and uncertainty:** Recovered, declined and rejected games by reason, signed shifts, 26 `check` invariants, Bentes lineup agreement, pbpstats.com possession counts, data.nba offense agreement. Counts only.
+- **Results:** 15 of 172 offered games recovered (first version 27, of which review found 3 of the 5 shifts of 5 s or more wrong). 118 declined uncorroborated, 14 counter inversion, 7 incomplete `ord`, 4 over the ceiling, 14 rejected. Largest applied shift 4 s. Regular coverage 86.7%, unresolved share 0.388%: 2017–18 stays ineligible. The same-clock rule applied to 0 games in this season. [Report](research/order-repair-v2-2017-18.md)
+- **Limitations / interpretation:** Corroboration by V3 or rebound semantics, with V3 and `ord` sharing upstream lineage. An unrepaired comparison is impossible. The tier definitions are proposals.
+- **Next decision:** Independent review. Whether to relax corroboration for same-clock substitutions, which is a maintainer call.

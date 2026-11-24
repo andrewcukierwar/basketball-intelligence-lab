@@ -7,7 +7,7 @@ import json
 import re
 import shutil
 from collections import Counter, defaultdict
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import version
@@ -42,6 +42,14 @@ from bil.data.pilot_inputs import (
 )
 from bil.data.pilot_normalize import MINUTES_TOLERANCE_MS, Row, Rows, located, normalize_game
 from bil.data.pilot_order import OrderRepair, repair_order
+from bil.data.pilot_order_v2 import VERSION as ORDER_V2_VERSION
+from bil.data.pilot_order_v2 import (
+    DeclinedV2,
+    Modification,
+    RepairedV2,
+    repair_order_v2,
+    write_order_repair_log,
+)
 from bil.data.pilot_output import read_game_reviews, write_tables
 from bil.data.pilot_parser import PARSER_VERSION, ParserEvent, Starters, parse_game
 from bil.data.pilot_sources import (
@@ -176,6 +184,45 @@ def _strata(events: list[RawEvent], periods: dict[int, tuple[int, int]]) -> list
     return labels
 
 
+def _reject_unresolved_at_moved_events(rows: Rows, repaired: RepairedV2) -> None:
+    """Decline a v2 repair when an unresolved possession touches a moved event (ADR-0029)."""
+    moved = {str(change.event_num) for change in repaired.modifications}
+    seqs = [int(str(row["seq"])) for row in rows["event"] if str(row["source_event_id"]) in moved]
+    for possession in rows["possession"]:
+        start, end = int(str(possession["start_seq"])), int(str(possession["end_seq"]))
+        if possession["status"] == "unresolved" and any(
+            start <= seq + 1 and seq - 1 < end for seq in seqs
+        ):
+            raise GameIssue(
+                "order_repair_v2_unresolved", "An unresolved possession touches a moved event"
+            )
+
+
+def _v2_detail(outcome: str, modifications: list[Modification], reason: str) -> str:
+    """JSON detail of an order-repair-v2 log row: the outcome, its reason and every change."""
+    return json.dumps(
+        {
+            "version": ORDER_V2_VERSION,
+            "outcome": outcome,
+            "reason": reason,
+            "modifications": [
+                {
+                    "event_num": m.event_num,
+                    "event_type": m.event_type,
+                    "period": m.period,
+                    "original_clock": m.original_clock,
+                    "corrected_clock": m.corrected_clock,
+                    "shift_s": m.shift_seconds,
+                    "justification": m.justification,
+                    "evidence": m.evidence,
+                }
+                for m in modifications
+            ],
+        },
+        sort_keys=True,
+    )
+
+
 def _issue_row(
     game_id: str, count: int, issue: GameIssue, severity: str, refs: list[dict[str, str]]
 ) -> Row:
@@ -206,33 +253,6 @@ def _issue_row(
     }
 
 
-def _unresolved(rows: Rows) -> int:
-    return sum(row["status"] == "unresolved" for row in rows["possession"])
-
-
-def _offer_repair(
-    choice: StarterChoice[Reconstruction],
-    raw: dict[int, RawEvent],
-    order: dict[int, int],
-    reconstruct: Callable[[bool, dict[int, RawEvent], list[int]], StarterChoice[Reconstruction]],
-) -> tuple[StarterChoice[Reconstruction], dict[int, RawEvent], OrderRepair] | None:
-    """Reparse in data.nba entry order when that leaves strictly fewer unresolved possessions.
-
-    Unresolved possessions are the hard-gate metric (ADR-0023 flags this selection).
-    """
-    current = _unresolved(choice.result.rows)
-    candidate = repair_order(raw, order) if current else None
-    if candidate is None:
-        return None
-    try:
-        alternative = reconstruct(False, candidate.events, list(candidate.events))
-    except GameIssue:
-        return None
-    if _unresolved(alternative.result.rows) < current:
-        return alternative, candidate.events, candidate
-    return None
-
-
 def _build_game(
     game: GameBox,
     roster: dict[int, PlayerBox],
@@ -247,6 +267,7 @@ def _build_game(
     season_start_year: int = 2022,
     order_repair: bool = False,
     same_clock_rule: bool = False,
+    order_repair_v2: bool = False,
     free_throw_miss_rule: bool = False,
 ) -> Rows:
     kind = GAME_PREFIXES[game.game_id[:3]]
@@ -260,6 +281,9 @@ def _build_game(
     clock_ordered: ClockOrder | None = None
     clock_declined: Declined | None = None
     clock_failed: ClockOrder | None = None
+    v2_applied: RepairedV2 | None = None
+    v2_declined: DeclinedV2 | None = None
+    v2_failed: RepairedV2 | None = None
     missed_free_throws: MissEvidence | None = None
     periods_reconciled = 0
     periods_match = None
@@ -421,7 +445,20 @@ def _build_game(
                         reordered = repaired
                     except GameIssue:
                         repaired = None
-                if clock_ordered is None and repaired is None:
+                if order_repair_v2 and clock_ordered is None and repaired is None:
+                    # Opt-in (ADR-0029, proposed): safeguarded entry-order repair, failed games only.
+                    offered_v2 = repair_order_v2(raw, cross.order, reference.order)
+                    if isinstance(offered_v2, DeclinedV2):
+                        v2_declined = offered_v2
+                    elif offered_v2 is not None:
+                        try:
+                            choice = reconstruct(False, offered_v2.events, list(offered_v2.events))
+                            _reject_unresolved_at_moved_events(choice.result.rows, offered_v2)
+                            raw = offered_v2.events
+                            v2_applied = offered_v2
+                        except GameIssue:
+                            v2_failed = offered_v2
+                if clock_ordered is None and repaired is None and v2_applied is None:
                     if free_throw_miss_rule and (
                         first.code == "unresolved_event_order"
                         or (first.code == "parser_error" and str(first) == "EventOrderError")
@@ -443,14 +480,6 @@ def _build_game(
                         if isinstance(first, PeriodScoreMismatch):
                             periods_match, periods_reconciled = False, first.reconciled
                         raise first from None
-        if order_repair and reordered is None and missed_free_throws is None and cross.order:
-            # Also offer data.nba entry order to accepted games with unresolved possessions.
-            # All checks apply to both streams. The repaired stream replaces a V3-primary or
-            # V2-order choice alike, so it also clears the V3-primary label.
-            offered = _offer_repair(choice, raw, cross.order, reconstruct)
-            if offered is not None:
-                choice, raw, reordered = offered
-                v3_primary = False
         built = choice.result
         parsed, rows, v3_order = built.events, built.rows, built.v3_order
         periods_reconciled = built.periods_reconciled
@@ -525,6 +554,12 @@ def _build_game(
                 f"re-clocked to their predecessor's clock (largest shift {max(shifts, default=0):g} s)",
             )
             issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if v2_applied is not None:
+            labels.append("datanba_event_order_v2")
+            applied = GameIssue(
+                "order_repair_v2_applied", _v2_detail("applied", v2_applied.modifications, "")
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, applied, "warning", refs))
         if v3_primary:
             labels.append("v3_primary_order")
             warning = GameIssue(
@@ -598,6 +633,24 @@ def _build_game(
                 f"{RULE_VERSION} order failed reconciliation ({len(clock_failed.moves)} moves)",
             )
             issues.append(_issue_row(game.game_id, len(issues) + 1, note, "warning", refs))
+        if v2_declined is not None:
+            declined = GameIssue(
+                "order_repair_v2_declined",
+                _v2_detail(
+                    "declined",
+                    v2_declined.proposed,
+                    f"{v2_declined.reason}: {v2_declined.detail}",
+                ),
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, declined, "warning", refs))
+        elif v2_failed is not None:
+            rejected = GameIssue(
+                "order_repair_v2_rejected",
+                _v2_detail(
+                    "rejected", v2_failed.modifications, "repaired stream failed reconciliation"
+                ),
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, rejected, "warning", refs))
         raw_event = raw.get(error.event_num) if error.event_num is not None else None
         failures = (
             refs
@@ -656,6 +709,7 @@ def _season_games(
     season_start_year: int = 2022,
     order_repair: bool = False,
     same_clock_rule: bool = False,
+    order_repair_v2: bool = False,
     free_throw_miss_rule: bool = False,
 ) -> Iterator[Rows]:
     games, players = box_scores(connection, snapshot_dir, include_free_throws=free_throw_miss_rule)
@@ -714,6 +768,7 @@ def _season_games(
                     year,
                     order_repair,
                     same_clock_rule,
+                    order_repair_v2,
                     free_throw_miss_rule,
                 )
                 remaining.remove(game_id)
@@ -732,6 +787,7 @@ def _season_games(
                 year,
                 order_repair,
                 same_clock_rule,
+                order_repair_v2,
                 free_throw_miss_rule,
             )
 
@@ -793,6 +849,7 @@ def build_pilot(
     chosen: set[str] | None = None,
     order_repair: bool = False,
     same_clock_rule: bool = False,
+    order_repair_v2: bool = False,
     free_throw_miss_rule: bool = False,
 ) -> dict[str, object]:
     if re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
@@ -819,6 +876,7 @@ def build_pilot(
                 year,
                 order_repair=order_repair,
                 same_clock_rule=same_clock_rule,
+                order_repair_v2=order_repair_v2,
                 free_throw_miss_rule=free_throw_miss_rule,
             )
             artifacts = write_tables(connection, games, staging, output)
@@ -828,6 +886,7 @@ def build_pilot(
                 if same_clock_rule
                 else None
             )
+            repair_log = write_order_repair_log(connection, output) if order_repair_v2 else None
             ft_log = (
                 connection.execute(
                     "SELECT game_id, code, detail FROM read_parquet(?) "
@@ -847,6 +906,7 @@ def build_pilot(
             "parser": PARSER_VERSION,
             "duckdb_version": version("duckdb"),
             **({"order_repair": True} if order_repair else {}),
+            **({"order_repair_v2": repair_log} if repair_log is not None else {}),
             **(
                 {"same_clock_rule": {"version": RULE_VERSION, "games": clock_log}}
                 if clock_log is not None
@@ -894,6 +954,11 @@ def main() -> None:
         "--same-clock-rule",
         action="store_true",
         help="retry failed games with the same-clock rebound ordering rule (ADR-0028)",
+    )
+    build.add_argument(
+        "--order-repair-v2",
+        action="store_true",
+        help="experimental: safeguarded data.nba entry-order repair of failed games (ADR-0029)",
     )
     build.add_argument(
         "--free-throw-miss-rule",
@@ -977,6 +1042,8 @@ def main() -> None:
         snapshot = capture_snapshot(args.snapshot_dir, None, args.season, args.from_local)
         print(f"Verified {len(snapshot['artifacts'])} private inputs. {ATTRIBUTION}.")
     else:
+        if args.order_repair and args.order_repair_v2:
+            raise SystemExit("Choose one of --order-repair and --order-repair-v2")
         manifest = build_pilot(
             args.snapshot_dir,
             args.output_dir,
@@ -984,6 +1051,7 @@ def main() -> None:
             set(args.game_id or []),
             args.order_repair,
             args.same_clock_rule,
+            args.order_repair_v2,
             args.free_throw_miss_rule,
         )
         print(json.dumps(manifest["coverage"], sort_keys=True))
