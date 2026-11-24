@@ -181,3 +181,13 @@ Do not overwrite negative or unexpected results. New experiments should be appen
   - Builds take 56 to 73 s and peak at 0.76 to 0.85 GB each. [Full results](data-pilot.md#development-seasons-201718-through-202122)
 - **Limitations / interpretation:** Thresholds were set after 2022–23 was observed and were not changed. Two of the three failures turn on small overtime denominators. The 2017–18 diagnosis is Inferred and was not investigated at the event level.
 - **Next decision:** The maintainer decides whether a stratum floor alone should make a season unavailable, and reassesses the #26 window. Under the current thresholds, the M1 seasons from 2017–18 to 2022–23 are 2019–20, 2020–21 and 2022–23.
+
+### EXP-0010 — Context for game-agnostic and game-optimized skill forecasts, 2022–23
+
+- **Status:** Run once under a frozen protocol. Independent review not yet run.
+- **Date:** 2026-11-23.
+- **Research question:** Does a fitted pregame context adjustment (home, team rest, opponent allowed rates, own-team rate, league trend) improve the frozen #32 skill forecast on later 2022–23 games, factor by factor, using only evidence available at the prediction origin?
+- **Category:** Experimental (retrospective replay, one season).
+- **Inputs and configuration:** Pinned `issue-5-v2` logs, frozen `issue-32-v1` fits, [frozen protocol](research/skill-context-protocol.md) (commit `9642a51`), code commit `9483a40`, output `issue-33-v1`. 2,496 penalized likelihood fits, game- and player-clustered bootstrap with 2,000 replicates.
+- **Results:** All 194,764 base predictions and 26,481 snapshot rows reproduced #32 exactly, and no context input used a date on or after its game. The matchup-specific forecast lowered log loss in 12 of 13 statistics (10 with game-clustered intervals excluding zero), with MSE changes of −0.02% to −0.88%. Opponent allowed rates carried the gain (retained for 9 statistics). Home, rest and team terms did not beat an intercept-only control. Aging was untestable (no birthdates). Playoffs got worse for 4 statistics. [Full results](research/skill-context-2022-23.md)
+- **Scope:** Single-season evidence only. Outer seasons 2023–24 and 2024–25 must be run before any context is adopted.

@@ -253,6 +253,16 @@ V2 remains the event source of record.
   - Any other missing feed is still an error.
 - **Links:** [Development seasons](data-pilot.md#development-seasons-201718-through-202122), [Feed coverage audit](research/nba-feed-coverage.md)
 
+## ADR-0021 — Pregame context as a fitted link-scale adjustment of the frozen skill forecast
+
+- **Date:** 2026-11-23
+- **Status:** Proposed for the #33 context experiment. Nothing is adopted as a default.
+- **Context:** EPM describes context families and a game-agnostic versus game-optimized split but not their forms, covariates or inputs ([EPM-U07](research/epm-uncertainties.md)). #32 froze the game-agnostic skill.
+- **Decision:** Keep the #32 forecast frozen as the game-agnostic skill, including for the SPM prior (#30) through `bil.features.skill_snapshot.skill_snapshot`. Test context only as a link-scale adjustment (log for per-36 rates, logit for fractions) with an intercept and ridge-penalized standardized terms for home, team rest, opponent allowed rates, own-team rate and league trend, fitted only on earlier blocks. Every input must come from the schedule or from strictly earlier games, with the source date audited. Aging is untested because the pinned sources have no birthdates. Retain a factor only when it beats both the agnostic forecast and an intercept-only control under game and player clustering and in every outer block.
+- **Evidence:** Frozen [protocol](research/skill-context-protocol.md) and [2022–23 results](research/skill-context-2022-23.md). Opponent allowed rates passed the rule for 9 of 13 statistics. Home, rest, team and trend terms did not beat recalibration. Context did not transfer to the playoffs.
+- **Consequences:** Gains are small (median 0.29% MSE) and single-season. The snapshot excludes context by design. Outer seasons must confirm before any context is adopted.
+- **Links:** [Issue #33](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/33), [ADR-0018](#adr-0018--league-shrunk-exponential-skill-decay-with-inner-fold-clock-choice)
+
 ## Decision template
 
 ### ADR-XXXX — Title
