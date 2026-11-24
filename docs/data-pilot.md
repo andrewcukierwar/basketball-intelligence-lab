@@ -270,6 +270,46 @@ The output directory holds `model_row`, `possession_disposition`, `score_reconci
 
 The current builder (issues #74 and #82) also reads the pilot `event` table. By default (`--variant canonical`) it keeps every accepted stable-lineup possession and reproduces the `issue-59-v1` model rows. `--variant period_end_start` and `--variant no_action` build sensitivity row sets that drop accepted possessions with a `period_end` first event or with no action event, with no exposure. See the [report](research/rapm-no-action-2022-23.md) and ADR-0019. `scripts/audit_period_end_possessions.py <pilot_dir>` reports the clock at the start of period-end possessions by pilot status.
 
+### Multi-season row sets (issue #93)
+
+The builder reads `season_start_year` from the pinned pilot manifest and validates it through `pinned_season()`. The confirmatory holdout (2025 and later) and unpinned seasons are refused before any table is read. The identity check also requires every game row to carry the manifest's season. Builds for seasons without liveData carry the `no_livedata` stratum on every game, `v2_home_designation` games are ordinary strata, and quarantined games may have no home or away team (ADR-0017). The reconciliation handles all three without special cases. Build each season into a new directory with its own pin:
+
+```sh
+for pair in 2018-19:issue-25-v1 2019-20:issue-25-v1 2020-21:issue-25-v1 2021-22:issue-25-v1 \
+            2022-23:issue-19-v6 2023-24:issue-52-v1 2024-25:issue-52-v1; do
+  season=${pair%%:*}; pilot=data/processed/$season/${pair##*:}
+  uv run python -m bil.data.rapm_rows "$pilot" data/processed/$season/issue-93-v1 \
+    --pilot-manifest-sha256 "$(shasum -a 256 $pilot/manifest.json | cut -d' ' -f1)" \
+    --code-commit "$(git rev-parse HEAD)"
+done
+```
+
+Each build took 3 to 4 seconds. Rebuilding 2022–23 from `issue-19-v6` reproduces the `issue-82-canonical-v1` tables byte for byte (identical file digests and `build_id`). It reproduces the `issue-59-v1` `model_row` and `score_reconciliation` tables exactly (`EXCEPT ALL` both ways returns 0 rows, identical file digests). The older `issue-59-v1` disposition and game reconciliation tables predate the #74 columns. All seven builds report 0 violations across the 16 identity checks, and each output manifest carries the pilot manifest's source snapshot digest. The builder copies that digest rather than re-hashing the snapshot. Independent review re-hashed each raw `snapshot.json` and its archives for all seven seasons, and all matched. This is ledger reconciliation only. No model was fitted or scored.
+
+| Season | Games (expected / accepted / quarantined) | Possessions | Accepted | Eligible | Multiple lineups | Pilot excluded | Unresolved | Eligible share of accepted | Ledger points (modeled / not modeled) | Strata |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 2018–19 | 1,312 / 1,286 / 26 | 259,789 | 256,845 | 223,686 | 33,159 | 2,769 | 175 | 87.09% | 239,862 / 45,336 | `no_livedata` all games |
+| 2019–20 | 1,142 / 1,123 / 19 | 227,690 | 225,227 | 195,128 | 30,099 | 2,377 | 86 | 86.64% | 209,469 / 41,291 | `no_livedata` all games |
+| 2020–21 | 1,165 / 1,157 / 8 | 231,750 | 229,190 | 200,256 | 28,934 | 2,499 | 61 | 87.38% | 219,138 / 40,034 | none |
+| 2021–22 | 1,317 / 1,306 / 11 | 258,831 | 256,017 | 223,043 | 32,974 | 2,746 | 68 | 87.12% | 242,685 / 45,430 | none |
+| 2022–23 | 1,314 / 1,292 / 22 | 259,263 | 256,456 | 224,039 | 32,417 | 2,756 | 51 | 87.36% | 249,091 / 46,359 | none |
+| 2023–24 | 1,312 / 1,299 / 13 | 258,099 | 255,337 | 223,264 | 32,073 | 2,662 | 100 | 87.44% | 250,340 / 44,952 | none |
+| 2024–25 | 1,314 / 1,289 / 25 | 257,543 | 254,727 | 221,940 | 32,787 | 2,636 | 180 | 87.13% | 247,063 / 45,442 | `v2_home_designation` 5 games (886 eligible) |
+
+By season type (eligible possessions, then the eligible share of accepted possessions):
+
+| Season | Regular eligible | Regular share | Playoff eligible | Playoff share |
+| --- | ---: | ---: | ---: | ---: |
+| 2018–19 | 210,210 | 87.15% | 13,476 | 86.11% |
+| 2019–20 | 181,335 | 86.69% | 13,793 | 85.96% |
+| 2020–21 | 186,134 | 87.45% | 14,122 | 86.44% |
+| 2021–22 | 208,789 | 87.18% | 14,254 | 86.30% |
+| 2022–23 | 209,942 | 87.37% | 14,097 | 87.15% |
+| 2023–24 | 210,324 | 87.52% | 12,940 | 86.11% |
+| 2024–25 | 208,155 | 87.22% | 13,785 | 85.78% |
+
+The per-stratum counts, points and exposure for every season are in each build's `manifest.json` under `reconciliation`. The 2023–24 and 2024–25 figures are ledger counts only. They are not outcome statistics and are not used for fitting.
+
 ## Box-score feature views (issue #62)
 
 The builder turns the pinned `issue-5-v2` player and team game logs into the [box-score features](research/box-score-feature-contract.md). It reads only those two logs, verifies the pinned snapshot, and writes a new private directory. It never reads EPM or any model target.
