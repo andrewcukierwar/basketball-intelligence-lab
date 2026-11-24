@@ -225,6 +225,16 @@ V2 remains the event source of record.
 - **Consequences:** `neutral_site` stays null because a missing flag does not establish a neutral site. For these games, V2 and V3 set the home/away orientation and the box confirms it. `v2_home_designation` is a lower-trust stratum in `evidence`.
 - **Links:** [Outer-validation seasons](data-pilot.md#outer-validation-seasons-202324-and-202425), [Feed coverage audit](research/nba-feed-coverage.md)
 
+## ADR-0018 — League-shrunk exponential skill decay with inner-fold clock choice
+
+- **Date:** 2026-11-23
+- **Status:** Proposed for the #32 Estimated Skills reference.
+- **Context:** EPM documents per-stat exponential decay tuned by Differential Evolution with day or possession ages, but not the loss, bounds, shrinkage, cold start or playoff handling ([EPM-U05, EPM-U06](research/epm-uncertainties.md)).
+- **Decision:** Predict `(N + k m) / (D + k)` from exponentially discounted earlier counts and exposures, shrunk toward the league-to-date rate with per-statistic strength `k`. Fit `(log10 h, log10 k)` per statistic and clock by DE on the #31 likelihood with frozen bounds and seeds. Choose day, games or estimated-possession clock per statistic in inner folds only. Pool regular-season and earlier playoff history (and the league reference) for playoff targets, never fitting on playoffs.
+- **Evidence:** Frozen [protocol](research/skill-decay-protocol.md) and [2022–23 results](research/skill-decay-2022-23.md). Synthetic tests check the recursion against a brute-force oracle and fold isolation.
+- **Consequences:** Players with no history get the league rate. Single-season retrospective evidence; outer seasons must confirm before any default is fixed.
+- **Links:** [Issue #32](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/32), [ADR-0016](#adr-0016--fixed-constant-baselines-and-season-type-keyed-history-for-skill-targets)
+
 ## Decision template
 
 ### ADR-XXXX — Title

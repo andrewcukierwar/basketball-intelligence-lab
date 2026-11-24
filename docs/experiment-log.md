@@ -147,3 +147,13 @@ Do not overwrite negative or unexpected results. New experiments should be appen
   - 14 of 25 quarantines in 2024–25 trace to box-log minute totals that do not sum to the game length. [Full results](data-pilot.md#outer-validation-seasons-202324-and-202425)
 - **Limitations / interpretation:** The box log remains the reference, so box defects quarantine games rather than being corrected. Thresholds were set after 2022–23 was observed and were not changed here.
 - **Next decision:** The maintainer decides whether the 0.1% unresolved-possession limit should also apply to each season type. Unresolved-possession boundaries are the main remaining verification gap before #26.
+
+### EXP-0007 — Stat-specific skill decay and league shrinkage, 2022–23
+
+- **Status:** Run once under a frozen protocol. Awaiting review.
+- **Date:** 2026-11-23.
+- **Research question:** Does per-statistic exponential decay with league shrinkage, fitted by Differential Evolution in nested chronological folds, beat the fixed #31 baselines on later 2022–23 games, and which age clock works best?
+- **Category:** Experimental (retrospective replay, one season).
+- **Inputs and configuration:** Pinned `issue-5-v2` logs, #31 build `issue-31-v1`, [frozen protocol](research/skill-decay-protocol.md) (commit `4e25451`), code commit `33fd3d0`, output `issue-32-v1`. 234 DE fits, game-clustered bootstrap with 2,000 replicates.
+- **Results:** In regular-season outer blocks, the model beat every #31 baseline on all 13 statistics in log loss and MSE, with intervals excluding zero. MSE gains were 0.6–3.7% over the best player or league baseline. Playoff gains were smaller and mostly within intervals against the 90-day decay. Clocks are indistinguishable for 11–12 of 13 statistics. A pure day clock is worse for free-throw rate. 33 of 234 fits hit the no-decay half-life bound. [Full results](research/skill-decay-2022-23.md)
+- **Scope:** Single-season evidence only. Outer seasons 2023–24 and 2024–25 must be run before any clock or parameter is fixed.
