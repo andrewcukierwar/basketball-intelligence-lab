@@ -1,6 +1,8 @@
 # Period-end pseudo-possession exclusion: frozen addendum protocol v2 (2022–23)
 
-**Status:** Frozen before any evaluation run on the variant B row set `issue-82-B-v1` ([issue #82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)). **Classification:** Original BIL design. It follows the maintainer decision of 2026-11-23 recorded in [ADR-0019](../DECISIONS.md) and supersedes the [v1 addendum](rapm-no-action-protocol.md) for the canonical row set. The v1 addendum and its results stay as the sensitivity record for variant A. Results go in [the no-action report](rapm-no-action-2022-23.md), written after the runs. A change here after a run starts is a deviation and is listed in that report.
+**Superseded by [v3](rapm-no-action-protocol-v3.md) on 2026-11-24: the audit it relied on was invalid (it measured clock duration over the possession's own events), so variant B is a sensitivity alternative named `period_end_start`, not canonical. The text below is the original registration and its runs are sensitivity evidence.**
+
+**Status (original):** Frozen before any evaluation run on the variant B row set `issue-82-B-v1` ([issue #82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)). **Classification:** Original BIL design. It follows the maintainer decision of 2026-11-23 recorded in [ADR-0019](../DECISIONS.md) and supersedes the [v1 addendum](rapm-no-action-protocol.md) for the canonical row set. The v1 addendum and its results stay as the sensitivity record for variant A. Results go in [the no-action report](rapm-no-action-2022-23.md), written after the runs. A change here after a run starts is a deviation and is listed in that report.
 
 ## Decision and eligibility rule
 
