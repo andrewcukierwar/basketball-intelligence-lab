@@ -248,6 +248,8 @@ uv run python -m bil.data.rapm_rows \
 
 The output directory holds `model_row`, `possession_disposition`, `score_reconciliation` and `game_reconciliation` Parquet tables plus `manifest.json`. The manifest records the pilot manifest and snapshot digests, the SHA-256 and row count of each output, the reconciliation by season type and adjudication stratum (`<season type>|<stratum>`, with `all` as the unfiltered scope) and a content-addressed `build_id`. The id hashes the contract revision, the pinned inputs and the output digests, so a rebuild from the same pilot gives the same id. DuckDB spills go to a staging directory inside the output that is removed on exit. The build fails and removes its output directory if any identity check finds a gap or a duplicate versus the pinned possession and scoring ledgers. Rows stay per possession: no aggregation is applied. Strata overlap, so stratum cells do not sum to a season type.
 
+The current builder (issues #74 and #82) also reads the pilot `event` table and classifies accepted possessions with no action event as `no_action`, which carry no exposure. See the [no-action report](research/rapm-no-action-2022-23.md) and ADR-0019. The `issue-59-v1` command above reproduces the earlier counts only at the earlier commit.
+
 ## Box-score feature views (issue #62)
 
 The builder turns the pinned `issue-5-v2` player and team game logs into the [box-score features](research/box-score-feature-contract.md). It reads only those two logs, verifies the pinned snapshot, and writes a new private directory. It never reads EPM or any model target.
