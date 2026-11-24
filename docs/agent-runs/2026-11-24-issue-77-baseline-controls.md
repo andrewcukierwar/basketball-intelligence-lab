@@ -47,3 +47,19 @@ Add separate offense and defense penalties selected on folds R1–R4 (P1 scored 
 - Independent review of the diff and report (fresh context, ideally a Codex review).
 - Maintainer decision on whether to carry the split penalty to 2023–24 under a new frozen protocol.
 - Lead to update issue #77 and open a PR when authorized.
+
+## Independent review
+
+A fresh Opus reviewer approved with no blocking findings. With its own script, it reproduced the following:
+- the single-λ pooled delta of −14.09, which matches #23;
+- the split-penalty delta of −1.566;
+- the P1 delta of +3.571;
+- the observed exclusion shift of 0.3688.
+
+It confirmed the protocol was frozen before the run, the solver oracle, the matching of the random draws, and that the smoke run did not compromise the registered run.
+
+Nonblocking items for future runners:
+- Record `HEAD` and the clean-tree check before fitting, not after.
+- Save the drawn game IDs.
+- Tighten the loose assertion at `tests/test_rapm_baseline_controls.py:128`.
+- `draw_sd` uses ddof=0.

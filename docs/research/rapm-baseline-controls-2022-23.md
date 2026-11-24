@@ -89,7 +89,7 @@ Split penalties do not hurt conditioning in this range. Wall times are from one 
 ## Deviations and limitations
 
 - **No deviation from the protocol** in the registered run: no grid extension was needed, the run used a clean tree at the recorded commit and the protocol file matched its recorded hash.
-- Before the registered run, a 2-draw smoke run on the real rows wrote to a scratch directory. Only structural facts were read from it (170 flagged games, 8 of them playoff, all fits converged, equal set sizes). No score or shift was read. The scratch output was deleted.
+- Before the registered run, a 2-draw smoke run on the real rows wrote to a scratch directory. It ran at 07:53Z, after the protocol was frozen in e2168f3. It used the same code that was then committed unchanged as b032969. Its stderr lines that report outcomes (`selected` and `observed`) were filtered out before reading. Only structural facts were read from it (170 flagged games, 8 of them playoff, all fits converged, equal set sizes). No score or shift was read. The scratch output was deleted.
 - The pre-declared two-sided statistic for held-out MSE delta is uninformative here, and the lower-tail counts above are a post hoc addition, labelled as such. The possession-linear adjustment is also post hoc.
 - Selection ran on the same four folds that report the pooled delta, so only P1 is independent, and P1 is a single short block with a wide interval. Bootstrap intervals cluster by game and ignore dependence across folds.
 - The random control draws from ordinary games and matches only size, season type and (in B) date block. It does not match team, lineup or possession counts beyond the near-equal totals. It was run at the single penalty only.
