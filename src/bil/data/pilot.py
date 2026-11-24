@@ -46,6 +46,7 @@ from bil.data.pilot_sources import (
     NBA_TERMS,
     Artifact,
     capture_snapshot,
+    has_datanba,
     has_livedata,
     load_snapshot,
     season_evidence_sources,
@@ -229,6 +230,9 @@ def _build_game(
     if not cross.has_livedata:
         # Weaker-verification stratum: no liveData starters or V3 period-defect adjudication.
         labels.append("no_livedata")
+    if not has_datanba(season_start_year):
+        # Weaker-verification stratum: no data.nba offense relabels, period scores or order.
+        labels.append("no_datanba")
     undesignated = not game.home_designated
     if undesignated:
         # The box log has no home flag for either team. V2's description columns designate
@@ -489,11 +493,13 @@ def _season_games(
         v3_name = f"nbastatsv3{suffix}_{year}.tar.xz"
         # liveData is absent from the pinned archive before 2020–21 (issue #51).
         live_name = f"{LIVEDATA}{suffix}_{year}.tar.xz" if has_livedata(year) else None
-        datanba_name = f"datanba{suffix}_{year}.tar.xz"
+        # data.nba.com is likewise absent from the pinned archive before 2016–17.
+        datanba_name = f"datanba{suffix}_{year}.tar.xz" if has_datanba(year) else None
         shots = shot_rows(snapshot_dir / shot_name)
         reference_games = v3_games(snapshot_dir / v3_name)
         feeds = cross_feeds(
-            snapshot_dir / live_name if live_name else None, snapshot_dir / datanba_name
+            snapshot_dir / live_name if live_name else None,
+            snapshot_dir / datanba_name if datanba_name else None,
         )
         refs = [
             sources[key]

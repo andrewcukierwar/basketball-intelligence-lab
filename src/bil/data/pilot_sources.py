@@ -25,6 +25,9 @@ NBA_TERMS = "https://www.nba.com/termsofuse"
 HOLDOUT_START_YEAR = 2025
 # NBA liveData play-by-play, the only archive feed that may be absent for a pinned season.
 LIVEDATA = "cdnnba"
+# data.nba.com archives exist from 2016–17, and the first two lack the ``ord`` event-order field.
+DATANBA = "datanba"
+FIRST_DATANBA_ORDER_YEAR = 2017
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,123 @@ class Source:
 
 # Shufinskiy archive digests and sizes, as recorded in the issue #51 coverage register.
 _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
+    2005: {
+        "nbastats": ("f6c314f719513db891d25dcd9421b48de0ef5d53fc67cd4a48fd6af6b18753fc", 7_721_416),
+        "nbastats_po": (
+            "fcd21eb7bbf88de950df89c953056cc4eab0ef423eea866fb27b3f680dcb4888",
+            537_808,
+        ),
+        "nbastatsv3": (
+            "c56c3e2f08e1c3a66a4774069e55f7c7bf0e738d9193ab537c7d6bbae4f2761c",
+            7_570_844,
+        ),
+        "nbastatsv3_po": (
+            "4a00b4fc582b0b6250fe1f420c1cd064997e4cb044adc04342e3e3efd76b5db0",
+            538_668,
+        ),
+        "shotdetail": (
+            "b6b10669e731b8f97f9596d5f07afbf1b11c76e3997d5f65d260c2f3e7bacc3f",
+            2_325_284,
+        ),
+        "shotdetail_po": (
+            "41f72620ef3be30df63a839955b8c80d7258ec559ef4b47b0dfd8fdd7604855a",
+            167_980,
+        ),
+        "pbpstats": ("753f7c595d98e24195de16f0768989570b334d3b00703afeace9ae6882cec1e6", 5_802_780),
+        "pbpstats_po": (
+            "d50328e2ae123e475a54032f7840dbbb57474ac642c3e9a5223eb1d487e49054",
+            412_148,
+        ),
+    },
+    2010: {
+        "nbastats": ("1603a3fa2a6b1812adb60c5b43ef5ed7602522c9fcec2569a4d2caaf1fc75f67", 7_833_200),
+        "nbastats_po": (
+            "2544678874e1cd13f524d799b6b24aebd45810676d8fe5d0a9427c90662198c4",
+            497_200,
+        ),
+        "nbastatsv3": (
+            "8cea2fbdaa57261b7adaf1f439c9b050b70d68c6f645c21209b21f0bcd8d71fb",
+            7_849_172,
+        ),
+        "nbastatsv3_po": (
+            "ae8a3049ec4adb901294cd00095fe057d5e692a7e89b72b03a73e9731bc4ba74",
+            508_116,
+        ),
+        "shotdetail": (
+            "e8a42d4fede746bb30abcb9df99e489af12f90499475554fdd821c3bd9fe6f2c",
+            2_529_752,
+        ),
+        "shotdetail_po": (
+            "0f553e2c0923003803b9717431531ec0315037a60477a2aada971745559a6ae5",
+            161_544,
+        ),
+        "pbpstats": ("078bd0c14be16bd4036dd2c5a71817c83218f23e398a330e4b3146096316b61f", 5_869_320),
+        "pbpstats_po": (
+            "c82d44c3bad3028295438a0bc81bbc323c1b3081f9e29a525b6604dbbfdfe85c",
+            377_204,
+        ),
+    },
+    2014: {
+        "nbastats": ("f6a48f32ed7887d6e1885354a9e46b8852040a9f9ce344eaa18e634803cd2eaf", 8_024_656),
+        "nbastats_po": (
+            "64ba3e501eaabac0d158a363d0f5ae725ac3600a31bc8a0b7d715e31e4cd09fd",
+            540_792,
+        ),
+        "nbastatsv3": (
+            "76a5398235900fd5b914eaeb1464e76fc05517184d04c503404a16a44d14f741",
+            8_073_464,
+        ),
+        "nbastatsv3_po": (
+            "ef116defaf9b87275fc9ea4fe9562072be97626850450181ee460e3f5b52c69b",
+            553_280,
+        ),
+        "shotdetail": (
+            "e2bf753050854e1eb99f6d5c5d690cdcfed4adae216726d330ef6adb3cd21513",
+            2_588_860,
+        ),
+        "shotdetail_po": (
+            "31f550c654d8ebf84c07ff6ebd7c3a9b1a229c725f6358ea247565e79e0c2931",
+            175_796,
+        ),
+        "pbpstats": ("01b4c0237ffe9087d43afe211eb72caba1b1a679933fb503c7109ea28d7ac4fe", 5_969_564),
+        "pbpstats_po": (
+            "cc34880fc5d1c2b513ba3ec70f737b0ae8a98260d25ba3383dec263d91bcd750",
+            410_844,
+        ),
+    },
+    2016: {
+        "nbastats": ("fab9222699fd126e24a3aa01805013ad73a84aafd06f01b8b69f3f9f9b130d0f", 8_341_720),
+        "nbastats_po": (
+            "ab3fb00678fb97c53dea774d64eddcbe3cf606f6a0610bf22f90f45ad4b08e6c",
+            522_764,
+        ),
+        "nbastatsv3": (
+            "6c94890f389abe5af085ff19a26a80e7fe0d205c55dc201aefaa078a887540f4",
+            8_323_760,
+        ),
+        "nbastatsv3_po": (
+            "ab6a8f685ca5838b23699939aea5a47903bfe3d6fa9950b58a78a6e9a31d503a",
+            531_364,
+        ),
+        "shotdetail": (
+            "0681285a0bf08a1ef84b24895d2a4bb709f2d192ba9134e3600567c593dacd96",
+            2_643_128,
+        ),
+        "shotdetail_po": (
+            "36606843e458f2e4bf631cdd877b57592cf27b7b395598bac5dcacda1d1e974d",
+            170_460,
+        ),
+        "datanba": ("1efe3f2ff99676dcc3c2288b9a345b6e287794fd9180c36c20c8e6661dc88d34", 7_531_600),
+        "datanba_po": ("27c3d40263a213e4a723c9bb15327a7652837882696fc6d3e30f1a769fb7882e", 482_636),
+        "pbpstats": (
+            "be3c77ff3c384c062c44d24ed995040db817233a1c1c955ee80b88a243e71e2d",
+            15_193_052,
+        ),
+        "pbpstats_po": (
+            "978aa4840511b5c39953109ee38bbb27569ed72e6af22785ec24082b4230878f",
+            1_034_568,
+        ),
+    },
     2017: {
         "nbastats": (
             "efd8c7139acb737ebdc76e0b98b118cb6152caffc0077cf2c7b6ef25a580e50f",
@@ -385,6 +505,22 @@ _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
 
 # Bill Mill team and player box logs as (sha256, bytes), from the issue #51 register.
 _BOX_PINS: dict[int, tuple[tuple[str, int], tuple[str, int]]] = {
+    2005: (
+        ("c460a8d6054c0d61096191693c3c86aabb9d30f3e010fb1e50d2c6d31aa856d1", 158_839),
+        ("315c603c625f5a2b6123a48ac32605442dc3ae2ad3c92266310f9c080a9eacad", 1_517_686),
+    ),
+    2010: (
+        ("14febf00675b74c53f3e7d76383fabfb5128409ad85a9e800b17c973d5186b45", 159_888),
+        ("4bdfd03b37236c054a7282c2e9fa5685e8df4368abb69645657c39ede897416d", 1_564_330),
+    ),
+    2014: (
+        ("9c122bd1362c0911b5b47cd5992d97c74b6e8060b6a3a09641b0a085c6e70d8c", 159_901),
+        ("8be6e39f9f7431015b81795c20aada4d475a3967f19ce70b05bf6015377ceb4d", 1_601_065),
+    ),
+    2016: (
+        ("5f437d5802e09e87dda9ce2fd5e73db189d061222cbc9d6e82625862b1d6e950", 159_695),
+        ("98a0ca9890ea831276059cadc837439372bd7b613c7d6b5a51ca6380554c8827", 1_589_918),
+    ),
     2017: (
         ("09ce5a1c9ba0db8c3dcd9a79df1dd070726fcb3f8a4a1951cef4b9df3568ee88", 158_915),
         ("c85d95c9516468aba14d4afb7de9ba693754d3fb407a529a89ca0ee35af48611", 1_618_976),
@@ -421,6 +557,22 @@ _BOX_PINS: dict[int, tuple[tuple[str, int], tuple[str, int]]] = {
 
 # Bentes regular-season and playoff lineup stints as (sha256, bytes, release asset ID).
 _BENTES_PINS: dict[int, tuple[tuple[str, int, int], tuple[str, int, int]]] = {
+    2005: (
+        ("13be19bede7071b5fabcb87c9ba343a88fe333dce7486d8ec3916e09246ddc73", 1_087_433, 582066539),
+        ("4f278f172cc1c403987e95432777452e1b3e78f702e7c7ba6a77e9a81e4552ee", 86_040, 582065357),
+    ),
+    2010: (
+        ("fa8ca61be522d874dd605e65a92805ad7ad3055c210b9d56487827b861a1ef79", 1_091_849, 582066733),
+        ("560bd168c66b30d53fe883b09b07bf4a20b48ff52c9bafb54403164d9cabceb4", 78_653, 582065564),
+    ),
+    2014: (
+        ("7294a7660e5c317956ef8304770553971b0d4759c7ef7d6bb73c871645d428a4", 1_258_026, 603727989),
+        ("9a9a1acce5f63eeec2f8ef58b2121f7e4e37bd74651acb60eb9ebf76e9714295", 85_984, 582065693),
+    ),
+    2016: (
+        ("616df99ca344f68d08f134d5449a8cdf130e38ec88c16c3201b9face2d82f70b", 1_283_777, 582066943),
+        ("35bdf39947528451aacab2cfe5150c5c95da94f1f36b8fdedf7cfd713a975fac", 90_701, 582065772),
+    ),
     2017: (
         ("9e86aca93b3af2345049b5c1df76ddc60c635c30410388e067f5b067ffce9419", 1_298_311, 582066969),
         ("9bd46cc3c3c0c12111c6ab264bea931e280008f159354d0484936656f7523518", 91_657, 582065797),
@@ -484,10 +636,21 @@ def _archive(name: str, sha256: str, size_bytes: int) -> Source:
 def has_livedata(start_year: int) -> bool:
     """Whether the pinned archive holds NBA liveData (``cdnnba``) for this season.
 
-    The #51 register records liveData as absent from the provider inventory before 2020–21.
-    Builds for those seasons run without it, and every other feed is required.
+    The #51 register records liveData as absent from the provider inventory before 2020–21,
+    and data.nba before 2016–17. Builds for those seasons run without the feed, and every
+    other feed is required.
     """
     return LIVEDATA in _ARCHIVE_PINS[pinned_season(start_year)]
+
+
+def has_datanba(start_year: int) -> bool:
+    """Whether the pinned archive holds data.nba.com events for this season (from 2016–17)."""
+    return DATANBA in _ARCHIVE_PINS[pinned_season(start_year)]
+
+
+def datanba_has_order(start_year: int) -> bool:
+    """Whether the season's data.nba archive carries the ``ord`` field (from 2017–18)."""
+    return has_datanba(start_year) and start_year >= FIRST_DATANBA_ORDER_YEAR
 
 
 def _archives(start_year: int, feeds: tuple[str, ...]) -> list[Source]:
@@ -495,7 +658,8 @@ def _archives(start_year: int, feeds: tuple[str, ...]) -> list[Source]:
     return [
         _archive(f"{stem}_{start_year}.tar.xz", *pins[stem])
         for feed in feeds
-        if feed != LIVEDATA or has_livedata(start_year)
+        if (feed != LIVEDATA or has_livedata(start_year))
+        and (feed != DATANBA or has_datanba(start_year))
         for stem in (feed, f"{feed}_po")
     ]
 
