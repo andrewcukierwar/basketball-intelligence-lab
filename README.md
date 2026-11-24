@@ -39,6 +39,7 @@ M0 established the methodology specification, source audit and research contract
 - [Canonical data contracts](docs/data-contracts.md)
 - [2022–23 possession pilot](docs/data-pilot.md)
 - [Synthetic offensive/defensive RAPM](docs/research/rapm-synthetic.md)
+- [M2 RAPM baseline report and gate assessment](docs/research/rapm-m2-report.md)
 - [Validation strategy](docs/validation-strategy.md)
 - [Evaluation run manifest](docs/run-manifest.md)
 - [Research decisions](docs/DECISIONS.md)

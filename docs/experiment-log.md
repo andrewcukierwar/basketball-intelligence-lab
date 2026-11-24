@@ -194,7 +194,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0011 — Run-outs and period-end possessions in the RAPM row set, 2022–23
 
-- **Status:** Sensitivity runs under frozen protocols v1 and v2 (v2 superseded), then one cohort comparison under v3. Independent review of the canonical decision pending.
+- **Status:** Sensitivity runs under frozen protocols v1 and v2 (v2 superseded), then one cohort comparison under v3. A focused independent re-review approved the canonical decision at abed529 before PR #91 merged.
 - **Date:** 2026-11-23 and 2026-11-24.
 - **Research question:** Do possessions that start a period's end, or contain no action, need exclusion from the RAPM row set, and what do the alternatives change?
 - **Category:** Experimental (retrospective replay, one season), with an Original row rule.
