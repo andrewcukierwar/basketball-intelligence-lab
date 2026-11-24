@@ -150,6 +150,8 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0007 — Stat-specific skill decay and league shrinkage, 2022–23
 
+### EXP-0008 — Stat-specific skill decay and league shrinkage, 2022–23
+
 - **Status:** Run once under a frozen protocol. Awaiting review.
 - **Date:** 2026-11-23.
 - **Research question:** Does per-statistic exponential decay with league shrinkage, fitted by Differential Evolution in nested chronological folds, beat the fixed #31 baselines on later 2022–23 games, and which age clock works best?
