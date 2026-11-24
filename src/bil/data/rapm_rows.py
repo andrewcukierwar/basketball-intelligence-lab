@@ -22,7 +22,7 @@ import duckdb
 
 from bil.data.pilot_sources import ATTRIBUTION, NBA_TERMS, sha256_file, utc_now, write_json
 
-CONTRACT_REVISION = "rapm-historical-rows-issue-82"
+CONTRACT_REVISION = "rapm-historical-rows-issue-82-v2"
 PILOT_TABLES = (
     "game",
     "event",
@@ -39,7 +39,22 @@ OUTPUT_TABLES = (
     "score_reconciliation",
     "game_reconciliation",
 )
-REASONS = ("eligible", "multiple_lineups", "no_action", "pilot_excluded", "unresolved_control")
+REASONS = (
+    "eligible",
+    "multiple_lineups",
+    "period_end_pseudo",
+    "no_action",
+    "pilot_excluded",
+    "unresolved_control",
+)
+# Canonical variant B excludes accepted possessions whose first event is ``period_end``. A is the
+# outcome-based no-action exclusion kept as a sensitivity alternative. C keeps everything.
+VARIANTS = ("B", "A", "C")
+EXCLUSION = {
+    "B": ("period_end_pseudo", "coalesce(a.first_kind, '') = 'period_end'"),
+    "A": ("no_action", "a.action_events = 0"),
+    "C": ("none", "false"),
+}
 # Events that give a possession a player-attributable outcome. A possession with none of them
 # inside its own half-open sequence interval is a no-action (run-out) possession.
 ACTION_KINDS = "('shot', 'free_throw', 'turnover', 'foul', 'violation')"
@@ -75,7 +90,10 @@ WITH overlap AS (
     AND s.period = p.period AND s.start_seq < p.end_seq AND s.end_seq > p.start_seq
   GROUP BY ALL),
 acts AS (
-  SELECT p.game_id, p.stream_revision, p.possession_seq, count(e.seq) AS action_events
+  SELECT p.game_id, p.stream_revision, p.possession_seq, count(e.seq) AS action_events,
+         (SELECT f.kind FROM event f WHERE f.game_id = p.game_id
+            AND f.stream_revision = p.stream_revision AND f.seq >= p.start_seq
+            AND f.seq < p.end_seq ORDER BY f.seq LIMIT 1) AS first_kind
   FROM possession p
   LEFT JOIN event e ON e.game_id = p.game_id AND e.stream_revision = p.stream_revision
     AND e.seq >= p.start_seq AND e.seq < p.end_seq AND e.kind IN {action_kinds}
@@ -90,18 +108,18 @@ SELECT p.game_id, p.stream_revision, p.possession_seq, g.season_type, p.period,
        CASE p.status
          WHEN 'excluded' THEN 'pilot_excluded'
          WHEN 'unresolved' THEN 'unresolved_control'
-         WHEN 'accepted' THEN CASE WHEN a.action_events = 0 THEN 'no_action'
+         WHEN 'accepted' THEN CASE WHEN {excluded} THEN '{excluded_reason}'
                                    WHEN o.lineup_pairs > 1 THEN 'multiple_lineups'
                                    ELSE 'eligible' END
        END AS reason,
-       CASE WHEN p.status = 'accepted' AND a.action_events > 0 AND o.lineup_pairs = 1
+       CASE WHEN p.status = 'accepted' AND NOT ({excluded}) AND o.lineup_pairs = 1
             THEN 1 ELSE 0 END AS exposure,
-       a.action_events,
+       a.action_events, a.first_kind AS first_event_kind,
        o.lineup_pairs, o.covered_seqs, p.end_seq - p.start_seq AS possession_seqs,
-       CASE WHEN p.status <> 'accepted' OR a.action_events = 0 OR o.lineup_pairs <> 1 THEN NULL
+       CASE WHEN p.status <> 'accepted' OR ({excluded}) OR o.lineup_pairs <> 1 THEN NULL
             WHEN p.offense_team_id = g.home_team_id THEN o.home_lineup_id
             ELSE o.away_lineup_id END AS offense_lineup_id,
-       CASE WHEN p.status <> 'accepted' OR a.action_events = 0 OR o.lineup_pairs <> 1 THEN NULL
+       CASE WHEN p.status <> 'accepted' OR ({excluded}) OR o.lineup_pairs <> 1 THEN NULL
             WHEN p.offense_team_id = g.home_team_id THEN o.away_lineup_id
             ELSE o.home_lineup_id END AS defense_lineup_id,
        coalesce(c.points, 0) AS control_points
@@ -158,6 +176,7 @@ WITH d AS (
          count(*) FILTER (reason = 'eligible') AS eligible,
          count(*) FILTER (reason = 'multiple_lineups') AS multiple_lineups,
          count(*) FILTER (reason = 'no_action') AS no_action,
+         count(*) FILTER (reason = 'period_end_pseudo') AS period_end_pseudo,
          count(*) FILTER (reason = 'pilot_excluded') AS pilot_excluded,
          count(*) FILTER (reason = 'unresolved_control') AS unresolved_control,
          count(*) FILTER (reason = 'eligible' AND offense_team_id = home_team_id)
@@ -175,6 +194,7 @@ SELECT g.game_id, g.season_type, g.strata, g.accepted, g.quarantine_reason, g.st
        coalesce(d.possessions, 0) AS possessions, coalesce(d.eligible, 0) AS eligible,
        coalesce(d.multiple_lineups, 0) AS multiple_lineups,
        coalesce(d.no_action, 0) AS no_action,
+       coalesce(d.period_end_pseudo, 0) AS period_end_pseudo,
        coalesce(d.pilot_excluded, 0) AS pilot_excluded,
        coalesce(d.unresolved_control, 0) AS unresolved_control,
        coalesce(d.home_model_offense_exposure, 0) AS home_model_offense_exposure,
@@ -259,10 +279,6 @@ CHECKS = {
            or d.exposure <> (d.reason = 'eligible')::int
            or (d.exposure = 0) <> (d.offense_lineup_id is null and d.defense_lineup_id is null)
            or (d.exposure = 1) <> (d.offense_lineup_id is not null and d.defense_lineup_id is not null)""",
-    "no_action_possessions_have_no_events_and_score_zero": """
-        select count(*) from possession_disposition
-        where (reason = 'no_action') <> (pilot_status = 'accepted' and action_events = 0)
-           or (reason = 'no_action' and control_points <> 0)""",
     "stints_contiguous_within_period": """
         select count(*) from (
           select start_seq, end_seq,
@@ -303,10 +319,12 @@ CHECKS = {
                      count(*) filter (status = 'excluded') e,
                      count(*) filter (status = 'unresolved') u
                    from possession group by game_id) p using (game_id)
-        where r.possessions <> r.eligible + r.multiple_lineups + r.no_action + r.pilot_excluded
+        where r.possessions <> r.eligible + r.multiple_lineups + r.no_action + r.period_end_pseudo
+                               + r.pilot_excluded
                                + r.unresolved_control
            or r.possessions <> coalesce(p.n, 0)
-           or r.eligible + r.multiple_lineups + r.no_action <> coalesce(p.a, 0)
+           or r.eligible + r.multiple_lineups + r.no_action + r.period_end_pseudo
+              <> coalesce(p.a, 0)
            or r.pilot_excluded <> coalesce(p.e, 0) or r.unresolved_control <> coalesce(p.u, 0)
            or (not r.accepted and r.possessions + r.allocations <> 0)""",
     "modeled_points_equal_eligible_control_points_by_team": """
@@ -346,6 +364,24 @@ CHECKS = {
         where r.home_model_offense_exposure + r.away_model_offense_exposure <> r.eligible
            or coalesce(m.n, 0) <> r.eligible
            or coalesce(m.o, 0) <> 5 * r.eligible or coalesce(m.f, 0) <> 5 * r.eligible""",
+}
+
+# Checks that apply to one exclusion variant only.
+VARIANT_CHECKS = {
+    "A": {
+        "no_action_possessions_have_no_events_and_score_zero": """
+        select count(*) from possession_disposition
+        where (reason = 'no_action') <> (pilot_status = 'accepted' and action_events = 0)
+           or (reason = 'no_action' and control_points <> 0)"""
+    },
+    "B": {
+        "period_end_pseudo_possessions_start_on_period_end_and_score_zero": """
+        select count(*) from possession_disposition
+        where (reason = 'period_end_pseudo')
+              <> (pilot_status = 'accepted' and first_event_kind = 'period_end')
+           or (reason = 'period_end_pseudo' and (control_points <> 0 or action_events <> 0))"""
+    },
+    "C": {},
 }
 
 
@@ -417,16 +453,23 @@ def _tally(connection: duckdb.DuckDBPyConnection) -> dict[str, dict[str, int]]:
     return {key: dict(sorted(result[key].items())) for key in sorted(result)}
 
 
-def _violations(connection: duckdb.DuckDBPyConnection) -> dict[str, int]:
+def _violations(connection: duckdb.DuckDBPyConnection, variant: str) -> dict[str, int]:
     return {
         name: int(cast(tuple[int], connection.execute(sql).fetchone())[0])
-        for name, sql in CHECKS.items()
+        for name, sql in {**CHECKS, **VARIANT_CHECKS[variant]}.items()
     }
 
 
 def build_rows(
-    pilot_dir: Path, output: Path, code_commit: str, pilot_manifest_sha256: str
+    pilot_dir: Path,
+    output: Path,
+    code_commit: str,
+    pilot_manifest_sha256: str,
+    variant: str = "B",
 ) -> dict[str, object]:
+    if variant not in VARIANTS:
+        raise ValueError(f"Unknown exclusion variant {variant}")
+    excluded_reason, excluded = EXCLUSION[variant]
     if re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
         raise ValueError("Record a full Git commit for the row build")
     pilot = _pilot_inputs(pilot_dir, pilot_manifest_sha256)
@@ -446,13 +489,15 @@ def build_rows(
             for sql in (
                 SORTED_IDS,
                 GAMES,
-                DISPOSITION.replace("{action_kinds}", ACTION_KINDS),
+                DISPOSITION.replace("{action_kinds}", ACTION_KINDS)
+                .replace("{excluded_reason}", excluded_reason)
+                .replace("{excluded}", excluded),
                 MODEL_ROW,
                 SCORE,
                 _game_reconciliation_sql(),
             ):
                 connection.execute(sql)
-            counts = _violations(connection)
+            counts = _violations(connection, variant)
             failed = {name: count for name, count in counts.items() if count}
             if failed:
                 raise ValueError(f"Row-set identities failed against the pilot ledgers: {failed}")
@@ -492,6 +537,7 @@ def build_rows(
         }
         identity: dict[str, object] = {
             "contract_revision": CONTRACT_REVISION,
+            "variant": variant,
             "pilot_manifest_sha256": pilot_manifest_sha256,
             "pilot_source_snapshot_sha256": pilot["source_snapshot_sha256"],
             "pilot_input_tables": pilot_artifacts,
@@ -506,6 +552,7 @@ def build_rows(
             "schema_version": 1,
             "build_id": build_id,
             "contract_revision": CONTRACT_REVISION,
+            "variant": variant,
             "code_commit": code_commit,
             "generated_at": when,
             "duckdb_version": version("duckdb"),
@@ -556,9 +603,16 @@ def main() -> None:
     cli.add_argument("output_dir", type=Path, help="new directory for the row set")
     cli.add_argument("--pilot-manifest-sha256", required=True)
     cli.add_argument("--code-commit", required=True)
+    cli.add_argument(
+        "--variant",
+        choices=VARIANTS,
+        default="B",
+        help="B excludes period-end pseudo-possessions (canonical), A the no-action "
+        "possessions (sensitivity), C keeps all",
+    )
     args = cli.parse_args()
     manifest = build_rows(
-        args.pilot_dir, args.output_dir, args.code_commit, args.pilot_manifest_sha256
+        args.pilot_dir, args.output_dir, args.code_commit, args.pilot_manifest_sha256, args.variant
     )
     print(json.dumps({"build_id": manifest["build_id"], "outputs": manifest["output_artifacts"]}))
 

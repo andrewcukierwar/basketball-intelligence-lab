@@ -45,7 +45,7 @@ def _game_tables(data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
             "remaining_ms": None,
             "elapsed_ms": None,
             "observed_at": WHEN,
-            "kind": "shot",
+            "kind": data.get("first_kinds", {}).get(str(row["possession_seq"]), "shot"),
             "team_id": row["offense_team_id"],
             "home_delta": None,
             "away_delta": None,
@@ -300,6 +300,10 @@ def _equal_gap_and_overlap(data: dict[str, Any]) -> None:
     ]
 
 
+def _period_end_start(data: dict[str, Any]) -> None:
+    data["first_kinds"] = {"5": "period_end"}
+
+
 def _stint_gap(data: dict[str, Any]) -> None:
     data["stints"][2]["start_seq"] = 7
     data["stints"][2]["end_seq"] = 15
@@ -356,7 +360,8 @@ def test_pilot_ledger_gaps_block_the_build(tmp_path: Path, mutation: Mutation, c
 def test_no_action_possession_is_excluded_but_kept_in_the_ledger(tmp_path: Path) -> None:
     pilot, pin = _pilot(tmp_path, _no_action)
     output = tmp_path / "out"
-    manifest = build_rows(pilot, output, COMMIT, pin)
+    manifest = build_rows(pilot, output, COMMIT, pin, "A")
+    assert manifest["variant"] == "A"
     rows = _read(
         output,
         "select possession_seq, reason, exposure, control_points, action_events, "
@@ -397,3 +402,49 @@ def test_ineligible_dispositions_carry_no_lineup_ids(tmp_path: Path) -> None:
         ("eligible", 1),
     ]
     assert [(r[2], r[3]) for r in rows] == [(e, e) for e in (False, True, True, True, False, False)]
+
+
+def test_variant_b_excludes_period_end_pseudo_possessions_only(tmp_path: Path) -> None:
+    pilot, pin = _pilot(tmp_path, _period_end_start)
+    output = tmp_path / "out"
+    manifest = build_rows(pilot, output, COMMIT, pin)
+    assert manifest["variant"] == "B"
+    rows = _read(
+        output,
+        "select possession_seq, reason, exposure, offense_lineup_id is null "
+        "from '@/possession_disposition.parquet' order by 1",
+    )
+    assert rows[4] == (5, "period_end_pseudo", 0, True)
+    assert [r[1] for r in rows if r[0] != 5] == [
+        "eligible",
+        "multiple_lineups",
+        "pilot_excluded",
+        "unresolved_control",
+        "eligible",
+    ]
+    assert _read(output, "select possession_seq from '@/model_row.parquet' order by 1") == [
+        (1,),
+        (6,),
+    ]
+    assert manifest["reconciliation"]["all|all"]["period_end_pseudo_possessions"] == 1  # type: ignore[index]
+    assert not any(manifest["identity_violations"].values())  # type: ignore[attr-defined]
+
+
+def test_variant_b_keeps_outcome_free_possessions_and_c_keeps_everything(tmp_path: Path) -> None:
+    def both(data: dict[str, Any]) -> None:
+        _no_action(data)
+        _period_end_start(data)
+        data["first_kinds"] = {}
+
+    pilot, pin = _pilot(tmp_path, both)
+    kept = build_rows(pilot, tmp_path / "b", COMMIT, pin, "B")
+    assert kept["reconciliation"]["all|all"]["eligible_possessions"] == 3  # type: ignore[index]
+    everything = build_rows(pilot, tmp_path / "c", COMMIT, pin, "C")
+    assert everything["reconciliation"]["all|all"]["eligible_possessions"] == 3  # type: ignore[index]
+    dropped = build_rows(pilot, tmp_path / "a", COMMIT, pin, "A")
+    assert dropped["reconciliation"]["all|all"]["eligible_possessions"] == 2  # type: ignore[index]
+    assert len({kept["build_id"], everything["build_id"], dropped["build_id"]}) == 3 or (
+        kept["build_id"] != dropped["build_id"]
+    )
+    with pytest.raises(ValueError, match="variant"):
+        build_rows(pilot, tmp_path / "x", COMMIT, pin, "Z")
