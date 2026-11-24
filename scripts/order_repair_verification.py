@@ -3,7 +3,7 @@
 Example:
     uv run python scripts/order_repair_verification.py BUILD_DIR EVIDENCE_DIR YEAR [--report FILE]
 
-Compares the repaired games (stratum ``datanba_event_order_v2``) with the other accepted games on
+Event-local results at moved events come first. Compares the repaired games (stratum ``datanba_event_order_v2``) with the other accepted games on
 three independent measures: lineup seconds against Bentes stints, counted possessions against
 pbpstats.com, and possession offense against data.nba on live-ball events. The repaired games
 cannot be compared with an unrepaired attempt, because that attempt failed a hard check and
@@ -25,6 +25,42 @@ from bil.data.pilot_evidence import lineup_agreement, possession_agreement, stag
 STRATUM = "datanba_event_order_v2"
 
 
+def event_local(connection: duckdb.DuckDBPyConnection, build: Path) -> dict[str, object]:
+    """Unresolved possessions and data.nba offense disagreements at or near moved events."""
+    log = str(build / "order_repair_v2_log.csv").replace("'", "''")
+    connection.execute(
+        f"""create or replace table moved as
+            select e.game_id, e.seq from read_csv('{log}', all_varchar = true) m
+            join event e on e.game_id = m.game_id and e.source_event_id = m.event_num
+            where m.outcome = 'applied'"""
+    )
+    row = connection.execute(
+        """select (select count(*) from moved),
+                  (select count(*) from possession p where exists (
+                     select 1 from moved m where m.game_id = p.game_id
+                     and p.start_seq <= m.seq + 1 and m.seq - 1 < p.end_seq)),
+                  (select count(*) from possession p where p.status = 'unresolved' and exists (
+                     select 1 from moved m where m.game_id = p.game_id
+                     and p.start_seq <= m.seq + 1 and m.seq - 1 < p.end_seq))"""
+    ).fetchone()
+    near = connection.execute(
+        """with feed as (select distinct GAME_ID as game_id, cast(evt as int) as evt, oftid as team
+                          from datanba where oftid not in ('', '0'))
+           select count(*), count(*) filter (where f.team = l.offense) from live_events l
+           join feed f using (game_id, evt)
+           join event e on e.game_id = l.game_id and cast(e.source_event_id as int) = l.evt
+           where exists (select 1 from moved m where m.game_id = e.game_id
+                         and abs(m.seq - e.seq) <= 3)"""
+    ).fetchone()
+    return {
+        "moved_events": row[0] if row else 0,
+        "possessions_touching_moved_events": row[1] if row else 0,
+        "unresolved_possessions_touching_moved_events": row[2] if row else 0,
+        "live_ball_events_within_3_of_a_moved_event": near[0] if near else 0,
+        "of_which_offense_equals_datanba": near[1] if near else 0,
+    }
+
+
 def verify(build: Path, evidence: Path, year: int) -> dict[str, object]:
     with TemporaryDirectory() as temp, duckdb.connect() as connection:
         stage_feeds(connection, evidence, Path(temp), year)
@@ -35,7 +71,7 @@ def verify(build: Path, evidence: Path, year: int) -> dict[str, object]:
         lineup = connection.execute(
             f"""select {group} as grp, count(distinct l.game_id),
                        sum(seconds) filter (where same) / sum(seconds),
-                       sum(seconds) filter (where not same and seconds > 2)
+                       count(*) filter (where not same and seconds > 2)
                 from lineup_overlap l join game_review r using (game_id) group by 1"""
         ).fetchall()
         per_game = connection.execute(
@@ -68,9 +104,11 @@ def verify(build: Path, evidence: Path, year: int) -> dict[str, object]:
             f"""select {group} as grp, count(*), count(*) filter (where p.status = 'unresolved')
                 from possession p join game_review r using (game_id) where r.accepted group by 1"""
         ).fetchall()
+        local = event_local(connection, build)
     return {
+        "event_local_at_moved_events": local,
         "lineup_vs_bentes": {
-            g: {"games": n, "same_seconds_share": s, "disagreeing_seconds_over_2s_pieces": d}
+            g: {"games": n, "same_seconds_share": s, "disagreeing_pieces_over_2s": d}
             for g, n, s, d in lineup
         },
         "lowest_game_lineup_share": dict(per_game),

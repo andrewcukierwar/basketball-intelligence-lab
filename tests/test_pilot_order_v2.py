@@ -282,3 +282,50 @@ def test_an_uncorroborated_repair_keeps_the_quarantine_and_logs_the_decline(
 def test_the_repair_is_off_by_default(harness) -> None:  # type: ignore[no-untyped-def]
     review, extra = harness(False, V3_AGREES, False)
     assert review["accepted"] is False and extra["logs"] == []
+
+
+def _described(num: int, kind: str, clock: str, text: str) -> tuple[int, RawEvent]:
+    _, base = event(num, kind, clock)
+    base.fields.update(PLAYER1_ID="7", PLAYER1_TEAM_ID="100", HOMEDESCRIPTION=text)
+    return num, base
+
+
+def test_description_counters_that_run_backwards_decline_the_repair() -> None:
+    def build(second: str) -> dict[int, RawEvent]:
+        return stream(
+            event(1, "12", "12:00"),
+            _described(9, "4", "0:40", "Smith REBOUND (Off:0 Def:2)"),
+            event(2, "2", "0:37"),
+            _described(5, "4", "0:20", f"Smith REBOUND {second}"),
+            event(4, "13", "0:00"),
+        )
+
+    entered = {1: 1, 2: 2, 9: 3, 5: 4, 4: 5}
+    v3 = [1, 9, 2, 5, 4]
+    declined = repair_order_v2(build("(Off:0 Def:1)"), entered, v3)
+    assert isinstance(declined, DeclinedV2) and declined.reason == "counter_inversion"
+    assert isinstance(repair_order_v2(build("(Off:0 Def:3)"), entered, v3), RepairedV2)
+
+
+def test_jump_balls_need_corroboration() -> None:
+    raw = stream(
+        event(1, "12", "12:00"),
+        event(9, "10", "0:40"),
+        event(2, "2", "0:37"),
+        event(4, "13", "0:00"),
+    )
+    result = repair_order_v2(raw, {1: 1, 2: 2, 9: 3, 4: 4}, [1, 9, 2, 4])
+    assert isinstance(result, DeclinedV2) and result.reason == "uncorroborated"
+
+
+def test_an_unresolved_possession_at_a_moved_event_rejects_the_repair() -> None:
+    repaired = repair_order_v2(LATE_TURNOVER, ENTERED, V3_AGREES)
+    assert isinstance(repaired, RepairedV2)
+    rows = {
+        "event": [{"seq": 3, "source_event_id": "9"}],
+        "possession": [{"status": "unresolved", "start_seq": 2, "end_seq": 5}],
+    }
+    with pytest.raises(GameIssue):
+        pilot._reject_unresolved_at_moved_events(rows, repaired)  # type: ignore[arg-type]
+    rows["possession"][0]["status"] = "accepted"
+    pilot._reject_unresolved_at_moved_events(rows, repaired)  # type: ignore[arg-type]

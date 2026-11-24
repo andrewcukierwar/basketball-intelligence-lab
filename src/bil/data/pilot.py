@@ -182,6 +182,20 @@ def _strata(events: list[RawEvent], periods: dict[int, tuple[int, int]]) -> list
     return labels
 
 
+def _reject_unresolved_at_moved_events(rows: Rows, repaired: RepairedV2) -> None:
+    """Decline a v2 repair when an unresolved possession touches a moved event (ADR-0029)."""
+    moved = {str(change.event_num) for change in repaired.modifications}
+    seqs = [int(str(row["seq"])) for row in rows["event"] if str(row["source_event_id"]) in moved]
+    for possession in rows["possession"]:
+        start, end = int(str(possession["start_seq"])), int(str(possession["end_seq"]))
+        if possession["status"] == "unresolved" and any(
+            start <= seq + 1 and seq - 1 < end for seq in seqs
+        ):
+            raise GameIssue(
+                "order_repair_v2_unresolved", "An unresolved possession touches a moved event"
+            )
+
+
 def _v2_detail(outcome: str, modifications: list[Modification], reason: str) -> str:
     """JSON detail of an order-repair-v2 log row: the outcome, its reason and every change."""
     return json.dumps(
@@ -419,6 +433,7 @@ def _build_game(
                     elif offered_v2 is not None:
                         try:
                             choice = reconstruct(False, offered_v2.events, list(offered_v2.events))
+                            _reject_unresolved_at_moved_events(choice.result.rows, offered_v2)
                             raw = offered_v2.events
                             v2_applied = offered_v2
                         except GameIssue:

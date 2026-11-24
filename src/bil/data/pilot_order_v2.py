@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -53,7 +54,9 @@ TIMEOUT, REPLAY = "9", "18"
 # Left out of the order solve: they have no lineup, score or possession effect.
 NON_SUBSTANTIVE = frozenset({TIMEOUT, REPLAY})
 # Moves of these types can change possession attribution or lineup exposure.
-CORROBORATED_TYPES = frozenset({SHOT, MISS, FREE_THROW, REBOUND, TURNOVER, SUBSTITUTION})
+JUMP_BALL = "10"
+# Jump balls change possession, so they need the same corroboration.
+CORROBORATED_TYPES = frozenset({SHOT, MISS, FREE_THROW, REBOUND, TURNOVER, SUBSTITUTION, JUMP_BALL})
 _SKIPPED_BETWEEN_MISS_AND_REBOUND = frozenset({SUBSTITUTION, TIMEOUT, REPLAY})
 
 EVIDENCE_V3 = "data.nba ord + V3 action order"
@@ -117,6 +120,50 @@ def _stable_positions(v2_index: list[int], numbers: list[int]) -> set[int]:
         stable.add(end)
         end = previous[end]
     return stable
+
+
+_COUNTERS = (
+    ("rebound", re.compile(r"\(Off:(\d+) Def:(\d+)\)")),
+    ("points", re.compile(r"\((\d+) PTS\)")),
+    ("foul", re.compile(r"\(P(\d+)\.(?:T(\d+)|PN)\)")),
+)
+
+
+def _counter_values(event: RawEvent) -> dict[tuple[str, str, int], int]:
+    """Running totals that V2 prints in a description, keyed by player (or team) and counter."""
+    fields = event.fields
+    text = " ".join(
+        fields.get(name, "")
+        for name in ("HOMEDESCRIPTION", "VISITORDESCRIPTION", "NEUTRALDESCRIPTION")
+    )
+    player = fields.get("PLAYER1_ID", "")
+    team = fields.get("PLAYER1_TEAM_ID", "")
+    values: dict[tuple[str, str, int], int] = {}
+    for name, pattern in _COUNTERS:
+        for match in pattern.finditer(text):
+            for index, group in enumerate(match.groups()):
+                if group is None:
+                    continue
+                owner = (
+                    f"{team}:{fields.get('PERIOD', '')}"
+                    if name == "foul" and index == 1
+                    else player
+                )
+                values[(owner, f"{name}{index}", index)] = int(group)
+    return values
+
+
+def counter_violations(raw: dict[int, RawEvent], order: list[int]) -> set[int]:
+    """Events whose printed running totals (rebounds, points, fouls) run backwards in ``order``."""
+    highest: dict[tuple[str, str, int], tuple[int, int]] = {}
+    broken: set[int] = set()
+    for event_num in order:
+        for key, value in _counter_values(raw[event_num]).items():
+            if key in highest and value < highest[key][0]:
+                broken.update((event_num, highest[key][1]))
+            elif key not in highest or value >= highest[key][0]:
+                highest[key] = (value, event_num)
+    return broken
 
 
 def _is_miss(event: RawEvent) -> bool:
@@ -269,6 +316,16 @@ def repair_order_v2(
                 placed[event_num] = RawEvent(fields, list(source.row_numbers))
     if not modifications and list(placed) == list(raw):
         return None
+    inverted = counter_violations(placed, list(placed)) & {m.event_num for m in modifications}
+    if inverted:
+        problems.append(
+            DeclinedV2(
+                "counter_inversion",
+                f"printed rebound, point or foul totals run backwards at events {sorted(inverted)}",
+                None,
+                min(inverted),
+            )
+        )
     if problems:
         first = problems[0]
         reasons = sorted({p.reason for p in problems})
