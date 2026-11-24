@@ -44,6 +44,40 @@ class Source:
 
 # Shufinskiy archive digests and sizes, as recorded in the issue #51 coverage register.
 _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
+    2004: {
+        "nbastats": (
+            "c5061b0adfc5d0ab4de86c3dede02d5b313669b3a4f1b3bae78a2306075abe26",
+            7_592_256,
+        ),
+        "nbastats_po": (
+            "84f426eb513db0000224e8830696a94378a5c1aeac03e7a5ce5e17ba663f1ac1",
+            507_832,
+        ),
+        "nbastatsv3": (
+            "9796c7b5175b212bfc6f5bf16ceb22eba1a16e8c4c5c72243d720cba37aa19a3",
+            7_646_260,
+        ),
+        "nbastatsv3_po": (
+            "8cd048d5b0e6562201e06539371fa854b4fde55da95896f20de3f6ab77aca226",
+            523_460,
+        ),
+        "shotdetail": (
+            "4159f7e2308f7924757241d125ddfd8784ac8b17626acf08de5d1bb7960aa776",
+            2_365_508,
+        ),
+        "shotdetail_po": (
+            "4b62555d2317e5eba817e5a59579f2fdb1a7a67b08de3ba4d8761686be899fd8",
+            163_236,
+        ),
+        "pbpstats": (
+            "f3c8e2c9de77bef6bbf569cceb1613a0f075b49bf5423b567b1077cae9ed70e0",
+            5_864_192,
+        ),
+        "pbpstats_po": (
+            "59f6e653b2436adeb914e8800c72dc082248ab0fa9cb51e07cd5260a46839507",
+            395_204,
+        ),
+    },
     2005: {
         "nbastats": ("f6c314f719513db891d25dcd9421b48de0ef5d53fc67cd4a48fd6af6b18753fc", 7_721_416),
         "nbastats_po": (
@@ -70,6 +104,74 @@ _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
         "pbpstats_po": (
             "d50328e2ae123e475a54032f7840dbbb57474ac642c3e9a5223eb1d487e49054",
             412_148,
+        ),
+    },
+    2006: {
+        "nbastats": (
+            "0d325c0df0ace9087f9cf2413f7c8970c05befc844fcf25897e48d41ad3c071c",
+            7_787_008,
+        ),
+        "nbastats_po": (
+            "eeb2360ff5a01c3f8821c34320fd18da9439bd00074549ffb429c672900d4277",
+            477_520,
+        ),
+        "nbastatsv3": (
+            "b6653696e22dc55a7af122a753439d31aee0365ef79bb9ec3c312f521281aee0",
+            7_635_480,
+        ),
+        "nbastatsv3_po": (
+            "c30ec7fc114b0eb12c0941ad20c4315dc819df6322e4f61efe86f8f2fb491612",
+            483_188,
+        ),
+        "shotdetail": (
+            "7c238aee908a59bb707b34da321fafcb63d677fc10349997ba7c1fb7ded96ecf",
+            2_346_208,
+        ),
+        "shotdetail_po": (
+            "67c6c9b506289157564665c382a4e01207a8c4d73df7fa07d106750103988772",
+            150_780,
+        ),
+        "pbpstats": (
+            "af255acb461d881bdf0d47e611482cd4d4251ccfdee804e799be0ebe97222a81",
+            5_852_380,
+        ),
+        "pbpstats_po": (
+            "31ea57674b9398d5b9c550f20f2000c230b20c58287601e2b74840aa426cb8eb",
+            368_096,
+        ),
+    },
+    2007: {
+        "nbastats": (
+            "875a5928d6c3267485627705805dcec1571d33c3c7ac948dd9a8d50bf2993e41",
+            7_728_748,
+        ),
+        "nbastats_po": (
+            "f31b052f63c7bf223ccb7be35cd5c27c1541a006054e69b2746c36a28a5f04d8",
+            515_464,
+        ),
+        "nbastatsv3": (
+            "2da43e84b9500bc6d0aea617e89a696f223627249bdbb6f30a9648c1a2c8f963",
+            7_619_916,
+        ),
+        "nbastatsv3_po": (
+            "03cf174378cc7b14873fa6d880f7ff83e731d3da398a6f1b6e2c7d5034220bf1",
+            520_688,
+        ),
+        "shotdetail": (
+            "067489fce1075f51cbce32f7b59a2f5e2c406a95d8f46f830a0a492677d0ceea",
+            2_406_988,
+        ),
+        "shotdetail_po": (
+            "364decea7800b75b7f5ebad7cd1cb996835ed08f4759f05e9613a6f0952ff27e",
+            165_564,
+        ),
+        "pbpstats": (
+            "3d683b9795c0fd3ac0f86abf6110fecd1c1537282d0ecea76f5e449450380e16",
+            5_847_516,
+        ),
+        "pbpstats_po": (
+            "ffd80e2a246aac7744b741b8ce64251290b12613c5f0705bc053434f9ea0de03",
+            397_144,
         ),
     },
     2010: {
@@ -505,9 +607,21 @@ _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
 
 # Bill Mill team and player box logs as (sha256, bytes), from the issue #51 register.
 _BOX_PINS: dict[int, tuple[tuple[str, int], tuple[str, int]]] = {
+    2004: (
+        ("542d70c7a535ed628e36c3ca40272ae70965f700d64f5983fd98c27909cc2123", 154_216),
+        ("83662facc36fef3525acbc1b17096658d764a67a88aafb48947d044419d9db79", 1_480_311),
+    ),
     2005: (
         ("c460a8d6054c0d61096191693c3c86aabb9d30f3e010fb1e50d2c6d31aa856d1", 158_839),
         ("315c603c625f5a2b6123a48ac32605442dc3ae2ad3c92266310f9c080a9eacad", 1_517_686),
+    ),
+    2006: (
+        ("2579eb3e0bf3ce0c7342ade5d50d001260925501b6cadbdcfed0020576b66c95", 159_592),
+        ("bf594dbe485a0ee29e529199e46316ab85f96ce1644c638bd423262f43d43b4b", 1_547_359),
+    ),
+    2007: (
+        ("dad17a19b2c97fa8935756568b48b9a46b7271a820efaf512502f4d2aaff6473", 160_818),
+        ("dc2f4393e6342f822649e37c06ecfd469c1e7df3369146d4ded4bc1e8b95b022", 1_576_640),
     ),
     2010: (
         ("14febf00675b74c53f3e7d76383fabfb5128409ad85a9e800b17c973d5186b45", 159_888),
@@ -557,9 +671,21 @@ _BOX_PINS: dict[int, tuple[tuple[str, int], tuple[str, int]]] = {
 
 # Bentes regular-season and playoff lineup stints as (sha256, bytes, release asset ID).
 _BENTES_PINS: dict[int, tuple[tuple[str, int, int], tuple[str, int, int]]] = {
+    2004: (
+        ("a46efac6d99d71a684f5460015ac634db4b55843956276f3295d82c0e7fbdf14", 1_095_351, 603727927),
+        ("1a480a7bddc54648cdc9447511973a9aeb6a9d89d169d054353b4e7850b76f80", 86_195, 582065324),
+    ),
     2005: (
         ("13be19bede7071b5fabcb87c9ba343a88fe333dce7486d8ec3916e09246ddc73", 1_087_433, 582066539),
         ("4f278f172cc1c403987e95432777452e1b3e78f702e7c7ba6a77e9a81e4552ee", 86_040, 582065357),
+    ),
+    2006: (
+        ("f293b9f24eef1900c3f8c9cb8ce4a1854496a4c67c63c67e11956245023fe5f7", 1_133_726, 582066585),
+        ("a1837cce5227c5d740166783a92655dc5d64d05126a3d5ad267bc61090428027", 79_147, 582065381),
+    ),
+    2007: (
+        ("f00a804dfb172e0913c693ea62484e76a7729209395248966d6216a68da62aff", 1_050_917, 582066621),
+        ("dd2bdf37e35da874a572fbb0d73409e0d837e9ab7880bbaab3d0ea2de7c6a9f6", 79_715, 582065424),
     ),
     2010: (
         ("fa8ca61be522d874dd605e65a92805ad7ad3055c210b9d56487827b861a1ef79", 1_091_849, 582066733),
