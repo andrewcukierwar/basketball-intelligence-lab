@@ -22,9 +22,10 @@ import duckdb
 
 from bil.data.pilot_sources import ATTRIBUTION, NBA_TERMS, sha256_file, utc_now, write_json
 
-CONTRACT_REVISION = "rapm-historical-rows-issue-58"
+CONTRACT_REVISION = "rapm-historical-rows-issue-82"
 PILOT_TABLES = (
     "game",
+    "event",
     "game_stream",
     "game_review",
     "lineup",
@@ -38,7 +39,10 @@ OUTPUT_TABLES = (
     "score_reconciliation",
     "game_reconciliation",
 )
-REASONS = ("eligible", "multiple_lineups", "pilot_excluded", "unresolved_control")
+REASONS = ("eligible", "multiple_lineups", "no_action", "pilot_excluded", "unresolved_control")
+# Events that give a possession a player-attributable outcome. A possession with none of them
+# inside its own half-open sequence interval is a no-action (run-out) possession.
+ACTION_KINDS = "('shot', 'free_throw', 'turnover', 'foul', 'violation')"
 DESTINATIONS = ("possession", "unassigned_dead_ball", "unresolved")
 
 # Expected games: every reviewed game with its stream and the game revision the stream names.
@@ -70,6 +74,12 @@ WITH overlap AS (
   LEFT JOIN stint s ON s.game_id = p.game_id AND s.stream_revision = p.stream_revision
     AND s.period = p.period AND s.start_seq < p.end_seq AND s.end_seq > p.start_seq
   GROUP BY ALL),
+acts AS (
+  SELECT p.game_id, p.stream_revision, p.possession_seq, count(e.seq) AS action_events
+  FROM possession p
+  LEFT JOIN event e ON e.game_id = p.game_id AND e.stream_revision = p.stream_revision
+    AND e.seq >= p.start_seq AND e.seq < p.end_seq AND e.kind IN {action_kinds}
+  GROUP BY ALL),
 control AS (
   SELECT game_id, stream_revision, possession_seq, scoring_team_id,
          sum(points_delta) AS points, count(*) AS allocations
@@ -80,19 +90,27 @@ SELECT p.game_id, p.stream_revision, p.possession_seq, g.season_type, p.period,
        CASE p.status
          WHEN 'excluded' THEN 'pilot_excluded'
          WHEN 'unresolved' THEN 'unresolved_control'
-         WHEN 'accepted' THEN CASE WHEN o.lineup_pairs > 1 THEN 'multiple_lineups'
+         WHEN 'accepted' THEN CASE WHEN a.action_events = 0 THEN 'no_action'
+                                   WHEN o.lineup_pairs > 1 THEN 'multiple_lineups'
                                    ELSE 'eligible' END
        END AS reason,
+       CASE WHEN p.status = 'accepted' AND a.action_events > 0 AND o.lineup_pairs = 1
+            THEN 1 ELSE 0 END AS exposure,
+       a.action_events,
        o.lineup_pairs, o.covered_seqs, p.end_seq - p.start_seq AS possession_seqs,
-       CASE WHEN p.offense_team_id = g.home_team_id THEN o.home_lineup_id
+       CASE WHEN p.status <> 'accepted' OR a.action_events = 0 OR o.lineup_pairs <> 1 THEN NULL
+            WHEN p.offense_team_id = g.home_team_id THEN o.home_lineup_id
             ELSE o.away_lineup_id END AS offense_lineup_id,
-       CASE WHEN p.offense_team_id = g.home_team_id THEN o.away_lineup_id
+       CASE WHEN p.status <> 'accepted' OR a.action_events = 0 OR o.lineup_pairs <> 1 THEN NULL
+            WHEN p.offense_team_id = g.home_team_id THEN o.away_lineup_id
             ELSE o.home_lineup_id END AS defense_lineup_id,
        coalesce(c.points, 0) AS control_points
 FROM possession p
 JOIN games g ON g.game_id = p.game_id AND g.stream_revision = p.stream_revision
 JOIN overlap o ON o.game_id = p.game_id AND o.stream_revision = p.stream_revision
   AND o.possession_seq = p.possession_seq
+JOIN acts a ON a.game_id = p.game_id AND a.stream_revision = p.stream_revision
+  AND a.possession_seq = p.possession_seq
 LEFT JOIN control c ON c.game_id = p.game_id AND c.stream_revision = p.stream_revision
   AND c.possession_seq = p.possession_seq AND c.scoring_team_id = p.offense_team_id
 """
@@ -108,7 +126,7 @@ SELECT d.game_id, d.stream_revision, g.game_revision, g.game_date, g.season_star
        d.offense_team_id, d.defense_team_id, d.offense_lineup_id, d.defense_lineup_id,
        sorted_ids(o.player_ids) AS offense_player_ids,
        sorted_ids(f.player_ids) AS defense_player_ids,
-       d.control_points AS model_points, 1 AS exposure, 1.0::DOUBLE AS weight,
+       d.control_points AS model_points, d.exposure, 1.0::DOUBLE AS weight,
        g.stream_available_at, g.stream_availability_basis
 FROM possession_disposition d
 JOIN games g ON g.game_id = d.game_id
@@ -116,7 +134,7 @@ JOIN lineup o ON o.game_id = d.game_id AND o.stream_revision = d.stream_revision
   AND o.lineup_id = d.offense_lineup_id
 JOIN lineup f ON f.game_id = d.game_id AND f.stream_revision = d.stream_revision
   AND f.lineup_id = d.defense_lineup_id
-WHERE d.reason = 'eligible'
+WHERE d.exposure = 1
 """
 
 SCORE = """
@@ -139,6 +157,7 @@ WITH d AS (
          count(*) AS possessions,
          count(*) FILTER (reason = 'eligible') AS eligible,
          count(*) FILTER (reason = 'multiple_lineups') AS multiple_lineups,
+         count(*) FILTER (reason = 'no_action') AS no_action,
          count(*) FILTER (reason = 'pilot_excluded') AS pilot_excluded,
          count(*) FILTER (reason = 'unresolved_control') AS unresolved_control,
          count(*) FILTER (reason = 'eligible' AND offense_team_id = home_team_id)
@@ -155,6 +174,7 @@ SELECT g.game_id, g.season_type, g.strata, g.accepted, g.quarantine_reason, g.st
        g.game_revision, g.game_date, g.home_team_id, g.away_team_id,
        coalesce(d.possessions, 0) AS possessions, coalesce(d.eligible, 0) AS eligible,
        coalesce(d.multiple_lineups, 0) AS multiple_lineups,
+       coalesce(d.no_action, 0) AS no_action,
        coalesce(d.pilot_excluded, 0) AS pilot_excluded,
        coalesce(d.unresolved_control, 0) AS unresolved_control,
        coalesce(d.home_model_offense_exposure, 0) AS home_model_offense_exposure,
@@ -235,7 +255,21 @@ CHECKS = {
     "eligible_exposure_is_one_and_exclusions_zero": """
         select count(*) from possession_disposition d
         left join model_row m using (game_id, stream_revision, possession_seq)
-        where (d.reason = 'eligible') <> (m.possession_seq is not null)""",
+        where (d.reason = 'eligible') <> (m.possession_seq is not null)
+           or d.exposure <> (d.reason = 'eligible')::int
+           or (d.exposure = 0) <> (d.offense_lineup_id is null and d.defense_lineup_id is null)
+           or (d.exposure = 1) <> (d.offense_lineup_id is not null and d.defense_lineup_id is not null)""",
+    "no_action_possessions_have_no_events_and_score_zero": """
+        select count(*) from possession_disposition
+        where (reason = 'no_action') <> (pilot_status = 'accepted' and action_events = 0)
+           or (reason = 'no_action' and control_points <> 0)""",
+    "stints_contiguous_within_period": """
+        select count(*) from (
+          select start_seq, end_seq,
+                 lag(end_seq) over (partition by game_id, stream_revision, period
+                                    order by start_seq, stint_seq) as previous_end
+          from stint)
+        where end_seq <= start_seq or (previous_end is not null and start_seq <> previous_end)""",
     "model_rows_unique_unit_weight_and_valid_points": """
         select (select count(*) - count(distinct (game_id, stream_revision, possession_seq))
                 from model_row)
@@ -269,10 +303,10 @@ CHECKS = {
                      count(*) filter (status = 'excluded') e,
                      count(*) filter (status = 'unresolved') u
                    from possession group by game_id) p using (game_id)
-        where r.possessions <> r.eligible + r.multiple_lineups + r.pilot_excluded
+        where r.possessions <> r.eligible + r.multiple_lineups + r.no_action + r.pilot_excluded
                                + r.unresolved_control
            or r.possessions <> coalesce(p.n, 0)
-           or r.eligible + r.multiple_lineups <> coalesce(p.a, 0)
+           or r.eligible + r.multiple_lineups + r.no_action <> coalesce(p.a, 0)
            or r.pilot_excluded <> coalesce(p.e, 0) or r.unresolved_control <> coalesce(p.u, 0)
            or (not r.accepted and r.possessions + r.allocations <> 0)""",
     "modeled_points_equal_eligible_control_points_by_team": """
@@ -412,7 +446,7 @@ def build_rows(
             for sql in (
                 SORTED_IDS,
                 GAMES,
-                DISPOSITION,
+                DISPOSITION.replace("{action_kinds}", ACTION_KINDS),
                 MODEL_ROW,
                 SCORE,
                 _game_reconciliation_sql(),
