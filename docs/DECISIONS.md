@@ -280,6 +280,30 @@ V2 remains the event source of record.
 - **Consequences:** Gains are small (median 0.29% MSE) and single-season. The snapshot excludes context by design. Outer seasons must confirm before any context is adopted.
 - **Links:** [Issue #33](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/33), [ADR-0018](#adr-0018--league-shrunk-exponential-skill-decay-with-inner-fold-clock-choice)
 
+## ADR-0022 — Revise the M1 quality policy: hard correctness, dataset eligibility and representativeness
+
+- **Date:** 2026-11-24
+- **Status:** Accepted (maintainer decision of 2026-11-23, [#89](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/89)). Supersedes the stratum and season-type reading of the M1 table in [data-pilot.md](data-pilot.md#m1-acceptance-for-the-202223-pilot). Does not change any check in code.
+- **Evidence class:** Original BIL design.
+- **Context:** The M1 table was written after 2022–23 was observed and treated every row as a pass/fail gate for the whole season. The 2017–18 through 2021–22 builds ([#25](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/25)) and the outer-validation builds ([#52](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/52)) showed what that reading does in practice. Two seasons (2018–19 and 2021–22) were recorded unavailable only because the regular-season overtime stratum, with 67 and 58 games, fell below 95%. 2021–22 missed by part of one game. The 2024–25 playoffs have an unresolved-possession share of 0.135% while the season is at 0.070%. The revision follows those observed data-quality findings. It is not a way to rescue a result, and it was decided after the original results were recorded.
+- **Decision:** Separate three questions that the original table mixed.
+  - **Hard correctness (unchanged, never relaxed to raise coverage).** Every `check` invariant (structural, identity, chronology, scoring, lineup, minutes, plus-minus reconciliation) must pass for every accepted game. A violation cannot be waived by this policy.
+  - **Dataset eligibility (hard limits kept).** At least 97% of expected games accepted for each season type, and at most 0.1% unresolved possessions over the full season. A season that misses either is not eligible as built.
+  - **Representativeness (target and warning, not a gate).**
+    - The 95% stratum coverage target (overtime, technical free throw, same-clock substitution) is kept as a target. A miss is a quality warning that needs investigation and sensitivity analysis, not automatic rejection of the season.
+    - Unresolved-possession shares are reported separately for each season type. A season type above 0.1% while the full season is within the limit is a warning to document.
+    - Material systematic missingness or demonstrated bias can still disqualify a dataset for a particular use. The diagnostic `scripts/season_quality.py` ([report](research/season-quality-2017-2025.md)) tests for it with a documented rule.
+  - **Application.** The policy applies to every season in the same way, retroactively as a classification. The original pass/fail results stay in `data-pilot.md` and the experiment log next to the revised ones.
+- **Season decisions (maintainer):**
+  - 2018–19 and 2021–22: conditionally authorized for primary retrospective training, subject to the missingness analysis.
+  - All individual game quarantines are retained.
+  - 2017–18: stays outside the primary cohort pending remediation ([#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53) feasibility). It fails two hard limits.
+  - 2024–25: accepted as an outer-validation season, playoffs included, with the elevated playoff unresolved rate documented.
+- **Evidence:** [Season quality report](research/season-quality-2017-2025.md) and [EXP-0012](experiment-log.md). Data-level only: no model was fitted or scored.
+- **Revision note:** The diagnostic's unresolved-possession flag rule was revised after its first run, because cells with 3 events gave infinite rate ratios: it now needs at least 5 events per cell and a Bonferroni adjustment. A later review found the 1,000-replicate bootstrap could not reach its own flag thresholds, so the run uses 20,000 replicates and refuses a floor above 1%. Neither revision touches any eligibility threshold, and the conclusions on 2018–19, 2021–22 and the 2024–25 playoffs did not change. Details are in the report's revision history.
+- **Consequences:** Eligibility is now a per-use judgment backed by the diagnostic, so a later change in a build or snapshot needs the diagnostic rerun. A conditionally authorized season whose analysis shows material bias for its use would be reported to the maintainer, who decides. The thresholds themselves were not changed.
+- **Links:** [Issue #89](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/89), [ADR-0020](#adr-0020--build-without-livedata-where-the-archive-lacks-it-as-a-weaker-verification-stratum), [ADR-0017](#adr-0017--season-pinned-builds-and-v2-home-designation-for-unflagged-box-games), [Development seasons](data-pilot.md#development-seasons-201718-through-202122)
+
 ## Decision template
 
 ### ADR-XXXX — Title

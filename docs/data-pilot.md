@@ -162,6 +162,26 @@ The thresholds below were set at this milestone after the results were observed.
 
 The dataset is fit for private RAPM development under the recorded strata. It makes no claim of historical point-in-time availability or of broader usage rights.
 
+### Revised M1 policy (ADR-0022, 2026-11-24)
+
+The table above is the original M1 result and is kept as recorded. [ADR-0022](DECISIONS.md#adr-0022--revise-the-m1-quality-policy-hard-correctness-dataset-eligibility-and-representativeness) revises how its rows are used, after the 2017–18 through 2024–25 builds ([#25](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/25), [#52](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/52)) showed that one small stratum could reject a whole season. No check in code and no threshold value changed.
+
+| Class | Rows | Rule |
+| --- | --- | --- |
+| Hard correctness | Invariants, final scores, lineups, minutes and plus-minus | Never relaxed. Every `check` passes for every accepted game. |
+| Dataset eligibility | Game coverage; unresolved possessions | Hard limits. At least 97% of expected games for each season type. At most 0.1% unresolved possessions over the full season. |
+| Representativeness | Stratum coverage; unresolved possessions by season type; systematic missingness | The 95% stratum figure is a target. A miss, or a season type above 0.1%, is a warning that needs investigation and sensitivity analysis, not rejection. Material systematic missingness or demonstrated bias can still disqualify a dataset for a particular use. |
+
+`scripts/season_quality.py` applies the revised policy and assesses missingness for any built season (see [the report](research/season-quality-2017-2025.md)):
+
+```sh
+uv run python scripts/season_quality.py data/processed/quality/<new-dir> \
+  --build data/processed/2018-19/issue-25-v1 data/raw/2018-19/issue-25-v1 \
+  --build data/processed/2019-20/issue-25-v1 data/raw/2019-20/issue-25-v1 --run-checks
+```
+
+It takes one `--build BUILD SNAPSHOT` pair per season, refuses an existing output directory, opens everything read-only and writes aggregate CSV and JSON files. `--run-checks` also runs the unchanged `check` invariants. It fits and scores no model. The flag rule (permutation chi-square for quarantines, game-clustered bootstrap for unresolved possessions) is in the report.
+
 ## Fourth full-season build: archived-feed adjudication
 
 The build at `b1a43ed` on 2026-11-23 used snapshot `issue-5-v2` and parser version `pbpstats-1.3.11-bil-v6`, and wrote to `data/processed/2022-23/issue-5-v6/`. [ADR-0011](DECISIONS.md) [EXP-0004](experiment-log.md)
@@ -340,7 +360,7 @@ Games accepted under each rule. Every game in these strata was accepted.
 | `same_clock_box_credit` | 20 | 18 |
 | `v2_home_designation` | 0 | 5 |
 
-Against the [M1 thresholds](#m1-acceptance-for-the-202223-pilot), both seasons pass all 26 `check` invariants and the game coverage floor of 97% for each season type. Stratum coverage is at least 96.6% for every stratum against the 95% floor. The unresolved-possession share is 0.039% for 2023–24 and 0.070% for 2024–25, inside the 0.1% season limit. The 2024–25 playoffs alone are at 0.135%. The M1 table sets that limit for the whole season, so this is reported here and not treated as a failure. The share of unresolved possessions has risen from 0.02% in 2022–23. The thresholds were not changed.
+Against the [M1 thresholds](#m1-acceptance-for-the-202223-pilot), both seasons pass all 26 `check` invariants and the game coverage floor of 97% for each season type. Stratum coverage is at least 96.6% for every stratum against the 95% floor. The unresolved-possession share is 0.039% for 2023–24 and 0.070% for 2024–25, inside the 0.1% season limit. The 2024–25 playoffs alone are at 0.135%. The original M1 table sets that limit for the whole season, so this was reported here and not treated as a failure. Under ADR-0022 it is a documented warning (bootstrap 95% interval 0.056% to 0.228% over 22 possessions in 10 of 84 games, with no systematic pattern; see the [season quality report](research/season-quality-2017-2025.md)). The share of unresolved possessions has risen from 0.02% in 2022–23. The thresholds were not changed.
 
 ### Quarantines
 
@@ -405,17 +425,17 @@ Outputs, all Parquet except the manifest: `fits` (statistic, clock, fit window a
 
 ### Result
 
-Two seasons meet every M1 threshold. Under the falsification rule in #25, the other three are recorded as **unavailable** for the #26 window. Their builds remain private evidence, and the thresholds were not changed.
+Under the original M1 table, two seasons meet every threshold and the other three were recorded **unavailable** for the #26 window under the falsification rule in #25. That original result is kept below. The maintainer then revised the policy ([ADR-0022](DECISIONS.md#adr-0022--revise-the-m1-quality-policy-hard-correctness-dataset-eligibility-and-representativeness)), and the last column gives the revised classification from `scripts/season_quality.py`. Their builds remain private evidence, and the thresholds were not changed.
 
-| Season | M1 status | Threshold missed |
-| --- | --- | --- |
-| 2017–18 | Unavailable | Regular-season game coverage is 85.5%, against a 97% floor. Unresolved possessions are 0.391%, against a 0.1% limit. The overtime (90.2%), technical-free-throw (84.6%) and same-clock-substitution (85.5%) regular-season strata are all below the 95% floor. |
-| 2018–19 | Unavailable | Regular-season overtime stratum is 58 of 67 (86.6%), against the 95% floor. Every other threshold passes. |
-| 2019–20 | Meets M1 | None. This is a weaker-verification season with no liveData. |
-| 2020–21 | Meets M1 | None. |
-| 2021–22 | Unavailable | Regular-season overtime stratum is 55 of 58 (94.8%), against the 95% floor. It misses by part of one game. Every other threshold passes. |
+| Season | Original M1 status (as recorded) | Threshold missed | Revised classification (ADR-0022) |
+| --- | --- | --- | --- |
+| 2017–18 | Unavailable | Regular-season game coverage is 85.5%, against a 97% floor. Unresolved possessions are 0.391%, against a 0.1% limit. The overtime (90.2%), technical-free-throw (84.6%) and same-clock-substitution (85.5%) regular-season strata are all below the 95% floor. | Fails two hard limits (game coverage and full-season unresolved share), plus three stratum warnings. |
+| 2018–19 | Unavailable | Regular-season overtime stratum is 58 of 67 (86.6%), against the 95% floor. Every other threshold passes. | Meets all hard limits. One warning, the overtime stratum, with a systematic missingness finding (below). |
+| 2019–20 | Meets M1 | None. This is a weaker-verification season with no liveData. | Meets, no warnings. |
+| 2020–21 | Meets M1 | None. | Meets, no warnings. |
+| 2021–22 | Unavailable | Regular-season overtime stratum is 55 of 58 (94.8%), against the 95% floor. It misses by part of one game. Every other threshold passes. | Meets all hard limits. One warning, the overtime stratum. |
 
-Every build passes 26 of 26 `check` invariants. The 2018–19 and 2021–22 failures rest on small overtime denominators. Whether a stratum floor should make a whole season unavailable is a maintainer decision. It is not settled here.
+Every build passes 26 of 26 `check` invariants. The 2018–19 and 2021–22 failures rest on small overtime denominators. Whether a stratum floor should make a whole season unavailable was a maintainer decision, now settled by ADR-0022 as described above.
 
 ### Snapshots and commands
 
@@ -557,3 +577,20 @@ ADR-0020 makes liveData an optional build input for seasons where the provider a
 - in `game` and `game_stream`, only `ingested_at` differs, and no row differs once it is excluded (EXCEPT ALL in both directions).
 
 `check` passes 26 of 26 on the rebuild. `evidence` reproduces the recorded values: 99.97% Bentes agreement, 1,260 / 1,286 games against pbpstats.com, 5,346 / 5,349 liveData versus data.nba periods, and 35 of 35 starter team-periods.
+
+## Season eligibility matrix (ADR-0022)
+
+Maintainer decisions of 2026-11-23 ([#89](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/89)), applied to the revised M1 classification. "Primary training" is the retrospective cohort 2018–19 through 2022–23. "Outer validation" seasons receive data-quality diagnostics here and no model results until their planned evaluation. The 2025–26 and later seasons are the holdout and were not read.
+
+| Season | Revised M1 class | Role | Conditions |
+| --- | --- | --- | --- |
+| 2017–18 | Fails hard limits | Excluded | Outside the primary cohort pending remediation ([#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53) feasibility). Early-season event-order failures, 14.6% of expected possessions lost to quarantines. |
+| 2018–19 | Meets, one warning | Primary training, conditional | Subject to the missingness analysis. Weaker verification (`no_livedata`). Systematic quarantine concentration in overtime games and in November 2018, reported in the [report](research/season-quality-2017-2025.md). Sensitivity run excluding it, overtime and weaker strata. |
+| 2019–20 | Meets | Primary training | Weaker verification (`no_livedata`); treat as a sensitivity stratum (ADR-0020). |
+| 2020–21 | Meets | Primary training | None. |
+| 2021–22 | Meets, one warning | Primary training, conditional | Subject to the missingness analysis. Overtime stratum at 94.8%, 3 quarantines in 58 overtime games. |
+| 2022–23 | Meets | Primary training | None. The pilot season. |
+| 2023–24 | Meets | Outer validation | Data-quality diagnostics only. |
+| 2024–25 | Meets, one warning | Outer validation, playoffs included | The elevated playoff unresolved rate (0.135%) is documented, not a gate. Five `v2_home_designation` games (ADR-0017). Data-quality diagnostics only. |
+
+All individual game quarantines are retained in every season. An eligibility role is a statement about the dataset, not a model result.
