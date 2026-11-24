@@ -251,7 +251,12 @@ V2 remains the event source of record.
 ## ADR-0019 — Exclude no-action possessions from RAPM model rows
 
 - **Date:** 2026-11-23
-- **Status:** Accepted for the historical RAPM row set (`issue-82-v1`, [#82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)).
+- **Status:** **Proposed, awaiting maintainer sign-off.** It applies to the historical RAPM row set (`issue-82-v1`, [#82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)). Independent review judged it a material methodology change: it redefines the canonical RAPM sample and reverses the #24 finding that the context-only comparator beats zero-context player RAPM. Until it is accepted, `issue-59-v1` remains the default pin for the #23 and #24 runners.
+- **Open alternatives for sign-off:**
+  - (a) Exclude all no-action possessions. This is the current implementation: 1,039 possessions, of which 1,003 are eligible.
+  - (b) Exclude only possessions that start on `period_end`, a rule known before the possession (962 of the 1,039).
+  - (c) Keep all of them in the model rows, as in `issue-59-v1`.
+  - Seven mid-period held-ball (`jump_ball`) possessions are classed as no-action under (a). A held ball is arguably a player-attributable outcome, but the effect is immaterial in size.
 - **Evidence class:** Original BIL design.
 - **Context:** The review of #24 found that possessions starting near a period's end drive most of the measured time-of-period effect. Many are run-outs that contain no shot, free throw, turnover, foul or violation and score 0.
 - **Decision:** Give an accepted possession the disposition `no_action` when no `shot`, `free_throw`, `turnover`, `foul` or `violation` event lies inside its own sequence interval. Use only events inside the possession. Do not use its end reason, outcome or score. Exclude these from model rows (exposure 0) but keep them in the disposition and reconciliation ledgers. The check applies after the pilot-status check and before the lineup rule.
