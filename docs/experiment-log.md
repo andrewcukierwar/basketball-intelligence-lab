@@ -292,6 +292,29 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Limitations:** Bitwise reproduction on the same machine and library versions. It does not test other platforms or library versions, or rebuilding inputs from raw sources. It does not validate the modeling choices.
 - **Next decision:** Maintainer review, then close #27.
 
+### EXP-0017 — Provisional long-window RAPM training targets for box-score SPM (partial-history methodology replication)
+
+- **Status:** Completed. Run once under a frozen protocol (revision 2, independently reviewed before the run). The results are not yet reviewed.
+- **Date:** 2026-11-24.
+- **Research question:** Build offense and defense RAPM labels for SPM from the eligible seasons without leakage. How reliable and stable are they by exposure, era, roster status and verification stratum?
+- **Category:** Original design, Experimental evidence. This is a partial-history methodology replication.
+- **Code SHA / run ID:** Protocol `2261ec7` (SHA-256 `5fade9a4…4ed2c`). Runner `e36ba78`. Clean tree, output `data/processed/rapm_targets/issue-28-v1` (manifest `40fcfba9…e043`). 6,755 s wall, peak 3.0 GiB. 8,828 fits, all converged. No stage failed and nothing was resumed.
+- **Datasets/checksums and cutoff:** The canonical row sets of 2005–06 to 2007–08 (`issue-97-rows-v1`), 2015–16 (`issue-98-rows-v1`), 2016–17 (`issue-96-rows-v1`) and 2018–19 to 2022–23 (`issue-93-v1`), each pinned by manifest SHA-256. 2,117,689 rows. Every row was played before 2023-07-01. No 2017–18, outer or holdout file was read.
+- **Train / validation / test periods:** One origin per eligible season close: 5 contiguous and 10 extended. Penalties were chosen by in-window game-grouped CV at each origin. Reliability is measured at the final origin.
+- **Model and configuration:** `K365` season-centred kernel (cap 730 days). Joint unpenalized context and season-type columns. Two player penalties: 2,000 / 4,000 at most origins, 4,000 / 4,000 at the first two contiguous origins, and 1,000 / 4,000 at the 2005–08 origins.
+- **Baselines:** Not a predictive comparison. The sensitivities are `K730`, `regular_only`, `pooled_window`, `exclude_no_livedata` and the two-stage offset. The evaluation labels are season-only `K0` fits.
+- **Metrics and uncertainty:** Split-half r with Spearman–Brown correction. 100-replicate game bootstrap standard errors. Revisions across origins, both as frozen and under fixed penalties. Year-to-year persistence of the `K0` labels. Agreement between the references.
+- **Results:**
+  - Split-half SB is 0.66 offense and 0.63 defense (contiguous), and 0.69 and 0.64 (extended).
+  - Below 2,000 possessions, offense SB is about 0.4. For team-changers SB is 0.52–0.55.
+  - Defense reliability is lowest in 2015–17 (0.55).
+  - One-sided labels correlate 0.86–0.94 with their final values in the contiguous reference. In the extended reference, 2005–06 defense correlates 0.84; 2007–08 correlates 0.99, where only the penalty changes.
+  - Extended and contiguous labels are identical from 2019–20 on, and correlate 0.97 in 2018–19.
+  - Year-to-year `K0` correlation is 0.2–0.4, and 0.12–0.14 across the 2007–08 to 2015–16 gap.
+  - The two-stage and joint fits agree at r 0.998. [Report](research/rapm-targets.md)
+- **Limitations / interpretation:** Partial history with a gap. Retrospective and capture-bound. Kernel fixed, not tuned. Flat CV surface. Bootstrap standard errors describe the shrunken estimator. No predictive-validity claim.
+- **Next decision:** In #30: the reliability weighting, the treatment of one-sided labels, and whether to pool the 2005–08 labels.
+
 ### EXP-0018 — Same-clock shot, tip and rebound ordering rule, 2008–09 through 2011–12 and older seasons
 
 - **Status:** Completed. Independent Opus re-review approved code 1055a39f after replaying 2010–11 and 2015–16 at that commit. Each build ran once per version. The first subagent review did not replay the rule on real data. The second review found one blocker, fixed in this version (see the report).

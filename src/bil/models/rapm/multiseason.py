@@ -26,7 +26,7 @@ import shutil
 import subprocess
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from itertools import chain
@@ -85,6 +85,7 @@ class SeasonPin:
     row_manifest_sha256: str
     pilot_build: str
     pilot_manifest_sha256: str
+    row_set: str = ROW_SET_VERSION
 
 
 SEASON_PINS: dict[int, SeasonPin] = {
@@ -133,15 +134,17 @@ SEASON_PINS: dict[int, SeasonPin] = {
 }
 
 
-def check_season(season: int, allowed: Iterable[int]) -> SeasonPin:
+def check_season(
+    season: int, allowed: Iterable[int], pins: Mapping[int, SeasonPin] = SEASON_PINS
+) -> SeasonPin:
     """Return the pin of an allowed season. Holdout, unpinned and out-of-phase seasons raise."""
     if season >= HOLDOUT_START_YEAR:
         raise ValueError(f"season {season} is the confirmatory holdout or later and is never read")
-    if season not in SEASON_PINS:
+    if season not in pins:
         raise ValueError(f"season {season} has no pinned row set")
     if season not in set(allowed):
         raise ValueError(f"season {season} is not allowed in this phase")
-    return SEASON_PINS[season]
+    return pins[season]
 
 
 # --- temporal candidates -------------------------------------------------------------
@@ -1466,12 +1469,18 @@ def _count(connection: Any, sql: str) -> int:
     return int(row[0])
 
 
-def load_season(processed: Path, season: int, allowed: Iterable[int], temp: Path) -> SeasonLoad:
+def load_season(
+    processed: Path,
+    season: int,
+    allowed: Iterable[int],
+    temp: Path,
+    pins: Mapping[int, SeasonPin] = SEASON_PINS,
+) -> SeasonLoad:
     """Verify and read one season's rows and pre-possession context. Holdout seasons refuse."""
     import duckdb
 
-    pin = check_season(season, allowed)
-    row_dir = processed / pin.label / ROW_SET_VERSION
+    pin = check_season(season, allowed, pins)
+    row_dir = processed / pin.label / pin.row_set
     pilot_dir = processed / pin.label / pin.pilot_build
     manifest = verify_row_set(row_dir, season, pin)
     digests = verify_pilot(pilot_dir, pin, manifest)
