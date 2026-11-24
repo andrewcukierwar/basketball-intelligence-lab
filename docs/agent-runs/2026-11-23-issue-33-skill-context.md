@@ -40,7 +40,7 @@ Freeze and compare the game-agnostic and matchup-specific skill forecasts with t
 
 ## Blockers and remaining risks
 
-- A first real-data launch (code `b6bb243`) aborted at the output step on a schema mismatch (level and delta score rows had different fields) after the reconciliation gates and before any table or manifest was written. The fix changed only the output schema. No result from that launch was read.
+- A first real-data launch (code `b6bb243`) aborted at the output step on a schema mismatch (level and delta score rows had different fields) after the reconciliation gates. `context_inputs.parquet` and `predictions.parquet` were written briefly and deleted on the exception, before any scores table or manifest existed. The fix changed only the output schema. No result from that launch was read.
 - One season, retrospective. Intervals ignore serial dependence across a player's games. No multiplicity correction across 13 statistics and 11 variants.
 - Opponent and team inputs are unadjusted for opposing rosters, so opponent quality and schedule are mixed.
 
@@ -49,3 +49,18 @@ Freeze and compare the game-agnostic and matchup-specific skill forecasts with t
 - Independent review of `9483a40` and the docs commit against the protocol.
 - Run the frozen protocol on 2023–24 and 2024–25 once #52's builds are accepted. Do not touch 2025–26.
 - #30 can consume `skill_snapshot` (game-agnostic skill, strictly earlier appearances) as its as-of skill feature. A draft or debut registry would give birthdates and true rookie status. Candidates for triage: opponent inputs adjusted for opposing rosters, and an expected-minutes input.
+
+## Independent review
+
+A fresh Opus reviewer approved with no blocking findings. It checked:
+- Every context input uses only strictly earlier dates, and fit rows stop before each outer block.
+- The `recal` comparison is apples-to-apples. The reviewer recounted the 9 retained opponent statistics.
+- The manifest provenance: protocol SHA-256 and a clean evaluated commit.
+- The aborted launch, which it judged not to be a second run in substance.
+
+It recomputed `tov_per_36` independently: full − agnostic is −7.43 ×10⁻³ (95% interval −10.69 to −4.08).
+
+Nonblocking items:
+- #30 callers must not pass `SkillParams` fitted on data after `as_of`. There is no public loader keyed by block yet.
+- The `team` input includes the target player's own earlier games.
+
