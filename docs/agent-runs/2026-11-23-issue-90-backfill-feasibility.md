@@ -29,7 +29,7 @@ Bounded feasibility only: diagnose the 2017–18 event-order quarantines, probe 
 - The first repair kept the longest clock run by patience sorting, which on ties re-clocked the rebound instead of the late event. The tie rule now keeps the earliest-entered events.
 - The first scratch build (`issue-90-order-repair-v1`) retried only failed games. It is kept as a comparison. The second (`-v2`) also offers games with unresolved possessions.
 - No interrupted builds in this run. The earlier session left no partial output, and its worktree was gone, so this run restarted from `origin/main` and rebuilt everything into new directories.
-- 2022–23 equivalence rebuild: `data/processed/2022-23/issue-90-rebuild-v1`, compared with `issue-19-v6`.
+- 2022–23 equivalence rebuild: `data/processed/2022-23/issue-90-rebuild-v1` (first code) and `issue-90-rebuild-v2` (after the review fixes), both compared with `issue-19-v6`: 0 differing rows excluding `ingested_at`.
 
 ## Verification
 
