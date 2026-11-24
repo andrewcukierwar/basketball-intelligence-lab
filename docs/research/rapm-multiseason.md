@@ -7,6 +7,8 @@
 - The runner and tests followed (`ec4f127`). That commit also added a pre-run clarification to the protocol for candidates with an empty fit window, which a synthetic test exposed (see Deviations).
 - The development run happened once, from a clean tree at `ec4f127`, to `data/processed/multiseason/issue-26-dev-v1`. Its protocol SHA-256 was `8787a112…4c99`.
 - No 2023–24, 2024–25, 2025–26 or 2026–27 row was read by Phase 1. No EPM value was read or used.
+- The development results were committed (`bd86289`). The [outer-validation addendum](rapm-multiseason-outer-addendum.md) followed (`57fe88e`, SHA-256 `23a9d3b7…420b`). It froze the configuration before any code read a 2023–24 or 2024–25 row.
+- The outer run happened once, from a clean tree at `57fe88e`, to `data/processed/multiseason/issue-26-outer-v1`. The runner verified the addendum's digest, that it was committed and unmodified, the clean tree, the development manifest (`8cbb4e5e…536a`) and the protocol digest, and recorded all of them in its manifest. It read 2018–19 through 2024–25 and nothing later.
 
 **Evidence tier: `retrospective_capture_bound`.** Every result is a chronological replay on stable-lineup possessions with realized lineups. None is a strict rolling-origin backtest or a pregame forecast.
 
@@ -139,9 +141,112 @@ A representative single multi-season fit is therefore under a second and well un
 
 ## Outer validation (Phase 2)
 
-Pending. The configuration is frozen in the [outer-validation addendum](rapm-multiseason-outer-addendum.md) before any 2023–24 or 2024–25 row is read.
+These are the frozen `W2` RAPM model ($\lambda_o$ = 4,000, $\lambda_d$ = 8,000) and the frozen `W1` baselines, scored walk-forward with ten refits per model. Nothing was re-tuned. The results are reported as they came out, and none of them changed the selection. They are retrospective development evidence for later registration, not confirmatory. 2025–26 was not touched.
+
+### Coverage
+
+| Season and type | Games in reconciliation | Accepted and scored | Quarantined, not scored | Eligible = scored possessions | Possessions with an unseen player |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2023–24 regular | 1,230 | 1,218 | 12 | 210,324 | 30,719 (14.6%) |
+| 2023–24 playoffs | 82 | 81 | 1 | 12,940 | 0 |
+| 2024–25 regular | 1,230 | 1,205 | 25 | 208,155 | 30,714 (14.8%) |
+| 2024–25 playoffs | 84 | 84 | 0 | 13,785 | 0 |
+
+Every eligible canonical row was scored. Most unseen-player possessions come from players new to the league, or absent from the two-season window, early in a season. Playoff fits include the whole regular season, so no playoff possession has an unseen player.
+
+Timing audits passed for all seven seasons, with 0 leaks and 0 ledger disagreements. Outcome digests for each outer season and type are in the manifest. For example, the 2023–24 regular season is `2a86f96e…8103` and the 2024–25 regular season is `7c9d9844…a796`.
+
+### Primary comparisons
+
+Δ = MSE(model) − MSE(baseline) on identical possessions, in (points per 100)². Negative favours the model. The first interval is the 95% game-clustered bootstrap (2,000 resamples, seed 2023), which sets the verdict. The calendar-week-clustered interval is in brackets.
+
+| Set | Possessions (games) | League MSE | `rapm` − league | `rapm` − context | Verdicts |
+| --- | --- | ---: | --- | --- | --- |
+| **Regular season, both seasons** | 418,479 (2,423) | 14,322.60 | **−23.39 (−26.48 to −20.33)** [−26.01 to −20.58] | **+8.82 (+4.09 to +13.68)** [+4.38 to +13.68] | better; **worse** |
+| **Playoffs, both seasons** | 26,725 (165) | 14,194.78 | −14.03 (−30.24 to +1.39) [−27.97 to +3.00] | +15.56 (−6.03 to +36.32) [−8.44 to +40.46] | inconclusive; inconclusive |
+| 2023–24 regular | 210,324 (1,218) | 14,222.70 | −21.30 (−25.51 to −17.09) | +12.74 (+6.55 to +19.11) | better; worse |
+| 2023–24 playoffs | 12,940 (81) | 14,157.82 | −15.89 (−36.51 to +4.81) | +16.66 (−12.40 to +46.85) | inconclusive; inconclusive |
+| 2024–25 regular | 208,155 (1,205) | 14,423.54 | −25.50 (−29.84 to −21.25) | +4.85 (−2.61 to +11.55) | better; inconclusive |
+| 2024–25 playoffs | 13,785 (84) | 14,229.47 | −12.28 (−35.03 to +11.48) | +14.53 (−14.77 to +44.05) | inconclusive; inconclusive |
+
+### Secondary comparisons
+
+| Set | `context` − league | `rapm_context` − context | `rapm_context` − league | Offense-only − league | Defense-only − league |
+| --- | --- | --- | --- | --- | --- |
+| Regular, both seasons | −32.21 (−36.01 to −28.46) | −24.73 (−27.88 to −21.50) | −56.94 (−61.72 to −52.18) | −17.66 (−20.38 to −15.00) | +4.19 (+1.31 to +6.98) |
+| Playoffs, both seasons | −29.59 (−44.29 to −13.01) | −11.61 (−27.40 to +4.10) | −41.20 (−64.68 to −18.95) | +6.98 (−9.11 to +23.99) | −2.76 (−16.37 to +11.04) |
+
+Team-game RMSE in points, regular season over both seasons:
+
+| Model | Team-game RMSE |
+| --- | ---: |
+| `rapm` | 10.61 |
+| `offense_only` | 10.76 |
+| `rapm_context` | 11.02 |
+| league | 11.08 |
+| `context` | 11.51 |
+
+In the playoffs it is `rapm` 11.46, league 11.45, context 11.54 and `rapm_context` 11.65.
+
+### Per refit block
+
+`rapm` − league is negative in all eight regular-season blocks: −18.7, −18.6, −22.8 and −32.7 in 2023–24, and −21.3, −23.9, −25.7 and −41.9 in 2024–25. Every game-clustered interval excludes zero.
+
+`rapm` − context ranges from −7.4 to +18.4 by block. It is significantly positive in 2023–24 R2 and R3 and inconclusive elsewhere.
+
+The playoff blocks are inconclusive in both directions. Each fit used 434,000 to 447,000 rows, with $\lambda_o$ about 1.7 to 2.4 times the median player exposure. That is close to the development scales.
+
+The week-clustered intervals of the R4 blocks are degenerate, because each block spans only two or three calendar weeks. The pooled sets span many weeks and are unaffected.
+
+### Calibration of the predicted possession scoring rate
+
+| Set | Model | Outcome − prediction (game-clustered 95%) | Slope of outcome on prediction (95%) |
+| --- | --- | --- | --- |
+| Regular, both seasons | `rapm` | +0.65 (+0.27 to +1.00) | 1.12 (1.04 to 1.20) |
+| | `rapm_context` | +0.58 (+0.21 to +0.94) | 1.06 (1.01 to 1.11) |
+| | `context` | +0.11 (−0.27 to +0.46) | 0.95 (0.90 to 1.01) |
+| | league | +0.12 (−0.27 to +0.47) | not applicable (constant within a block) |
+| Playoffs, both seasons | `rapm` | −3.84 (−5.23 to −2.38) | 1.24 (0.85 to 1.65) |
+| | `rapm_context` | −3.69 (−5.07 to −2.24) | 1.00 (0.80 to 1.21) |
+| | `context` | −1.94 (−3.35 to −0.43) | 0.94 (0.70 to 1.16) |
+| | league | −1.95 (−3.36 to −0.46) | not applicable |
+
+- **The RAPM rate is under-dispersed in the regular season.** The slope is above 1, so realized differences between lineups are about 12% larger than predicted. The decile table runs from a mean prediction of 104.1 to 119.0, against outcomes of 103.9 to 119.5. This fits penalties that shrink slightly too hard for these seasons (Inferred).
+- **The RAPM intercept runs low by 0.65 points per 100 in the regular season.** League scoring rose (the scored mean was 111.85, against 110.06 in development). The two-season window lags that rise more than the one-season baselines do (Inferred).
+- **Every model over-predicts playoff scoring by 2 to 4 points per 100.** The models fit on regular-season-heavy history, and playoff possessions score less.
+- No model produces a predictive interval, so interval coverage is not reported, as the addendum stated.
+
+### Refit stability (outer)
+
+Totals move between consecutive refits by an RMS of 0.45 to 0.58 within a regular season (r = 0.90 to 0.94), by 0.29 to 0.30 when the playoff fit adds the last regular-season weeks, and by 0.18 from the 2023–24 playoff fit to the 2024–25 opening fit. These match the development volatility of `W2` (mean 0.41, r = 0.95).
+
+### What the outer seasons show
+
+- **Player RAPM generalizes against the league mean.** The regular-season gain over the league mean (−23.4) is larger than in development (−16.2). It is significant in both outer seasons and in every regular-season block. That is the **intercept baseline** requirement, met for the regular season.
+- **Player RAPM alone does not beat the #24 context-only baseline.** Pooled over both outer seasons it is worse by 8.8 (+4.1 to +13.7). It is worse in 2023–24 and inconclusive in 2024–25. This negative result repeats the development finding (+12.3). The context gain is mostly the end-of-period structure that the #82 analysis documented.
+- **Players and context are complementary.** The secondary `rapm_context` beats context by 24.7 (−27.9 to −21.5) and the league mean by 56.9 in the regular season. Its calibration slope is close to 1. It was frozen as a secondary model and not selected on, so this is the strongest outer result. It is still not a confirmatory claim.
+- **Playoffs are inconclusive for player RAPM** against both baselines in both seasons (165 games in all). The development playoff check was −11.3 against the league mean with an interval just excluding zero. The point estimate held (−14.0), but the interval now includes zero.
+- **Offense carries the signal and defense does not.** Offense-only beats the league mean by 17.7. Defense-only is worse than the league mean in the regular season (+4.2), as in development, despite the doubled defense penalty.
 
 ## Deviations
 
 1. **Pre-run protocol clarification.** A synthetic end-to-end test showed that `W1` has no fit rows at the 2022–23 opening cutoff under `exclude_2021_22`. The protocol gained a rule: a candidate with an empty window at any scored cutoff is infeasible in that scenario. The rule was committed in `ec4f127`, after the protocol commit `86790ae` and before the development run. It changes only the `exclude_2021_22` scenario, which marks `W1` infeasible.
 2. **Split penalties without #77.** #77 is not merged. Separate penalties were selected here with the reference solver's two-penalty interface, using a one-pass coordinate search rather than a full grid.
+3. **Informational addendum fields.** The addendum's `bootstrap` and `calibration_bins` fields restate the runner's constants (2,000 resamples, seed 2023, game and week clusters, ten bins). The runner checks the model, penalty, baseline, season and lineage fields, but it does not read these two. The constants are the same.
+4. **League calibration slope.** The runner also computed a slope for the league baseline. The addendum excluded it, because that prediction is constant within a block. It is not reported.
+
+No other deviation. The development and outer runs each ran once. The rate-limit interruption fell between writing the runner and its first commit. No run was in progress and none was repeated.
+
+### Runtime and memory (outer run)
+
+The outer run took 11.7 s wall with peak resident 2.93 GB. Of that, 1.4 s assembled seven seasons and their design (1.57 million rows). The run made 20 fits of 434,000 to 447,000 rows, at 0.21 s median and 35 LSQR iterations each, all converged. Memory is dominated by loading and the context SQL, not the solver.
+
+## Limitations
+
+- **Retrospective and capture-bound.** The data are realized-lineup, stable-lineup possessions (ADR-0013), so this is not a pregame forecast. The outer seasons are development evidence for later registration. 2025–26 remains the confirmatory holdout.
+- **Near-tie selection.** Four candidates are within 0.3 MSE units in development. The selection of `W2` over `W3`, `H365` or `H730` is not meaningful, and the outer seasons were not used to check it.
+- **Truncated long windows.** `W5` and the 1,825-day decay cap could not be fully evaluated in development, because the data start in 2018–19.
+- **Neutral sites are not coded.** Neutral-site flags are null in every pilot. The 2019–20 bubble games and the five 2024–25 `v2_home_designation` games are coded by their nominal home team.
+- **Possession intervals only.** Bootstrap intervals resample games or weeks within a set and do not model dependence between refit blocks.
+- **The context comparator's advantage is structural.** It rests largely on run-out possessions at period ends, which the canonical rows keep under ADR-0019 (#82). Whether player RAPM should be judged against that comparator, or on the `no_action` cohort, is a maintainer question.
+- **No independent review yet.** This report has not been independently reviewed.

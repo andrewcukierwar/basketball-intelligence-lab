@@ -322,6 +322,25 @@ V2 remains the event source of record.
 - **Consequences:** data.nba shares upstream lineage with V2 and V3, so the box and Bentes reconciliation carries the verification burden. Not adopting it leaves 2017–18 outside the primary cohort.
 - **Links:** [Issue #90](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/90), [ADR-0010](#adr-0010--pinned-evidence-feeds-verify-builds-but-do-not-feed-them), [ADR-0011](#adr-0011--use-archived-livedata-and-datanba-evidence-for-three-narrow-decisions), [ADR-0020](#adr-0020--build-without-livedata-where-the-archive-lacks-it-as-a-weaker-verification-stratum)
 
+## ADR-0025 — Two-season unit-weight window with split penalties for the multi-season RAPM baseline
+
+- **Date:** 2026-11-24
+- **Status:** Proposed for the M2 baseline ([#26](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/26)). Independent review pending.
+- **Evidence class:** Original BIL design, Experimental evidence.
+- **Context:** Multi-season RAPM needs a temporal weighting and penalties chosen without outer-season or EPM information. #77's split penalties are not merged. ADR-0015 leaves the half-life free and the weights unnormalized.
+- **Decision:**
+  - The multi-season zero-prior baseline uses `W2`: rows played 1 to 730 days before the cutoff, unit weight, with $\lambda_o$ = 4,000 and $\lambda_d$ = 8,000.
+  - It refits on a fixed calendar schedule (1 October, 1 December, 1 February, 1 April and the first playoff date).
+  - The choice was made on 2021–22 and 2022–23 development folds, by a two-phase procedure. The development protocol was committed before any fit. A frozen addendum was committed before any outer read. The outer runner refuses to run without that committed addendum on a clean tree.
+- **Evidence:**
+  - Development: lowest pooled MSE of eight candidates (windows of 1, 2, 3 and 5 seasons; decays with 90- to 730-day half-lives). Four candidates are within 0.3 units. The choice is unchanged when 2018–19, 2021–22, overtime or `no_livedata` games are excluded.
+  - Outer seasons: −23.4 (−26.5 to −20.3) against the league mean and +8.8 (+4.1 to +13.7) against the context-only comparator, regular season. Player RAPM with a context offset beats context by 24.7. [Report](research/rapm-multiseason.md)
+- **Consequences:**
+  - The defense penalty is twice the offense penalty, and defense-only predictions still do not beat the league mean.
+  - Player RAPM alone is not better than context-only possession scoring on the canonical rows. Later informed-RAPM work should compare against the context offset model, not plain RAPM.
+  - The selection is a near-tie, so `W3`, `H365` and `H730` are acceptable alternatives on this evidence.
+- **Links:** [Protocol](research/rapm-multiseason-protocol.md), [Addendum](research/rapm-multiseason-outer-addendum.md), [ADR-0015](decisions/0015-dated-rapm-clock-and-decay.md), [ADR-0019](#adr-0019--keep-run-outs-in-rapm-model-rows-and-exclude-only-verified-pseudo-possessions)
+
 ## Decision template
 
 ### ADR-XXXX — Title
