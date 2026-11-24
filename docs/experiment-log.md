@@ -237,3 +237,14 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Limitations / interpretation:** One season per era. 2001–02 to 2003–04 was not probed. The reason for the early-season rate in 2017–18 is Inferred. Starter verification is weaker without liveData and data.nba.
 - **Next decision:** Whether to adopt ADR-0023, and how to split #53 ([recommendation](research/backfill-feasibility.md#part-3-recommended-split-of-53)).
 
+
+### EXP-0014 — Split penalties, random-exclusion control and per-fit diagnostics for the RAPM baseline, 2022–23
+
+- **Status:** Run once under a frozen protocol. Independent review not yet run.
+- **Date:** 2026-11-24.
+- **Research question:** Do separate offense and defense ridge penalties improve held-out possession scoring over the single #23 penalty, and is the effect of excluding the 170 adjudication-stratum games unusual against excluding the same number of random ordinary games?
+- **Category:** Experimental (retrospective replay, one season).
+- **Inputs and configuration:** `issue-82-canonical-v1` (manifest SHA-256 `bd25cd0a…56488`), [frozen protocol](research/rapm-baseline-controls-protocol.md) (commit `e2168f3`, SHA-256 `7fb3ce72…8531b2`), code commit `b032969`, clean tree, output `issue-77-v1`. 49-cell grid, folds R1–R4 for selection and P1 after, 300 random draws per matching variant, 3,806 logged fits.
+- **Results:** Selected $(\lambda_{off}, \lambda_{def})$ = (2,000, 8,000). Pooled R1–R4 delta against the single penalty is −1.57 (95% −3.11 to −0.06), optimistic. P1 delta is +3.57 (−1.61 to +8.75), so the split penalty is not distinguishable by the frozen rule. Stratum exclusion shifts estimates like random exclusion (total RMS 0.369 against 0.361 ± 0.015). Its held-out effect (−0.79) is lower than 2% of random draws (mean +1.28), which is descriptive only. All fits converged (iterations 8 to 60, condition at most 106).
+- **Limitations / interpretation:** One season, one short playoff block, selection and reporting share R1–R4. The single penalty remains the baseline. [Report](research/rapm-baseline-controls-2022-23.md)
+- **Next decision:** Whether a split penalty is worth carrying to the 2023–24 outer-validation season.
