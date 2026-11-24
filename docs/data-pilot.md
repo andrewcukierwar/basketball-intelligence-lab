@@ -30,7 +30,7 @@ Then check the exported tables independently. The check reads the output tables,
   data/raw/2022-23/issue-5-v2
 ```
 
-The same commands build other pinned seasons. Seasons are keyed by starting year, and `build`, `check` and `evidence` read the season recorded in the snapshot or manifest. `capture` and `capture-evidence` take `--season` (default `2022`). `--from-local DIR` copies already captured bytes instead of downloading them and checks every pin. Pins exist for 2005–06, 2010–11, 2014–15, 2016–17 and 2017–18 through 2024–25 only. Seasons before 2016–17 have no data.nba archive and are labeled `no_datanba`. 2016–17 has data.nba without `ord`. The [backfill feasibility study](research/backfill-feasibility.md) records the older-era builds. `build --order-repair` is an experimental, off-by-default retry in data.nba entry order (ADR-0023, proposed). The 2025–26 holdout and later seasons are refused under [#42](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/42). The pinned archive has no NBA liveData before 2020–21, so those snapshots omit it (ADR-0020). See [the outer-validation seasons](#outer-validation-seasons-202324-and-202425) and [the development seasons](#development-seasons-201718-through-202122).
+The same commands build other pinned seasons. Seasons are keyed by starting year, and `build`, `check` and `evidence` read the season recorded in the snapshot or manifest. `capture` and `capture-evidence` take `--season` (default `2022`). `--from-local DIR` copies already captured bytes instead of downloading them and checks every pin. Pins exist for 2004–05 through 2007–08, 2010–11, 2014–15, 2016–17 and 2017–18 through 2024–25 only. Seasons before 2016–17 have no data.nba archive and are labeled `no_datanba`. 2016–17 has data.nba without `ord`. The [backfill feasibility study](research/backfill-feasibility.md) records the older-era builds. `build --order-repair` is an experimental, off-by-default retry in data.nba entry order (ADR-0023, proposed). The 2025–26 holdout and later seasons are refused under [#42](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/42). The pinned archive has no NBA liveData before 2020–21, so those snapshots omit it (ADR-0020). See [the outer-validation seasons](#outer-validation-seasons-202324-and-202425) and [the development seasons](#development-seasons-201718-through-202122).
 
 `check` and `check-seasons` refuse a manifest whose season is the holdout or unpinned, and `check-seasons` also requires each build's `source_snapshot_sha256` to equal the SHA-256 of its snapshot's `snapshot.json`. A game whose box log has no home flag and whose home side V2 cannot designate is quarantined with null `home_team_id`, `away_team_id`, `home_final` and `away_final`, because the team-ID order is only provisional. `evidence` fails if a season with pinned liveData lacks liveData rows for an inferred-starter game.
 
@@ -657,12 +657,68 @@ Canonical RAPM row set (`bil.data.rapm_rows`, variant `canonical`, build id `b77
 
 Ledger points are 227,541 modeled and 44,470 not modeled, from 272,011 final points. The row counts are 215,884 `model_row`, 251,344 `possession_disposition`, 146,507 `score_reconciliation` and 1,309 `game_reconciliation`.
 
+## Backfill batch 2: 2004–05 through 2007–08
+
+[Issue #97](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/97), under [#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53), builds four seasons with the default path at `2598f05` and parser `pbpstats-1.3.11-bil-v6`. The order repair of ADR-0023 (proposed) was not used, and no pipeline code changed: the only code change is the pins for 2004–05, 2006–07 and 2007–08, generated from the #51 register CSVs and checked against them by the existing pin test (2005–06 was already pinned). All four seasons are `no_datanba` and `no_livedata`. `capture --from-local` and `capture-evidence --from-local` verified 8 inputs and 4 evidence files per season by size and SHA-256, with no download. Private outputs, for each season `<s>`: `data/raw/<s>/issue-97-v1`, `issue-97-evidence-v1`, `data/processed/<s>/issue-97-v1`, `issue-97-rows-v1` (not for 2004–05), and `data/processed/quality/issue-97-v1`. The #90 build of 2005–06 was rebuilt rather than reused.
+
+The commands are those of batch 1, with `--season 2004` to `2007`, `issue-97` directory names, `--code-commit 2598f05b619d55ab6d351a24be2fd0dbfb4b33cc` and one `season_quality.py` call with a `--build` pair per season.
+
+Results are aggregates only. `build` and `check` pass 26 of 26 for every season, in 46 to 60 s and at most 0.84 GB. `check-seasons` over the four new builds, 2016–17, 2017–18 to 2022–23 and 2023–24 and 2024–25 (13 builds, 16,755 games) reports zero violations.
+
+| Season | Type | Expected | Accepted | Quarantined | Possessions | Excluded | Unresolved | Unresolved share |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2004–05 | Regular | 1,230 | 1,203 (97.8%) | 27 | 224,139 | 2,912 | 66 | 0.029% |
+| 2004–05 | Playoffs | 84 | 81 (96.4%) | 3 | 14,777 | 202 | 0 | 0.000% |
+| 2004–05 | Season | 1,314 | 1,284 | 30 | 238,916 | 3,114 | 66 | 0.028% |
+| 2005–06 | Regular | 1,230 | 1,220 (99.2%) | 10 | 226,027 | 2,949 | 45 | 0.020% |
+| 2005–06 | Playoffs | 89 | 88 (98.9%) | 1 | 16,117 | 234 | 2 | 0.012% |
+| 2005–06 | Season | 1,319 | 1,308 | 11 | 242,144 | 3,183 | 47 | 0.019% |
+| 2006–07 | Regular | 1,230 | 1,209 (98.3%) | 21 | 226,958 | 2,968 | 62 | 0.027% |
+| 2006–07 | Playoffs | 79 | 78 (98.7%) | 1 | 14,232 | 192 | 3 | 0.021% |
+| 2006–07 | Season | 1,309 | 1,287 | 22 | 241,190 | 3,160 | 65 | 0.027% |
+| 2007–08 | Regular | 1,230 | 1,214 (98.7%) | 16 | 228,694 | 2,899 | 57 | 0.025% |
+| 2007–08 | Playoffs | 86 | 86 (100%) | 0 | 15,446 | 191 | 2 | 0.013% |
+| 2007–08 | Season | 1,316 | 1,300 | 16 | 244,140 | 3,090 | 59 | 0.024% |
+
+The full-season unresolved limit (0.1%) passes in all four seasons. The coverage floor (97%) passes in every cell except the **2004–05 playoffs** (81 of 84, 96.4%), a hard-gate failure: 2004–05 is **unavailable** under ADR-0022 and has no row set. The `season_quality.py` diagnostic gives:
+
+| Season | Original M1 status | Revised status | Warnings |
+| --- | --- | --- | --- |
+| 2004–05 | fail | fails hard limit | None beyond the hard failure |
+| 2005–06 | fail | meets with warnings | Playoff overtime stratum 9 of 10 (90.0%) |
+| 2006–07 | pass | meets | None. One missingness flag (`systematic`): regular-season unresolved events by month, p = 0.0052, November 2006 lift 4.5 on 31 of 62 events |
+| 2007–08 | pass | meets | None |
+
+Quarantine causes (games): 2004–05 has 30, `player_plus_minus_mismatch` 14, `missing_period_end` 7, `parser_error` 3, and one each of `missing_period_start`, `shooter_outside_lineup`, `unresolved_clock_reset`, `unresolved_event_order`, `unresolved_starters` and `unsupported_reorder`. 2005–06 has 11: `parser_error` 3, `unresolved_starters` 2, `unsupported_reorder` 2, and one each of `missing_period_end`, `shooter_outside_lineup`, `v3_box_final_mismatch` and `v3_period_score_mismatch`. 2006–07 has 22: `missing_period_end` 6, `parser_error` 6, `player_plus_minus_mismatch` 6, `unsupported_reorder` 2, `shooter_outside_lineup` 1 and `unresolved_starters` 1. 2007–08 has 16: `parser_error` 12, `player_plus_minus_mismatch` 3 and `unsupported_reorder` 1. The 2004–05 missing-period and plus-minus cluster is the weakest of the four seasons.
+
+Evidence (**Documented**, from `evidence`): without liveData and data.nba every game carries `no_livedata` and `no_datanba`, so period scores and event order cannot be compared with another feed. Bentes lineups cover every built game with a time share of 1.000 and no disagreement over 2 s. Inferred starters agree with Bentes in 10 of 11 team-periods (2004–05), 13 of 14 (2005–06), 13 of 13 (2006–07) and 13 of 15 (2007–08). pbpstats.com possession counts are equal in 1,253 of 1,284, 1,287 of 1,308, 1,258 of 1,287 and 1,276 of 1,300 games, and within 2 in 1,268, 1,298, 1,269 and 1,286.
+
+Canonical RAPM row sets (`bil.data.rapm_rows`, variant `canonical`, 0 identity violations in each, no model fitted):
+
+| Season | Build id | Type | Accepted possessions | Eligible | Multiple lineups | Eligible share of accepted |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| 2005–06 | `40308b6e` | Regular | 223,033 | 192,218 | 30,815 | 86.18% |
+| 2005–06 | | Playoffs | 15,881 | 13,536 | 2,345 | 85.23% |
+| 2005–06 | | Season | 238,914 | 205,754 | 33,160 | 86.12% |
+| 2006–07 | `b8d872c2` | Regular | 223,928 | 193,042 | 30,886 | 86.21% |
+| 2006–07 | | Playoffs | 14,037 | 11,939 | 2,098 | 85.05% |
+| 2006–07 | | Season | 237,965 | 204,981 | 32,984 | 86.14% |
+| 2007–08 | `0daa90b4` | Regular | 225,738 | 196,672 | 29,066 | 87.12% |
+| 2007–08 | | Playoffs | 15,253 | 13,159 | 2,094 | 86.27% |
+| 2007–08 | | Season | 240,991 | 209,831 | 31,160 | 87.07% |
+
+Row counts (`model_row`, `possession_disposition`, `score_reconciliation`, `game_reconciliation`): 2005–06 205,754, 242,144, 145,154 and 1,319; 2006–07 204,981, 241,190, 143,893 and 1,309; 2007–08 209,831, 244,140, 145,436 and 1,316.
+
 ## Season eligibility matrix (ADR-0022)
 
 Maintainer decisions of 2026-11-23 ([#89](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/89)), applied to the revised M1 classification. "Primary training" is the retrospective cohort 2018–19 through 2022–23. "Outer validation" seasons receive data-quality diagnostics here and no model results until their planned evaluation. The 2025–26 and later seasons are the holdout and were not read.
 
 | Season | Revised M1 class | Role | Conditions |
 | --- | --- | --- | --- |
+| 2004–05 | Fails hard limits | Unavailable | The playoff game coverage is 96.4% (81 of 84), below the 97% floor (ADR-0022). Not built into a row set. The build and checks ran and the quarantines are retained. Default build, no order repair ([#97](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/97)). |
+| 2005–06 | Meets, one warning | Eligible history, outside the planned #26 window | Not part of the #26 primary window. Available for later use. Weaker verification (`no_livedata`, `no_datanba`). The playoff overtime stratum is 9 of 10 (90.0%), below the 95% target. Default build, no order repair ([#97](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/97)). |
+| 2006–07 | Meets | Eligible history, outside the planned #26 window | Not part of the #26 primary window. Available for later use. Weaker verification (`no_livedata`, `no_datanba`). Missingness flag: the regular-season unresolved events concentrate in November 2006 (`systematic`, 31 of 62 events, lift 4.5). Default build, no order repair ([#97](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/97)). |
+| 2007–08 | Meets | Eligible history, outside the planned #26 window | Not part of the #26 primary window. Available for later use. Weaker verification (`no_livedata`, `no_datanba`). Default build, no order repair ([#97](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/97)). |
 | 2016–17 | Meets, two warnings | Eligible history, outside the planned #26 window | Not part of the #26 primary window (2018–19 to 2022–23). Available for later use. Weaker verification (`no_livedata`, data.nba without `ord`). Regular-season overtime stratum at 94.3% (66 of 70) and a playoff unresolved share of 0.404%. Default build, no order repair ([#96](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/96)). |
 | 2017–18 | Fails hard limits | Excluded | Outside the primary cohort pending remediation ([#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53) feasibility). Early-season event-order failures, 14.6% of expected possessions lost to quarantines. |
 | 2018–19 | Meets, one warning | Primary training, conditional | Subject to the missingness analysis. Weaker verification (`no_livedata`). Systematic quarantine concentration in overtime games and in November 2018, reported in the [report](research/season-quality-2017-2025.md). Sensitivity run excluding it, overtime and weaker strata. |
