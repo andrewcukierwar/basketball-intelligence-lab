@@ -477,7 +477,7 @@ def test_manifest_season_must_match_the_game_ledger(tmp_path: Path) -> None:
     assert not (tmp_path / "out").exists()
 
 
-@pytest.mark.parametrize("season", [2025, 2026, 2003, 1999])
+@pytest.mark.parametrize("season", [2025, 2026, 2008, 1999])
 def test_holdout_and_unpinned_seasons_are_refused(tmp_path: Path, season: int) -> None:
     pilot, pin = _pilot(tmp_path, season=season)
     with pytest.raises(ValueError, match="holdout|No pinned sources"):
