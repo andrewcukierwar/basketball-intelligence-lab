@@ -45,7 +45,7 @@ It also required verifying that covariates precede each possession, reporting th
   - Offset variants match their fitted versions within noise.
   - On P1, T and HST stay clearly negative, while H and S are null.
 - Context-only comparator against the league mean: HST −30.5 (−37.2 to −23.8) and time −26.9. Both beat zero-context player RAPM (−14.1).
-- The time gain is mostly the end-of-period column (≤ 24 s left, about −30 points per 100). That may partly reflect parser handling of period-boundary possessions, which was not audited separately.
+- The time gain is mostly the end-of-period column (≤ 24 s left, about −30 points per 100). Independent review found that about 80% of it comes from 996 run-out/no-action zero-point possessions, mostly starting on `period_end`, and no parser artifact. Their eligibility is decided in #82.
 - The fitted score slope is −0.30 per point against −0.20 for the context-only offset. Score terms worsen team-game RMSE (about 10.45 to 11.4 points).
 - Player totals shift at most RMS 0.27 (W_drop), correlation at least 0.978.
 - Neutral court is untestable: `game.neutral_site` is null for every pilot game. Two likely neutral international games (`0022200439`, `0022200678`) are coded by nominal home team. This is Inferred and not verified in the pinned data.
@@ -78,3 +78,7 @@ No independent review was performed. Nothing was pushed.
    - Add a neutral-site flag to the pilot or game metadata (needed for later seasons such as the 2020 bubble).
    - Register an outer-fold protocol before adopting any context family into the reference RAPM.
    - Pair the remaining #77 items (split role penalties, random exclusion control) with the HST context.
+
+## Independent review
+
+A fresh Opus reviewer checked covariate timing, the frozen-protocol provenance, the solver's FWL treatment of the context columns, and the folds. C0 matches the #23 solver to 9e-14 or better. All of these passed. It requested one documentation change: decompose the end-of-period time effect and qualify the context-beats-players claim. The lead applied this. The reviewer's nonblocking note: for W_drop, the runner logs `mask.sum()` in `info["rows"]` rather than the rows actually kept.

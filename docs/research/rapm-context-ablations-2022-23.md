@@ -15,7 +15,7 @@
 
 ## Result in one paragraph
 
-Pre-possession **time** and **score** terms improve held-out possession scoring over the zero-context baseline. **Home court** and **late-blowout weighting** do not, measurably. All four context terms together (HST) cut held-out MSE by 32.3 (95% interval −39.0 to −25.4) in (points per 100)², on top of the −14.1 that player RAPM gains over the league mean. That is more than twice the player gain. Most of it comes from one time column: possessions that start with 24 seconds or less left in a period score about 30 points per 100 less. Fitted control and the eligible offset are indistinguishable on held-out data. The **context-only comparator** (no players) beats the league mean by 30.5 (−37.2 to −23.8), which is also more than player RAPM's 14.1. On the playoff check fold, time and HST again help, while home and score alone are null. The score term helps per possession but worsens team-game totals.
+Pre-possession **time** and **score** terms improve held-out possession scoring over the zero-context baseline. **Home court** and **late-blowout weighting** do not, measurably. All four context terms together (HST) cut held-out MSE by 32.3 (95% interval −39.0 to −25.4) in (points per 100)², on top of the −14.1 that player RAPM gains over the league mean. That is more than twice the player gain. Most of it comes from one time column: possessions that start with 24 seconds or less left in a period score about 30 points per 100 less. About 80% of that gain comes from run-out/no-action possessions that score exactly 0, mostly starting on the `period_end` event itself, which the #59 row set keeps (see the decomposition below). It is therefore largely a consequence of how possessions are defined, not evidence that game context outpredicts players. Fitted control and the eligible offset are indistinguishable on held-out data. The **context-only comparator** (no players) beats the league mean by 30.5 (−37.2 to −23.8), which is also more than player RAPM's 14.1. On the playoff check fold, time and HST again help, while home and score alone are null. The score term helps per possession but worsens team-game totals.
 
 ## Timing verification
 
@@ -111,7 +111,7 @@ These models use no players: intercept and context columns by least squares on e
 | CTX time | −26.86 | −32.68 to −20.97 | −42.7 (−61.7 to −21.5) |
 | CTX home + score + time | −30.50 | −37.16 to −23.78 | −49.5 (−69.1 to −29.0) |
 
-A context-only model with time terms beats zero-context player RAPM on held-out possessions. Player RAPM adds a further −15.8 on top of context (HST_fit −46.3 against the league mean). The player gain should therefore be read against a context comparator, not only against the league mean.
+Under the current #59 possession definition, a context-only model with time terms beats zero-context player RAPM on held-out possessions. This comparison depends on that definition. Most of the time gain comes from predictable zero-point no-action possessions, so it should not be read as context outpredicting players until #82 settles their eligibility. Player RAPM adds a further −15.8 on top of context (HST_fit −46.3 against the league mean). The player gain should therefore be read against a context comparator, not only against the league mean.
 
 Final context-only coefficients on all 224,039 rows, in points per 100 with game-clustered 95% intervals:
 - Home: +1.24 (0.81 to 1.65) per side, so about 2.5 between home and away offense.
@@ -156,7 +156,16 @@ Player totals move little. The largest RMS shift (0.27, W_drop) is below the 0.3
 
 - One development season, with retrospective, capture-bound data and realized lineups. Nothing here is confirmatory, and no verdict admits a context family into a reference specification without a registered outer-fold protocol.
 - Twelve variants and six comparators were scored on the same folds without multiplicity adjustment. Bootstrap intervals cluster by game but ignore dependence across folds.
-- The end-of-period effect may partly be a property of the possession parser at period boundaries: heaves and short final possessions. It was not audited separately. Pre-possession clock is a legitimate covariate, but the size of the gain says more about truncated possessions than about player context (**Inferred**).
+- **End-of-period decomposition (independent review audit, Original).** 6,028 eligible possessions (2.69%) start with 24 s or less left. They score 80.2 points per 100, against 112.0 for all others.
+  - 996 of them (16.5%) are run-out/no-action possessions: no shot, free throw, turnover, foul or violation, and exactly 0 points.
+    - 962 start on the `period_end` event itself.
+    - 853 are game-final possessions.
+    - 706 are in the 4th quarter, with median absolute margin 13.
+  - The other 5,032 score 96.1 per 100.
+  - An end-of-period dummy alone gives an in-sample MSE gain of 26.5, close to the held-out time gain of 25.7. With the no-action possessions removed, it falls to 5.6.
+  - No parser artifact was found. Possessions tile the event stream exactly, with no duplicate or zero-length possessions, and the covariates are pre-possession.
+  - The effect is real game structure combined with a possession-definition choice. Whether no-action possessions should be eligible is decided in #82, which also affects the #23 baseline.
+- The 0–2 s bucket (149 possessions, about 207 points per 100) is probably intentional-foul free throws (**Inferred**).
 - No neutral-court evidence, and multiple-lineup possessions (12.6%) are excluded as in #23.
 - The penalty was fixed at the #23 value. A context-aware $\lambda$ or separate role penalties (#77) were not searched.
 
