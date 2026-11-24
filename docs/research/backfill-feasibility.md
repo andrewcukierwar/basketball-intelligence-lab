@@ -53,7 +53,7 @@ Retry a failed game in data.nba entry order and re-clock the late-entered events
 4. Parse that stream with the unchanged parser and run every unchanged reconciliation: V3 box final, period scores and substitutions, chronology, lineup, minutes within tolerance and exact plus-minus. A failure keeps the original quarantine.
 5. Label the game `datanba_event_order`, a lower-trust stratum, with a warning that gives the largest clock shift.
 
-This relaxes no hard check. It changes only a source timestamp, for events that the feed itself orders later than their stamp. data.nba shares upstream lineage with V2 and V3 (ADR-0010), so it is not independent proof of the true clock. The independent evidence is the unchanged reconciliation against box minutes and plus-minus, Bentes lineups and pbpstats.com possession counts. The pinned parser already uses this feed's order as its documented fallback, so this reuses its intent offline (**Documented**). The choice of predecessor-clock and of the tie rule is **Original**.
+This relaxes no hard check, but it rewrites source timestamps, and the shifts are not all small or all in one direction (see the next section). The repaired stream has monotone clocks by construction, so `unsupported_reorder` and `unresolved_clock_reset` cannot fire on the re-clocked events. Those two checks lose discriminating power on repaired games. Minutes, plus-minus, lineup and score reconciliation, the V3 checks, Bentes and pbpstats.com remain. data.nba shares upstream lineage with V2 and V3 (ADR-0010), so it is not independent proof of the true clock. The independent evidence is the unchanged reconciliation against box minutes and plus-minus, Bentes lineups and pbpstats.com possession counts. The pinned parser already uses this feed's order as its documented fallback, so this reuses its intent offline (**Documented**). The choice of predecessor-clock and of the tie rule is **Original**.
 
 ### Prototype (flag `--order-repair`, off by default)
 
@@ -68,7 +68,9 @@ Measured in new scratch builds of the `issue-25-v1` snapshot, which the build ne
 - The offline replay recovered 137 of the 168 order-class quarantines: 79 of 101 `parser_error` and 58 of 67 `unsupported_reorder` (both playoff games included). The two builds also recover the one `unresolved_starters` game. Both accept 1,188 regular games, 5 short of the 1,193 that the 97% limit needs.
 - 31 order-class games stay quarantined: 22 `parser_error` and 9 `unsupported_reorder`. The 11 other quarantines are untouched.
 - `check` passes 26 of 26 on both builds. Bentes lineups agree on 99.97% of court time over 1,270 covered games, lowest game 99.85%. In the 225 repaired games the lowest game is 99.88%. pbpstats.com possession counts are equal in 1,020 of 1,270 games, up from 871 of 1,132.
-- Clock shifts in the 138 games repaired in the first scratch build: median 4 s, 90th percentile 54 s, 17 above 30 s, 12 above 60 s, largest 498 s. Reconciliation accepted all of them. A bound on the shift is a choice for the maintainer. This write-up does not impose one.
+- Signed clock shifts in the 225 repaired games of `issue-90-order-repair-v2`, from `event_order_diagnostics.py --shifts` (positive means later in game time). 384 events were re-clocked: 160 (42%) moved earlier and 224 later. The median absolute shift is 3 s. 41 events moved more than 24 s and 17 more than 60 s. 33 games have a shift above 24 s and 17 above 60 s. The largest are +518 s, +498 s and +289 s (all replays), then a jump ball at +208 s and a turnover at +156 s. The largest earlier shift is -47 s.
+- 377 re-clocked events have an actor, and 38 of those moved more than 24 s. The re-clocked events include 44 made field goals (12 earlier, from -41 s to +25 s), 8 free throws (-14 s to +47 s) and 21 substitutions (+1 s to +2 s). Median signed shift by type: rebounds -4 s (108 of 110 earlier), missed shots -7 s, made shots +3 s, turnovers +1 s, replays +26 s (20 of 39 over 24 s), fouls +1 s. The earlier example is game `0021700131`, where a miss and an offensive rebound move from 10:23 to 10:37, a shift of -14 s.
+- Reconciliation accepted every one of these games, so the shifts did not break minutes or plus-minus. Whether they are right in time is not established. Safeguards are listed in ADR-0023 for the maintainer. None is implemented.
 - **2017–18 still fails the 0.1% limit** (0.283%), and misses coverage by 5 games. The residual unresolved rate keeps the early-season shape (0.88% in October after repair), so order is not the only cause. That residual is the next investigation.
 
 ### Residual and other order-class patterns
@@ -152,6 +154,8 @@ PYTHONPATH=src .venv/bin/python scripts/event_order_diagnostics.py \
   $M/data/raw/2017-18/issue-25-v1 $M/data/processed/2017-18/issue-25-v1 --simulate-repair --report diag.json
 .venv/bin/python -m bil.data.pilot build $M/data/raw/2017-18/issue-25-v1 $M/data/processed/2017-18/issue-90-order-repair-v2 \
   --code-commit <sha> --order-repair
+PYTHONPATH=src .venv/bin/python scripts/event_order_diagnostics.py \
+  $M/data/raw/2017-18/issue-25-v1 $M/data/processed/2017-18/issue-90-order-repair-v2 --shifts
 ```
 
 The older builds ran at `c079ba8`, before the opt-in flag existed. The default path is unchanged since, and the 2022–23 equivalence above holds at the final code. The 2025–26 and 2026–27 payloads were never listed, opened or read.

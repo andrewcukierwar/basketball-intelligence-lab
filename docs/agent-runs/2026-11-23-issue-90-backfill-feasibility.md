@@ -19,7 +19,7 @@ Bounded feasibility only: diagnose the 2017–18 event-order quarantines, probe 
 
 ## Key findings
 
-- 2017–18: 168 of 178 quarantines are event-order failures caused by late-entered events whose stale clocks V2 sorts before the events they follow. Their rate falls from 78% of games in the first four weeks to 10% by March. Details in the research note.
+- 2017–18: 168 of 180 quarantines (166 of 178 in the regular season) are event-order failures caused by late-entered events whose stale clocks V2 sorts before the events they follow. Their rate falls from 78% of games in the first four weeks to 10% by March. Details in the research note.
 - The repair recovers 137 of 168 and passes 26 of 26 checks, but 2017–18 still misses both hard gates (96.6% coverage, 0.283% unresolved). Residual unresolved possessions are not only an order problem.
 - Older eras are cleaner than 2017–18: 2016–17 and 2005–06 pass both hard gates. 2014–15 misses 97% in the playoffs by one game. 2010–11 misses regular-season coverage by 8 games, from same-clock rebound sequences that no pre-2017 feed can order.
 - V3 order equals V2 order in every older-era order-class quarantine, so V3 cannot help there.
@@ -29,6 +29,7 @@ Bounded feasibility only: diagnose the 2017–18 event-order quarantines, probe 
 - The first repair kept the longest clock run by patience sorting, which on ties re-clocked the rebound instead of the late event. The tie rule now keeps the earliest-entered events.
 - The first scratch build (`issue-90-order-repair-v1`) retried only failed games. It is kept as a comparison. The second (`-v2`) also offers games with unresolved possessions.
 - No interrupted builds in this run. The earlier session left no partial output, and its worktree was gone, so this run restarted from `origin/main` and rebuilt everything into new directories.
+- 2022–23 equivalence rebuild: `data/processed/2022-23/issue-90-rebuild-v1`, compared with `issue-19-v6`.
 
 ## Verification
 

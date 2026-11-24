@@ -7,7 +7,7 @@ import json
 import re
 import shutil
 from collections import Counter, defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import version
@@ -47,6 +47,7 @@ from bil.data.pilot_sources import (
     NBA_TERMS,
     Artifact,
     capture_snapshot,
+    datanba_has_order,
     has_datanba,
     has_livedata,
     load_snapshot,
@@ -206,6 +207,29 @@ def _unresolved(rows: Rows) -> int:
     return sum(row["status"] == "unresolved" for row in rows["possession"])
 
 
+def _offer_repair(
+    choice: StarterChoice[Reconstruction],
+    raw: dict[int, RawEvent],
+    order: dict[int, int],
+    reconstruct: Callable[[bool, dict[int, RawEvent], list[int]], StarterChoice[Reconstruction]],
+) -> tuple[StarterChoice[Reconstruction], dict[int, RawEvent], OrderRepair] | None:
+    """Reparse in data.nba entry order when that leaves strictly fewer unresolved possessions.
+
+    Unresolved possessions are the hard-gate metric (ADR-0023 flags this selection).
+    """
+    current = _unresolved(choice.result.rows)
+    candidate = repair_order(raw, order) if current else None
+    if candidate is None:
+        return None
+    try:
+        alternative = reconstruct(False, candidate.events, list(candidate.events))
+    except GameIssue:
+        return None
+    if _unresolved(alternative.result.rows) < current:
+        return alternative, candidate.events, candidate
+    return None
+
+
 def _build_game(
     game: GameBox,
     roster: dict[int, PlayerBox],
@@ -356,17 +380,13 @@ def _build_game(
                         periods_match, periods_reconciled = False, first.reconciled
                     raise first from None
         if order_repair and reordered is None and cross.order:
-            # Also offer data.nba entry order to accepted games with unresolved possessions,
-            # and keep it only when it leaves fewer of them. All checks apply to both streams.
-            current = _unresolved(choice.result.rows)
-            candidate = repair_order(raw, cross.order) if current else None
-            if candidate is not None:
-                try:
-                    alternative = reconstruct(False, candidate.events, list(candidate.events))
-                except GameIssue:
-                    alternative = None
-                if alternative is not None and _unresolved(alternative.result.rows) < current:
-                    choice, raw, reordered = alternative, candidate.events, candidate
+            # Also offer data.nba entry order to accepted games with unresolved possessions.
+            # All checks apply to both streams. The repaired stream replaces a V3-primary or
+            # V2-order choice alike, so it also clears the V3-primary label.
+            offered = _offer_repair(choice, raw, cross.order, reconstruct)
+            if offered is not None:
+                choice, raw, reordered = offered
+                v3_primary = False
         built = choice.result
         parsed, rows, v3_order = built.events, built.rows, built.v3_order
         periods_reconciled = built.periods_reconciled
@@ -401,9 +421,8 @@ def _build_game(
             shifts = [abs(shift) for _, _, shift in reordered.clamped.values()]
             warning = GameIssue(
                 "datanba_event_order",
-                f"{reordered.repositioned} events placed in data.nba entry order; "
-                f"{len(shifts)} late-entered events took their predecessor's clock "
-                f"(largest shift {max(shifts, default=0):g} s)",
+                f"{len(shifts)} late-entered events placed in data.nba entry order and "
+                f"re-clocked to their predecessor's clock (largest shift {max(shifts, default=0):g} s)",
             )
             issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
         if v3_primary:
@@ -545,6 +564,7 @@ def _season_games(
         feeds = cross_feeds(
             snapshot_dir / live_name if live_name else None,
             snapshot_dir / datanba_name if datanba_name else None,
+            datanba_has_order(year),
         )
         refs = [
             sources[key]

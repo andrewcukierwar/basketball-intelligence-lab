@@ -1096,6 +1096,19 @@ def test_cross_feeds_without_ord_keep_offense_but_no_scores_or_order(tmp_path: P
     assert feed.datanba_periods == {} and feed.order == {}
 
 
+def test_cross_feeds_require_ord_where_the_pinned_season_has_it(tmp_path: Path) -> None:
+    from bil.data.pilot_inputs import cross_feeds
+
+    _csv_archive(
+        tmp_path / "datanba.tar.xz",
+        ["GAME_ID", "evt", "oftid", "PERIOD", "hs", "vs"],
+        [["21700001", "7", "100", "1", "30", "20"]],
+    )
+    with pytest.raises(ValueError, match="ord column"):
+        cross_feeds(None, tmp_path / "datanba.tar.xz", expect_order=True)
+    assert cross_feeds(None, tmp_path / "datanba.tar.xz")["0021700001"].offense == {7: 100}
+
+
 def test_cross_feeds_without_any_archive_have_no_evidence() -> None:
     from bil.data.pilot_inputs import cross_feeds
 

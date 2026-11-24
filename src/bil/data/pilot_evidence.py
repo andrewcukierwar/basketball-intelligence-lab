@@ -20,6 +20,7 @@ from bil.data.pilot_inputs import archive_rows, v3_games
 from bil.data.pilot_sources import (
     DATANBA,
     LIVEDATA,
+    datanba_has_order,
     has_datanba,
     has_livedata,
     lineup_stat_names,
@@ -93,6 +94,12 @@ def stage_feeds(
             writer.writerow(columns)
             for suffix in () if absent else ("", "_po"):
                 for row in archive_rows(evidence / f"{name}{suffix}_{season_start_year}.tar.xz"):
+                    if (
+                        name == DATANBA
+                        and datanba_has_order(season_start_year)
+                        and "ord" not in row
+                    ):
+                        raise ValueError("The pinned data.nba archive must have an ord column")
                     writer.writerow([row.get(column, "") for column in columns])
         connection.execute(
             f"create or replace table {name} as select * replace (lpad({game_key}, 10, '0') as {game_key}) "

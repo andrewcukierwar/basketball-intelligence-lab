@@ -37,7 +37,7 @@ from bil.data.pilot_inputs import (
     nba_game_id,
     v3_games,
 )
-from bil.data.pilot_order import clock_seconds, displaced_events, ord_sequence
+from bil.data.pilot_order import clock_seconds, displaced_events, ord_sequence, repair_order
 from bil.data.pilot_sources import (
     datanba_has_order,
     has_datanba,
@@ -258,6 +258,79 @@ def season_features(
                 )
 
 
+def repaired_games(build: Path) -> set[str]:
+    """Accepted games that a ``--order-repair`` build marked with the ``datanba_event_order`` stratum."""
+    with duckdb.connect() as connection:
+        rows = connection.execute(
+            f"""select game_id from read_parquet('{build / "game_review.parquet"}')
+                where accepted and list_contains(strata, 'datanba_event_order')"""
+        ).fetchall()
+    return {game_id for (game_id,) in rows}
+
+
+def shift_report(snapshot: Path, build: Path) -> dict[str, Any]:
+    """Signed clock shifts the order repair gave late-entered events, from raw inputs alone.
+
+    A positive shift moves the event later in game time. Shifts are recomputed by replaying
+    ``repair_order`` on each repaired game's V2 events and data.nba order, which is deterministic.
+    The repaired streams have monotone clocks, so the ``unsupported_reorder`` and
+    ``unresolved_clock_reset`` checks cannot fire on the re-clocked events.
+    """
+    wanted = repaired_games(build)
+    by_type: dict[str, list[float]] = defaultdict(list)
+    actors: dict[str, int] = Counter()
+    game_peaks: list[float] = []
+    missing = 0
+    for game_id, raw, _, ord_map in season_features(snapshot):
+        if game_id not in wanted:
+            continue
+        repaired = repair_order(raw, ord_map)
+        if repaired is None:
+            missing += 1
+            continue
+        peak = 0.0
+        for event_num, (_, _, shift) in repaired.clamped.items():
+            by_type[type_name(raw[event_num])].append(shift)
+            if raw[event_num].fields.get("PLAYER1_ID", "") not in ("", "0"):
+                actors["events_with_actor"] += 1
+                actors["actor_events_over_24s"] += abs(shift) > 24
+            peak = max(peak, abs(shift))
+        game_peaks.append(peak)
+    every = sorted(shift for values in by_type.values() for shift in values)
+
+    def median(values: list[float]) -> float:
+        ordered = sorted(values)
+        return ordered[len(ordered) // 2]
+
+    return {
+        "repaired_games": len(wanted),
+        "not_reproduced": missing,
+        "reclocked_events": len(every),
+        "earlier_in_game_time": sum(shift < 0 for shift in every),
+        "later_in_game_time": sum(shift > 0 for shift in every),
+        "median_abs_shift_s": median([abs(shift) for shift in every]) if every else None,
+        "largest_later_s": max(every, default=None),
+        "largest_earlier_s": min(every, default=None),
+        "events_over_24s": sum(abs(shift) > 24 for shift in every),
+        "events_over_60s": sum(abs(shift) > 60 for shift in every),
+        "games_with_a_shift_over_24s": sum(peak > 24 for peak in game_peaks),
+        "games_with_a_shift_over_60s": sum(peak > 60 for peak in game_peaks),
+        "largest_abs_shift_s": max(game_peaks, default=None),
+        **dict(sorted(actors.items())),
+        "by_event_type": {
+            kind: {
+                "events": len(values),
+                "earlier": sum(shift < 0 for shift in values),
+                "median_signed_s": median(values),
+                "min_s": min(values),
+                "max_s": max(values),
+                "over_24s": sum(abs(shift) > 24 for shift in values),
+            }
+            for kind, values in sorted(by_type.items())
+        },
+    }
+
+
 def share(part: int, whole: int) -> float:
     return round(part / whole, 4) if whole else 0.0
 
@@ -278,7 +351,18 @@ def main() -> None:
         action="store_true",
         help="replay the order-class quarantines with the opt-in data.nba order repair",
     )
+    cli.add_argument(
+        "--shifts",
+        action="store_true",
+        help="only report signed clock shifts for the games a --order-repair build repaired",
+    )
     args = cli.parse_args()
+    if args.shifts:
+        text = json.dumps(shift_report(args.snapshot, args.build), indent=2, sort_keys=True)
+        print(text)
+        if args.report:
+            args.report.write_text(text + "\n", encoding="utf-8")
+        return
 
     manifest = load_snapshot(args.snapshot)
     year = manifest["season_start_year"]

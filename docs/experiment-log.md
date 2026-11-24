@@ -231,7 +231,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Datasets/checksums and cutoff:** Snapshots copied from the #51 audit capture and checked against its pins. Retrospective capture, no availability claim. The 2025–26 holdout was not touched.
 - **Baselines:** `issue-25-v1` for 2017–18, `issue-19-v6` for 2022–23, and the M1 hard gates under the #89 revision.
 - **Results:**
-  - 2017–18: 168 of 178 quarantines are event-order failures. The opt-in repair recovers 137 of them. Coverage 96.6%, unresolved 0.283%, so it still fails.
+  - 2017–18: 168 of 180 quarantines (166 of 178 in the regular season) are event-order failures. The opt-in repair recovers 137 of them. Coverage 96.6%, unresolved 0.283%, so it still fails.
   - 2016–17 and 2005–06 meet both hard gates. 2014–15 meets them for the regular season and misses 97% in the playoffs by one game. 2010–11 misses regular-season coverage (96.5%) from a same-clock rebound pattern.
   - All builds pass 26 of 26 checks. The 2022–23 rebuild is row-identical to `issue-19-v6` apart from `ingested_at`.
 - **Limitations / interpretation:** One season per era. 2001–02 to 2003–04 was not probed. The reason for the early-season rate in 2017–18 is Inferred. Starter verification is weaker without liveData and data.nba.

@@ -307,11 +307,14 @@ def _period_start_clock(period: int) -> str:
     return "PT12M00.00S" if period <= 4 else "PT05M00.00S"
 
 
-def cross_feeds(livedata: Path | None, datanba: Path | None) -> dict[str, CrossFeed]:
+def cross_feeds(
+    livedata: Path | None, datanba: Path | None, expect_order: bool = False
+) -> dict[str, CrossFeed]:
     """Read both cross-feeds. An absent archive leaves its evidence empty for every game.
 
     The first two data.nba seasons lack the ``ord`` field, so they carry offense keys but no
-    period scores or event order.
+    period scores or event order. When ``expect_order`` is set, a missing ``ord`` column is an
+    error instead of silently dropping that evidence.
     """
     games: dict[str, CrossFeed] = defaultdict(CrossFeed)
     live_ends: dict[tuple[str, int], tuple[int, tuple[int, int]]] = {}
@@ -348,6 +351,8 @@ def cross_feeds(livedata: Path | None, datanba: Path | None) -> dict[str, CrossF
 
     nba_ends: dict[tuple[str, int], tuple[int, tuple[int, int]]] = {}
     for row in archive_rows(datanba) if datanba is not None else ():
+        if expect_order and "ord" not in row:
+            raise ValueError("The pinned data.nba archive for this season must have an ord column")
         game_id = nba_game_id(row["GAME_ID"])
         feed = games[game_id]
         if row["oftid"].isdigit() and int(row["oftid"]) and row["evt"].isdigit():

@@ -3,9 +3,16 @@
 V2 rows are sorted by game clock. A late-entered stat correction keeps its original clock, so V2
 can place it before an event that really preceded it (a turnover before the offensive rebound
 that came first). data.nba.com ``ord`` records the sequence in which events were entered.
-Following that sequence restores the action order, but the late event's clock is then older
-than its neighbors'. The repair gives each such event the clock of its predecessor. Every other
-event keeps its V2 clock, and every hard reconciliation still runs on the repaired stream.
+Following that sequence restores the action order, but then some clocks break the monotone
+clock order. Which events are "displaced" is a minimal-removal choice, so a displaced event
+may carry a clock that is later or earlier than its predecessor's, and a re-clocked event moves
+by that difference in either direction (measured: 42% move earlier, by up to 47 s, and a few
+later by minutes; replays move most). Each displaced event takes its predecessor's clock, so
+every repaired stream has monotone clocks. Every other event keeps its V2 clock, and every
+reconciliation still runs on the repaired stream. Because the clocks are monotone by
+construction, ``unsupported_reorder`` and ``unresolved_clock_reset`` cannot fire on the
+displaced events: no check is relaxed, but those two lose discriminating power on repaired
+games. Minutes, plus-minus, lineup and score reconciliation remain the safeguards.
 """
 
 from __future__ import annotations
