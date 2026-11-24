@@ -72,6 +72,7 @@ def test_missing_marker_uses_box_totals_and_preserves_raw_bytes() -> None:
         (3, "PCTIMESTRING", "4:18"),
         (3, "PERIOD", "4"),
         (3, "EVENTMSGACTIONTYPE", "17"),
+        (3, "SCORE", "34 - 42"),
     ],
 )
 def test_conflicting_local_evidence_does_not_change_the_feed(
@@ -93,6 +94,12 @@ def test_unknown_or_inconsistent_box_counts_are_declined(box: PlayerBox) -> None
 def test_shooters_other_make_needs_exactly_one_point_on_its_side(score: str) -> None:
     raw = final_attempt()
     raw[1].fields["SCORE"] = score
+    assert infer_missing_misses(raw, GAME, {11: PlayerBox(100, 1000, 1, 1, 2)}) is None
+
+
+def test_competing_same_clock_field_goal_miss_is_declined() -> None:
+    raw = final_attempt()
+    raw[4] = event(4, "2", "1", "12", "100", "MISS Shot")
     assert infer_missing_misses(raw, GAME, {11: PlayerBox(100, 1000, 1, 1, 2)}) is None
 
 

@@ -6,6 +6,7 @@ import re
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
+from itertools import takewhile
 
 from bil.data.pilot_inputs import GameBox, PlayerBox, RawEvent
 
@@ -82,12 +83,23 @@ def infer_missing_misses(
         rebound_team = rebound["PLAYER1_ID"]
         if (
             rebound["EVENTMSGTYPE"] != "4"
+            or rebound["SCORE"]
             or rebound["EVENTMSGACTIONTYPE"] not in {"0", "1"}
             or rebound_team not in teams
             or rebound["PLAYER1_TEAM_ID"] not in {"", rebound_team}
             or (rebound["PERIOD"], rebound["PCTIMESTRING"]) != clock
         ):
             continue
+        subsequent = takewhile(
+            lambda item: (
+                (item[1]["PERIOD"], item[1]["PCTIMESTRING"]) == clock
+                and item[1]["EVENTMSGTYPE"] not in {"12", "13"}
+            ),
+            sequence[index + 2 :],
+        )
+        if any(row["EVENTMSGTYPE"] == "2" for _, row in subsequent):
+            # A late-entered same-clock shot could supply a different rebounding opportunity.
+            return None
         if attempt < total:
             # Between attempts the same team's rebound is a dead-ball record. Require the next
             # attempt of the same trip at this clock to establish that interpretation.
