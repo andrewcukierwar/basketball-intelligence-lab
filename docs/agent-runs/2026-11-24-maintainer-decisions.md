@@ -1,0 +1,23 @@
+# Handoff: maintainer decisions of 2026-11-24
+
+- **Objective:** record the maintainer's 2026-11-24 authorizations in the repository so later sessions can resume from repository state.
+- **Done:**
+  - ADR-0013 and ADR-0025 are Accepted.
+  - ADR-0019 records explicit maintainer confirmation of the canonical row set.
+  - ADR-0023 lists the maintainer's safeguard conditions. Development is authorized, but canonical use waits for an independent review.
+  - New ADR-0026 covers M2 acceptance, the informed-RAPM comparators, the partial-history SPM targets for #28, versioned incorporation of #53 seasons, and the autonomy scope.
+  - The M2 report header records the decision.
+- **Issues:**
+  - Created #110, alternatives to stable-lineup rows (future research, not blocking).
+  - Created #111, the same-clock shot, tip and rebound rule.
+  - Updated the bodies and labels of #27, #28, #30 and #99.
+- **Next:**
+  - ADR-0025 reproducibility replay, then close #27.
+  - #28 partial-history targets.
+  - #111 parser rule.
+  - #99 safeguarded repair.
+- **Reserved numbers for the next wave:**
+  - EXP-0016: #27 replay.
+  - ADR-0027 and EXP-0017: #28.
+  - ADR-0028 and EXP-0018: #111.
+  - ADR-0029 and EXP-0019: #99.
