@@ -824,7 +824,7 @@ def test_season_sources_follow_each_provider_year_convention() -> None:
     assert len(set(digests)) == len(digests)
 
 
-@pytest.mark.parametrize("year", [2025, 2026, 2021])
+@pytest.mark.parametrize("year", [2025, 2026, 2016])
 def test_unpinned_and_holdout_seasons_are_refused(tmp_path: Path, year: int) -> None:
     for make in (pilot_sources.season_sources, pilot_sources.season_evidence_sources):
         with pytest.raises(ValueError, match="holdout" if year >= 2025 else "No pinned"):
@@ -1022,3 +1022,105 @@ def test_checks_and_evidence_read_the_recorded_season_files(tmp_path: Path) -> N
         )
         scores = pilot_evidence.period_score_agreement(connection, tmp_path, 2023)
         assert scores["periods_compared"] == 0
+
+
+def test_seasons_before_livedata_pin_every_other_feed() -> None:
+    assert pilot_sources.SEASONS == (2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024)
+    for year in pilot_sources.SEASONS:
+        names = [source.name for source in pilot_sources.season_sources(year)]
+        evidence = [source.name for source in pilot_sources.season_evidence_sources(year)]
+        live = pilot_sources.has_livedata(year)
+        assert live == (year >= 2020)
+        # V2, V3, shot detail and data.nba in both season types, both box logs, and liveData
+        # only where the provider archived it.
+        assert len(names) == (12 if live else 10)
+        assert len(evidence) == (8 if live else 6)
+        assert (f"cdnnba_po_{year}.tar.xz" in names) is live
+        assert (f"cdnnba_{year}.tar.xz" in evidence) is live
+        assert f"datanba_po_{year}.tar.xz" in names
+        assert f"pbpstats_{year}.tar.xz" in evidence
+    team = {s.name: s for s in pilot_sources.season_sources(2019)}["team_game_logs.parquet"]
+    assert team.local_name == "team_game_logs_2020.parquet"
+
+
+def test_cross_feeds_without_livedata_keep_datanba_evidence(tmp_path: Path) -> None:
+    from bil.data.pilot_inputs import cross_feeds
+
+    _csv_archive(
+        tmp_path / "datanba.tar.xz",
+        ["GAME_ID", "evt", "oftid", "ord", "PERIOD", "hs", "vs"],
+        [["21700001", "7", "100", "70", "1", "30", "20"]],
+    )
+    feed = cross_feeds(None, tmp_path / "datanba.tar.xz")["0021700001"]
+    assert not feed.has_livedata and not feed.live_periods and not feed.between_periods
+    assert feed.datanba_periods == {1: (30, 20)} and feed.offense == {7: 100}
+
+
+def test_games_without_livedata_carry_a_weaker_verification_stratum(tmp_path: Path) -> None:
+    from bil.data.pilot_inputs import CrossFeed
+
+    game, roster, _, _ = synthetic_game()
+    artifact = {
+        "artifact_id": "fixture",
+        "name": "fixture",
+        "uri": "",
+        "source_id": "synthetic",
+        "upstream_namespace": "nba",
+        "source_revision": None,
+        "sha256": "0",
+        "size_bytes": 0,
+        "retrieved_at": "2026-11-23T00:00:00+00:00",
+        "rights_ref": "x",
+    }
+
+    def review(cross: CrossFeed | None) -> dict[str, object]:
+        rows = pilot._build_game(
+            game,
+            roster,
+            [],
+            {},
+            None,
+            [artifact] * 6,  # type: ignore[list-item]
+            tmp_path,
+            "hash",
+            "2026-11-23T00:00:00+00:00",
+            cross,
+            2017,
+        )
+        return rows["game_review"][0]
+
+    absent = review(None)
+    assert absent["reason"] == "missing_v2_game"
+    assert "no_livedata" in absent["strata"]  # type: ignore[operator]
+    present = review(CrossFeed(has_livedata=True))
+    assert "no_livedata" not in present["strata"]  # type: ignore[operator]
+
+
+def test_evidence_without_livedata_compares_v3_with_datanba_only(tmp_path: Path) -> None:
+    from bil.data import pilot_evidence
+
+    for suffix in ("", "_po"):
+        _v3_archive(
+            tmp_path / f"nbastatsv3{suffix}_2017.tar.xz",
+            [] if suffix else [["21700001", "1", "20", "1", "", "", "period", "end", "31", "20"]],
+        )
+        for name, (game_key, columns) in pilot_evidence.FEEDS.items():
+            if name == "cdnnba":
+                continue  # Absent before 2020–21; reading it would fail.
+            row = ["21700001" if column == game_key else "" for column in columns]
+            if name == "datanba" and not suffix:
+                values = {"evt": "20", "ord": "5", "PERIOD": "1", "hs": "31", "vs": "20"}
+                row = [values.get(column, value) for column, value in zip(columns, row)]
+            _csv_archive(tmp_path / f"{name}{suffix}_2017.tar.xz", list(columns), [row])
+    with duckdb.connect() as connection:
+        for name in pilot_sources.lineup_stat_names(2017):
+            connection.execute(
+                "copy (select '0021700001' as game_id, 0 as secs_game_start, "
+                "720 as secs_game_end, '1 A, 2 B, 3 C, 4 D, 5 E' as lineup_team) "
+                f"to '{tmp_path / name}' (format parquet)"
+            )
+        pilot_evidence.stage_feeds(connection, tmp_path, tmp_path, 2017)
+        assert connection.execute("select count(*) from cdnnba").fetchone() == (0,)
+        scores = pilot_evidence.period_score_agreement(connection, tmp_path, 2017)
+        assert scores["periods_compared"] == 0
+        assert scores["v3_datanba_periods_compared"] == 1 and scores["v3_equals_datanba"] == 1

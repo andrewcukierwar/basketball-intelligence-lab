@@ -17,7 +17,7 @@ from tempfile import TemporaryDirectory
 import duckdb
 
 from bil.data.pilot_inputs import archive_rows, v3_games
-from bil.data.pilot_sources import lineup_stat_names
+from bil.data.pilot_sources import LIVEDATA, has_livedata, lineup_stat_names
 
 FEEDS = {
     "pbpstats": ("GAMEID", ("GAMEID", "PERIOD", "STARTTIME", "ENDTIME", "OPPONENT")),
@@ -54,6 +54,7 @@ LOWER_TRUST = (
     "v3_event_order",
     "unresolved_possessions",
     "v2_home_designation",
+    "no_livedata",
 )
 PERIOD_START = "case when {p} <= 4 then ({p} - 1) * 720000 else 2880000 + ({p} - 5) * 300000 end"
 
@@ -68,13 +69,18 @@ def stage_feeds(
     staging: Path,
     season_start_year: int = 2022,
 ) -> None:
-    """Load the archived evidence CSVs into DuckDB tables keyed by ten-digit game IDs."""
+    """Load the archived evidence CSVs into DuckDB tables keyed by ten-digit game IDs.
+
+    A season without pinned liveData gets an empty ``cdnnba`` table, so every liveData
+    comparison reports nothing rather than a disagreement.
+    """
     for name, (game_key, columns) in FEEDS.items():
         path = staging / f"{name}.csv"
+        absent = name == LIVEDATA and not has_livedata(season_start_year)
         with path.open("w", newline="", encoding="utf-8") as target:
             writer = csv.writer(target)
             writer.writerow(columns)
-            for suffix in ("", "_po"):
+            for suffix in () if absent else ("", "_po"):
                 for row in archive_rows(evidence / f"{name}{suffix}_{season_start_year}.tar.xz"):
                     writer.writerow([row.get(column, "") for column in columns])
         connection.execute(
@@ -312,7 +318,7 @@ def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object
             [game_id, start_ms // 1000, team],
         ).fetchall()
         recorded_agree += int(len(match) == 1 and match[0][0] == ids)
-    bentes_agree = live_agree = live_checked = 0
+    bentes_agree = live_agree = live_checked = live_unavailable = 0
     disagreements: list[list[str]] = []
     for game_id, period, team, ids in inferred:
         start_ms = (period - 1) * 720_000 if period <= 4 else 2_880_000 + (period - 5) * 300_000
@@ -325,6 +331,12 @@ def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object
         else:
             disagreements.append(["bentes", game_id, str(period), team, f"{len(first)} rows"])
         if period == 1:
+            continue
+        covered = connection.execute(
+            "select count(*) from cdnnba where gameId = ?", [game_id]
+        ).fetchone()
+        if not covered or not covered[0]:
+            live_unavailable += 1
             continue
         previous = connection.execute(
             """select ids from ours where game_id = ? and team = ? and period = ?
@@ -355,6 +367,7 @@ def starter_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object
         "bentes_agree": bentes_agree,
         "livedata_checked": live_checked,
         "livedata_agree": live_agree,
+        "livedata_unavailable": live_unavailable,
         "disagreements": disagreements,
     }
 
@@ -388,6 +401,8 @@ def period_score_agreement(
                   last(vs order by cast(ord as bigint)) from datanba group by all"""
     )
     shared = sorted(v3.keys() & live.keys() & data_nba.keys())
+    # Without liveData, V3 and data.nba remain the only two-feed period comparison.
+    pairs = sorted(v3.keys() & data_nba.keys())
     v3_alone = sorted(
         {
             game
@@ -408,6 +423,11 @@ def period_score_agreement(
         "v3_equals_livedata": sum(v3[key] == live[key] for key in shared),
         "games_where_v3_alone_differs": v3_alone,
         "games_where_datanba_alone_differs": data_nba_alone,
+        "v3_datanba_periods_compared": len(pairs),
+        "v3_equals_datanba": sum(v3[key] == data_nba[key] for key in pairs),
+        "games_where_v3_differs_from_datanba": sorted(
+            {game for game, period in pairs if v3[(game, period)] != data_nba[(game, period)]}
+        ),
     }
 
 
