@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-24
 - **Issue:** [#110](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/110)
-- **Status:** Development study completed locally. Independent review and publication pending.
+- **Status:** Development study completed and independently reviewed.
 - **Branch:** `codex/issue-110-lineup-exposure-study` from `3749944`
 - **Protocol and run code:** `b76e2c41e2ec7e4e52198a01b83f224b994af387` frozen before profiling and fits, runner `d5b319aaa7ca1e5e95a894fc346b2127fd8788ad`.
 
@@ -24,6 +24,8 @@ The runner accessed only the 2019–20 through 2022–23 pinned development inpu
 
 The first ad hoc reporting command used an older system Python that did not support `zip(strict=True)`. Running it in the project environment produced the recorded summaries. No protocol or fit configuration changed.
 
+The independent reviewer replayed all 30 fits at reviewed commit `445b583`. Every score, interval and block fit matched exactly. Three exposure quantiles differed by at most `2.8e-17`, with identical reported rounding. All three focused tests passed and the review found no blockers.
+
 ## Next action
 
-Review and integrate the report and study runner. The results do not justify changing the canonical estimand. A future substitution-specific model would need separately registered scoring coverage for multiple-lineup possessions.
+The recommendation retains the canonical estimand. A future substitution-specific model would need separately registered scoring coverage for multiple-lineup possessions.
