@@ -14,6 +14,7 @@ from pathlib import Path
 import duckdb
 
 from bil.data.pilot_inputs import archive_rows, nba_game_id
+from bil.data.pilot_sources import pinned_season
 
 TABLES = (
     "game",
@@ -257,6 +258,10 @@ def _same_offense_violations(
 def check_build(output: Path, snapshot: Path) -> dict[str, int]:
     """Return the number of violations for each check. Every value is zero for a valid build."""
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    year = manifest["season_start_year"]
+    if type(year) is not int:
+        raise ValueError("Manifest does not record an integer season start year")
+    pinned_season(year)  # refuses the confirmatory holdout and unpinned seasons
     results: dict[str, int] = {}
     with duckdb.connect() as connection:
         mismatched = 0
@@ -276,7 +281,7 @@ def check_build(output: Path, snapshot: Path) -> dict[str, int]:
             ).fetchone()
             results[f"no_quarantined_rows_in_{table}"] = row[0] if row else -1
         results["consecutive_offenses_accounted_for"] = _same_offense_violations(
-            connection, snapshot, manifest["season_start_year"]
+            connection, snapshot, year
         )
         for name, sql in CHECKS.items():
             row = connection.execute(sql).fetchone()
@@ -300,8 +305,10 @@ CROSS_SEASON_CHECKS = {
     "playoffs_after_each_team_regular_season": """
         with sides as (
           select season_start_year, season_type, game_date, home_team_id as team from games
+          where home_team_id is not null
           union all
-          select season_start_year, season_type, game_date, away_team_id from games)
+          select season_start_year, season_type, game_date, away_team_id from games
+          where away_team_id is not null)
         select count(*) from (
           select season_start_year, team,
                  max(game_date) filter (where season_type = 'regular') as last_regular,
@@ -324,7 +331,14 @@ def check_seasons(builds: list[tuple[Path, Path]]) -> tuple[dict[str, int], dict
     with duckdb.connect() as connection:
         for index, (output, snapshot) in enumerate(builds):
             manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
-            year = int(manifest["season_start_year"])
+            year = manifest["season_start_year"]
+            if type(year) is not int:
+                raise ValueError("Manifest does not record an integer season start year")
+            pinned_season(year)
+            recorded = manifest["source_snapshot_sha256"]
+            digest = hashlib.sha256((snapshot / "snapshot.json").read_bytes()).hexdigest()
+            if recorded != digest:
+                raise ValueError(f"The {year} build was not made from the snapshot at {snapshot}")
             game = _literal(output / "game.parquet")
             lineup = _literal(output / "lineup.parquet")
             box = _literal(snapshot / "player_game_logs.parquet")

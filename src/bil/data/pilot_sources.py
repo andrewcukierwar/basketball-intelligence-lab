@@ -667,15 +667,6 @@ def capture_snapshot(
     return snapshot
 
 
-def snapshot_season(directory: Path) -> int:
-    """Read and validate the season recorded in a snapshot, before trusting its sources."""
-    snapshot = json.loads((directory / "snapshot.json").read_text(encoding="utf-8"))
-    year = snapshot.get("season_start_year") if isinstance(snapshot, dict) else None
-    if type(year) is not int:
-        raise ValueError("Snapshot does not record an integer season start year")
-    return pinned_season(year)
-
-
 def load_snapshot(
     directory: Path,
     sources: tuple[Source, ...] | None = None,

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -34,6 +35,7 @@ from bil.data.pilot_inputs import (  # noqa: E402
     GameIssue,
     PlayerBox,
     RawEvent,
+    V3Game,
     deduplicate_events,
     v2_substitutions,
     v3_games,
@@ -973,6 +975,11 @@ def test_undesignated_box_game_quarantines_without_v2_evidence(tmp_path: Path) -
     review = rows["game_review"][0]
     assert review["reason"] == "unresolved_home_designation" and review["accepted"] is False
     assert rows["game"][0]["season_start_year"] == 2024
+    # The provisional team-ID orientation is not exported as fact.
+    assert all(
+        rows["game"][0][field] is None
+        for field in ("home_team_id", "away_team_id", "home_final", "away_final")
+    )
 
 
 def test_checks_and_evidence_read_the_recorded_season_files(tmp_path: Path) -> None:
@@ -1131,7 +1138,9 @@ def _season_build(root: Path, year: int, games: list[tuple[str, str]], lineup_te
     build, snapshot = root / f"build-{year}", root / f"snapshot-{year}"
     build.mkdir()
     snapshot.mkdir()
-    (build / "manifest.json").write_text(json.dumps({"season_start_year": year}), "utf-8")
+    (snapshot / "snapshot.json").write_text("{}", "utf-8")
+    recorded = {"season_start_year": year, "source_snapshot_sha256": sha256(b"{}").hexdigest()}
+    (build / "manifest.json").write_text(json.dumps(recorded), "utf-8")
     values = ", ".join(
         f"('{game_id}', {year}, '{'regular' if game_id[:3] == '002' else 'playoffs'}', "
         f"date '{played}', '100', '200')"
@@ -1192,3 +1201,117 @@ def test_cross_season_checks_cover_identity_chronology_and_trades(tmp_path: Path
     assert violations["playoffs_after_each_team_regular_season"] == 2
     assert violations["lineup_team_matches_player_box"] == 1
     assert violations["game_ids_unique_across_seasons"] == 0
+
+
+def _designation_review(
+    tmp_path: Path, v3_final: tuple[int, int]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    game, roster, _, _ = synthetic_game()
+    provisional = GameBox(
+        game.game_id, game.played_date, game.home_id, game.away_id, 3, 0, home_designated=False
+    )
+    artifact = {
+        "artifact_id": "fixture",
+        "name": "fixture",
+        "uri": "",
+        "source_id": "synthetic",
+        "upstream_namespace": "nba",
+        "source_revision": None,
+        "sha256": "0",
+        "size_bytes": 0,
+        "retrieved_at": "2026-11-23T00:00:00+00:00",
+        "rights_ref": "x",
+    }
+
+    def event(num: str, team: str, home: str, visitor: str) -> RawEvent:
+        fields = {
+            "EVENTNUM": num,
+            "EVENTMSGTYPE": "2",
+            "PERIOD": "1",
+            "PCTIMESTRING": "11:00",
+            "PLAYER1_TEAM_ID": team,
+            "HOMEDESCRIPTION": home,
+            "VISITORDESCRIPTION": visitor,
+        }
+        return RawEvent(fields, [int(num) + 1])
+
+    # V2 puts team 200's actions in the home column, so the box's provisional order is swapped.
+    events = [event("1", "200", "Miss", ""), event("2", "100", "", "Miss")]
+    reference = V3Game({1: v3_final}, Counter())
+    rows = pilot._build_game(
+        provisional,
+        roster,
+        events,
+        {},
+        reference,
+        [artifact] * 7,  # type: ignore[list-item]
+        tmp_path,
+        "hash",
+        "2026-11-23T00:00:00+00:00",
+    )
+    return rows["game_review"][0], rows["game"][0]
+
+
+def test_v2_home_designation_is_accepted_when_v3_confirms_it(tmp_path: Path) -> None:
+    review, game_row = _designation_review(tmp_path, (0, 3))
+    assert "v2_home_designation" in review["strata"]
+    assert review["v3_box_final_match"] is True
+    assert review["reason"] != "unresolved_home_designation"
+    assert (game_row["home_team_id"], game_row["away_team_id"]) == ("200", "100")
+    assert (game_row["home_final"], game_row["away_final"]) == (0, 3)
+
+
+def test_v2_home_designation_contradicted_by_v3_quarantines(tmp_path: Path) -> None:
+    review, game_row = _designation_review(tmp_path, (3, 0))
+    assert "v2_home_designation" in review["strata"]
+    assert review["reason"] == "v3_box_final_mismatch" and review["accepted"] is False
+    assert review["v3_box_final_match"] is False
+    # The orientation V2 designated is kept; only an undesignated game is nulled.
+    assert game_row["home_team_id"] == "200"
+
+
+def test_check_refuses_holdout_manifests_and_mismatched_snapshots(tmp_path: Path) -> None:
+    from bil.data.pilot_check import check_build, check_seasons
+
+    holdout = tmp_path / "holdout"
+    holdout.mkdir()
+    (holdout / "manifest.json").write_text(json.dumps({"season_start_year": 2025}), "utf-8")
+    with pytest.raises(ValueError, match="holdout"):
+        check_build(holdout, tmp_path)
+
+    build = _season_build(tmp_path, 2017, [("0021700001", "2017-10-17")], "100")
+    snapshot = tmp_path / "snapshot-2017"
+    (snapshot / "snapshot.json").write_text("{}", "utf-8")
+    manifest = json.loads((build / "manifest.json").read_text(encoding="utf-8"))
+    manifest["source_snapshot_sha256"] = sha256(b"{}").hexdigest()
+    (build / "manifest.json").write_text(json.dumps(manifest), "utf-8")
+    check_seasons([(build, snapshot)])  # a matching digest passes
+    (snapshot / "snapshot.json").write_text('{"changed": true}', "utf-8")
+    with pytest.raises(ValueError, match="not made from the snapshot"):
+        check_seasons([(build, snapshot)])
+
+
+def test_starter_check_requires_livedata_coverage_where_pinned() -> None:
+    from bil.data import pilot_evidence
+
+    def run(year: int) -> dict[str, object]:
+        with duckdb.connect() as connection:
+            connection.execute(
+                """
+                create table quality_issue as select * from (values
+                  ('0022200001', 'inferred_starters', 'period 2 team 100: 1,2,3,4,5'))
+                  t(game_id, code, detail);
+                create table bentes_team as select * from (values
+                  ('0022200001', 720, '100', ['1', '2', '3', '4', '5']))
+                  t(game_id, t0, team, ids);
+                create table cdnnba (gameId varchar, actionType varchar, subType varchar,
+                  personId varchar, period varchar, clock varchar, teamId varchar);
+                create table ours (game_id varchar, team varchar, period int, stint_seq int,
+                  ids varchar[]);
+                """
+            )
+            return pilot_evidence.starter_agreement(connection, year)
+
+    assert run(2017)["livedata_unavailable"] == 1
+    with pytest.raises(ValueError, match="liveData is pinned"):
+        run(2022)
