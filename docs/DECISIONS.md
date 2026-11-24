@@ -212,6 +212,19 @@ V2 remains the event source of record.
 - **Consequences:** Playoff debuts have no player history until a pooling convention is registered. Career equals season-to-date while one season is loaded. Strict baselines are unavailable with this source.
 - **Links:** [Skill histories](research/skill-histories.md), [Issue #31](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/31)
 
+## ADR-0017 — Season-pinned builds and V2 home designation for unflagged box games
+
+- **Date:** 2026-11-23
+- **Status:** Accepted for the 2023–24 and 2024–25 outer-validation builds ([#52](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/52)).
+- **Evidence class:** Original BIL design.
+- **Context:** The pilot pipeline named 2022–23 inputs directly. The 2024–25 Bill Mill team log leaves `home` null for both teams in five neutral-site regular-season games, which stopped the build.
+- **Decision:**
+  - Pin each season's build and evidence inputs in code from the #51 audit register. Read the season from the snapshot or manifest. Refuse the 2025–26 holdout and any unpinned season. `capture --from-local` may copy verified audit bytes instead of downloading them.
+  - When both box home flags are null, take the home team from V2. Every event with a PLAYER1 team and only one of the home or visitor descriptions must place each team on a single, opposite side. The existing V3 terminal-score check must then match the box points under that designation. Mark accepted games `v2_home_designation`. Otherwise quarantine them as `unresolved_home_designation`.
+- **Evidence:** V2 designated all five games unanimously, with 173 to 236 attributed events per team. V3 confirmed all five finals. All five games are accepted, and their lineups agree with Bentes on at least 99.93% of court time. The 2022–23 rebuild is unchanged.
+- **Consequences:** `neutral_site` stays null because a missing flag does not establish a neutral site. For these games, V2 and V3 set the home/away orientation and the box confirms it. `v2_home_designation` is a lower-trust stratum in `evidence`.
+- **Links:** [Outer-validation seasons](data-pilot.md#outer-validation-seasons-202324-and-202425), [Feed coverage audit](research/nba-feed-coverage.md)
+
 ## Decision template
 
 ### ADR-XXXX — Title

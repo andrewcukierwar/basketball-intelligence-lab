@@ -1,4 +1,4 @@
-"""Capture and build the private 2022–23 possession pilot."""
+"""Capture and build the private possession pilot for one pinned season at a time."""
 
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ from bil.data.pilot_inputs import (
     box_scores,
     cross_feeds,
     deduplicate_events,
+    designate_home,
     event_games,
     nba_game_id,
     shot_rows,
@@ -41,11 +42,11 @@ from bil.data.pilot_output import read_game_reviews, write_tables
 from bil.data.pilot_parser import PARSER_VERSION, ParserEvent, Starters, parse_game
 from bil.data.pilot_sources import (
     ATTRIBUTION,
-    EVIDENCE_SOURCES,
     NBA_TERMS,
     Artifact,
     capture_snapshot,
     load_snapshot,
+    season_evidence_sources,
     sha256_file,
     utc_now,
     write_json,
@@ -111,13 +112,15 @@ def _version(when: str, source_ids: list[Artifact], refs: list[dict[str, str]]) 
     }
 
 
-def _game_row(game: GameBox, kind: str, source: Artifact, when: str) -> Row:
+def _game_row(
+    game: GameBox, kind: str, source: Artifact, when: str, season_start_year: int = 2022
+) -> Row:
     ref = _ref(source, f"game_id={game.game_id};home_and_away")
     return {
         "game_id": game.game_id,
         **_version(when, [source], [ref]),
         "league": "NBA",
-        "season_start_year": 2022,
+        "season_start_year": season_start_year,
         "season_type": kind,
         "game_date": game.played_date.isoformat(),
         "date_basis": "played",
@@ -206,6 +209,7 @@ def _build_game(
     snapshot_hash: str,
     when: str,
     cross: CrossFeed | None = None,
+    season_start_year: int = 2022,
 ) -> Rows:
     kind = GAME_PREFIXES[game.game_id[:3]]
     cross = cross or CrossFeed()
@@ -219,11 +223,29 @@ def _build_game(
     periods_match = None
     substitutions_match = None
     periods = reference.periods if reference is not None else {}
-    final_match = periods[max(periods)] == (game.home_points, game.away_points) if periods else None
     labels = _strata(events, periods)
+    undesignated = not game.home_designated
+    if undesignated:
+        # The box log has no home flag for either team. V2's description columns designate
+        # the sides, and the V3 terminal-score check below confirms them against the box.
+        designated = designate_home(game, events)
+        if designated is not None:
+            game = designated
+            labels.append("v2_home_designation")
+            warning = GameIssue(
+                "v2_home_designation",
+                "Box log has no home flag; V2 description columns designated the home team",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+    final_match = periods[max(periods)] == (game.home_points, game.away_points) if periods else None
     try:
         if not events:
             raise GameIssue("missing_v2_game", "Expected game is absent from V2 events")
+        if not game.home_designated:
+            raise GameIssue(
+                "unresolved_home_designation",
+                "Box log has no home flag and V2 does not designate the home team",
+            )
         if reference is None or final_match is not True:
             raise GameIssue("v3_box_final_mismatch", "V3 terminal score differs from the team box")
         raw = deduplicate_events(events)
@@ -400,7 +422,7 @@ def _build_game(
         issues.append(_issue_row(game.game_id, len(issues) + 1, error, "quarantine", failures))
 
     rows.update(
-        game=[_game_row(game, kind, sources[0], when)],
+        game=[_game_row(game, kind, sources[0], when, season_start_year)],
         game_stream=[
             {
                 "game_id": game.game_id,
@@ -440,21 +462,23 @@ def _season_games(
     scratch: Path,
     snapshot_hash: str,
     when: str,
+    season_start_year: int = 2022,
 ) -> Iterator[Rows]:
     games, players = box_scores(connection, snapshot_dir)
     expected = chosen or set(games)
     if expected - games.keys():
         raise ValueError("Requested games must exist in the regular season or playoff box logs")
+    year = season_start_year
 
     for season_type, suffix in SUFFIXES.items():
         wanted = {game_id for game_id in expected if GAME_PREFIXES[game_id[:3]] == season_type}
         if not wanted:
             continue
-        raw_name = f"nbastats{suffix}_2022.tar.xz"
-        shot_name = f"shotdetail{suffix}_2022.tar.xz"
-        v3_name = f"nbastatsv3{suffix}_2022.tar.xz"
-        live_name = f"cdnnba{suffix}_2022.tar.xz"
-        datanba_name = f"datanba{suffix}_2022.tar.xz"
+        raw_name = f"nbastats{suffix}_{year}.tar.xz"
+        shot_name = f"shotdetail{suffix}_{year}.tar.xz"
+        v3_name = f"nbastatsv3{suffix}_{year}.tar.xz"
+        live_name = f"cdnnba{suffix}_{year}.tar.xz"
+        datanba_name = f"datanba{suffix}_{year}.tar.xz"
         shots = shot_rows(snapshot_dir / shot_name)
         reference_games = v3_games(snapshot_dir / v3_name)
         feeds = cross_feeds(snapshot_dir / live_name, snapshot_dir / datanba_name)
@@ -486,6 +510,7 @@ def _season_games(
                     snapshot_hash,
                     when,
                     feeds.get(game_id),
+                    year,
                 )
                 remaining.remove(game_id)
         for game_id in sorted(remaining):
@@ -499,6 +524,7 @@ def _season_games(
                 scratch,
                 snapshot_hash,
                 when,
+                season_start_year=year,
             )
 
 
@@ -539,6 +565,7 @@ def build_pilot(
     if re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
         raise ValueError("Record a full Git commit for the pilot build")
     snapshot = load_snapshot(snapshot_dir)
+    year = snapshot["season_start_year"]
     snapshot_hash = sha256_file(snapshot_dir / "snapshot.json")
     sources = {row["name"]: row for row in snapshot["artifacts"]}
     when = utc_now()
@@ -549,13 +576,20 @@ def build_pilot(
             staging = Path(temp)
             connection.execute("SET temp_directory = ?", [str(staging / "duckdb-spill")])
             games = _season_games(
-                connection, snapshot_dir, sources, chosen or set(), staging, snapshot_hash, when
+                connection,
+                snapshot_dir,
+                sources,
+                chosen or set(),
+                staging,
+                snapshot_hash,
+                when,
+                year,
             )
             artifacts = write_tables(connection, games, staging, output)
             results = summarize_reviews(read_game_reviews(connection, output))
         manifest: dict[str, object] = {
             "schema_version": 1,
-            "season_start_year": 2022,
+            "season_start_year": year,
             "selected_game_ids": sorted(chosen) if chosen else None,
             "code_commit": code_commit,
             "generated_at": when,
@@ -581,7 +615,6 @@ def main() -> None:
     cli = argparse.ArgumentParser(description=__doc__)
     subcommands = cli.add_subparsers(dest="action", required=True)
     capture = subcommands.add_parser("capture", help="capture all pinned source bytes")
-    capture.add_argument("snapshot_dir", type=Path)
     build = subcommands.add_parser("build", help="create a new, independently reconciled dataset")
     build.add_argument("snapshot_dir", type=Path)
     build.add_argument("output_dir", type=Path)
@@ -590,7 +623,19 @@ def main() -> None:
     evidence = subcommands.add_parser(
         "capture-evidence", help="capture pinned comparison feeds that never enter a build"
     )
-    evidence.add_argument("snapshot_dir", type=Path)
+    for parser in (capture, evidence):
+        parser.add_argument("snapshot_dir", type=Path)
+        parser.add_argument(
+            "--season",
+            type=int,
+            default=2022,
+            help="season start year with pinned sources (default 2022, meaning 2022–23)",
+        )
+        parser.add_argument(
+            "--from-local",
+            type=Path,
+            help="copy and verify already captured bytes from this directory; no network",
+        )
     compare = subcommands.add_parser(
         "evidence", help="compare an exported build with the pinned evidence feeds"
     )
@@ -611,19 +656,25 @@ def main() -> None:
         if failed:
             raise SystemExit(1)
     elif args.action == "evidence":
-        load_snapshot(args.evidence_dir, EVIDENCE_SOURCES)
         recorded = json.loads((args.output_dir / "manifest.json").read_text(encoding="utf-8"))
+        year = recorded["season_start_year"]
+        load_snapshot(args.evidence_dir, season_evidence_sources(year), year)
         if recorded["source_snapshot_sha256"] != sha256_file(args.snapshot_dir / "snapshot.json"):
             raise SystemExit("The build was not made from this source snapshot")
-        report = compare_evidence(args.output_dir, args.snapshot_dir, args.evidence_dir)
+        report = compare_evidence(args.output_dir, args.snapshot_dir, args.evidence_dir, year)
         if args.report:
             write_json(args.report, report)
         print(json.dumps(report, indent=2, default=str))
     elif args.action == "capture-evidence":
-        snapshot = capture_snapshot(args.snapshot_dir, EVIDENCE_SOURCES)
+        snapshot = capture_snapshot(
+            args.snapshot_dir,
+            season_evidence_sources(args.season),
+            args.season,
+            args.from_local,
+        )
         print(f"Verified {len(snapshot['artifacts'])} private evidence files. {ATTRIBUTION}.")
     elif args.action == "capture":
-        snapshot = capture_snapshot(args.snapshot_dir)
+        snapshot = capture_snapshot(args.snapshot_dir, None, args.season, args.from_local)
         print(f"Verified {len(snapshot['artifacts'])} private inputs. {ATTRIBUTION}.")
     else:
         manifest = build_pilot(

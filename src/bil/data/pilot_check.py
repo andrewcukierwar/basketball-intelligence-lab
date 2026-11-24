@@ -209,7 +209,9 @@ def _prepare(connection: duckdb.DuckDBPyConnection, output: Path, snapshot: Path
     )
 
 
-def _same_offense_violations(connection: duckdb.DuckDBPyConnection, snapshot: Path) -> int:
+def _same_offense_violations(
+    connection: duckdb.DuckDBPyConnection, snapshot: Path, season_start_year: int = 2022
+) -> int:
     """Check within-period pairs against unresolved status and original V2 foul codes."""
     pairs = connection.execute(
         """
@@ -236,7 +238,8 @@ def _same_offense_violations(connection: duckdb.DuckDBPyConnection, snapshot: Pa
     ).fetchall()
     candidate_games = {game_id for game_id, events in pairs if events}
     flagrant_fouls: set[tuple[str, str]] = set()
-    for prefix, filename in (("002", "nbastats_2022"), ("004", "nbastats_po_2022")):
+    year = season_start_year
+    for prefix, filename in (("002", f"nbastats_{year}"), ("004", f"nbastats_po_{year}")):
         if not any(game_id.startswith(prefix) for game_id in candidate_games):
             continue
         for row in archive_rows(snapshot / f"{filename}.tar.xz"):
@@ -273,7 +276,7 @@ def check_build(output: Path, snapshot: Path) -> dict[str, int]:
             ).fetchone()
             results[f"no_quarantined_rows_in_{table}"] = row[0] if row else -1
         results["consecutive_offenses_accounted_for"] = _same_offense_violations(
-            connection, snapshot
+            connection, snapshot, manifest["season_start_year"]
         )
         for name, sql in CHECKS.items():
             row = connection.execute(sql).fetchone()

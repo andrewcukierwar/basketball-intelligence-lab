@@ -40,6 +40,47 @@ class GameBox:
     away_id: int
     home_points: int
     away_points: int
+    # False when the box log leaves the home flag null for both teams, as it does for some
+    # 2024–25 neutral-site games. The home/away order is then provisional until V2 designates it.
+    home_designated: bool = True
+
+
+def designate_home(game: GameBox, events: list[RawEvent]) -> GameBox | None:
+    """Take the home side from V2, where each team's actions appear in one description column.
+
+    Counts events whose PLAYER1 team is set and that carry exactly one of the home and visitor
+    descriptions. Both box teams must appear, each always on one side and on opposite sides.
+    """
+    sides: dict[str, set[str]] = defaultdict(set)
+    for raw in events:
+        row = raw.fields
+        team = row.get("PLAYER1_TEAM_ID", "")
+        home = row.get("HOMEDESCRIPTION", "") not in ("", "NA")
+        visitor = row.get("VISITORDESCRIPTION", "") not in ("", "NA")
+        if team not in ("", "NA") and home != visitor:
+            sides[team].add("home" if home else "away")
+    teams = {str(game.home_id), str(game.away_id)}
+    if sides.keys() != teams or any(len(side) != 1 for side in sides.values()):
+        return None
+    if {side for values in sides.values() for side in values} != {"home", "away"}:
+        return None
+    if sides[str(game.home_id)] == {"home"}:
+        return GameBox(
+            game.game_id,
+            game.played_date,
+            game.home_id,
+            game.away_id,
+            game.home_points,
+            game.away_points,
+        )
+    return GameBox(
+        game.game_id,
+        game.played_date,
+        game.away_id,
+        game.home_id,
+        game.away_points,
+        game.home_points,
+    )
 
 
 @dataclass(frozen=True)
@@ -206,16 +247,21 @@ def box_scores(
         if len(sides) != 2:
             raise ValueError(f"Expected two box-score teams for {game_id}")
         home, away = sides
+        # Both flags null: keep a provisional, deterministic order for V2 to designate later.
+        undesignated = home[4] is None and away[4] is None
+        if undesignated and int(home[2]) > int(away[2]):
+            home, away = away, home
         if not (
-            home[4] is True
-            and away[4] is False
+            (undesignated or (home[4] is True and away[4] is False))
             and home[1] == away[1]
             and home[2] == away[3]
             and away[2] == home[3]
             and home[2] != away[2]
         ):
             raise ValueError(f"Conflicting box-score team rows for {game_id}")
-        games[game_id] = GameBox(game_id, home[1], int(home[2]), int(away[2]), home[5], away[5])
+        games[game_id] = GameBox(
+            game_id, home[1], int(home[2]), int(away[2]), home[5], away[5], not undesignated
+        )
     players: dict[str, dict[int, PlayerBox]] = defaultdict(dict)
     for game_id, player_id, team_id, minutes, plus_minus in connection.execute(
         """
