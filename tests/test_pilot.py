@@ -402,6 +402,47 @@ def test_back_to_back_possessions_are_recorded_not_raised() -> None:
     assert flagged == {3, 4}
 
 
+def test_same_offense_pairs_require_unresolved_rows_or_a_nearby_flagrant(tmp_path: Path) -> None:
+    from bil.data.pilot_check import _same_offense_violations
+
+    raw = b"GAME_ID,EVENTNUM,EVENTMSGTYPE,EVENTMSGACTIONTYPE\n22200001,50,6,14\n22200001,51,6,1\n"
+    with tarfile.open(tmp_path / "nbastats_2022.tar.xz", "w:xz") as archive:
+        member = tarfile.TarInfo("events.csv")
+        member.size = len(raw)
+        archive.addfile(member, io.BytesIO(raw))
+
+    with duckdb.connect() as connection:
+        connection.execute(
+            """
+            create table possession as
+            select '0022200001' as game_id, 1 as stream_revision, * from (values
+                (1, 1, 1, 3, '100', 'accepted'),
+                (2, 1, 4, 6, '200', 'accepted'),
+                (3, 1, 6, 8, '200', 'excluded'),
+                (4, 2, 8, 10, '200', 'accepted')
+            ) as rows(possession_seq, period, start_seq, end_seq, offense_team_id, status);
+
+            create table event as
+            select '0022200001' as game_id, 1 as stream_revision,
+                   2 as seq, 'foul' as kind, '50' as source_event_id;
+            """
+        )
+        # A flagrant in the possession before the earlier one is an exemption.
+        assert _same_offense_violations(connection, tmp_path) == 0
+        connection.execute("update event set seq = 4")
+        assert _same_offense_violations(connection, tmp_path) == 0
+        connection.execute("update event set source_event_id = '51'")
+        assert _same_offense_violations(connection, tmp_path) == 1
+        connection.execute("update event set seq = 3, source_event_id = '50'")
+        assert _same_offense_violations(connection, tmp_path) == 1
+        connection.execute("update event set seq = 6")
+        assert _same_offense_violations(connection, tmp_path) == 1
+        connection.execute("update possession set status = 'unresolved' where possession_seq = 3")
+        assert _same_offense_violations(connection, tmp_path) == 1
+        connection.execute("update possession set status = 'unresolved' where possession_seq = 2")
+        assert _same_offense_violations(connection, tmp_path) == 0
+
+
 def test_box_credit_search_moves_only_same_clock_credit(monkeypatch: pytest.MonkeyPatch) -> None:
     from bil.data.pilot_normalize import CreditChoice, TimedEvent, choose_box_credits
 
