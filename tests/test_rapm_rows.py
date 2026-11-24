@@ -360,8 +360,8 @@ def test_pilot_ledger_gaps_block_the_build(tmp_path: Path, mutation: Mutation, c
 def test_no_action_possession_is_excluded_but_kept_in_the_ledger(tmp_path: Path) -> None:
     pilot, pin = _pilot(tmp_path, _no_action)
     output = tmp_path / "out"
-    manifest = build_rows(pilot, output, COMMIT, pin, "A")
-    assert manifest["variant"] == "A"
+    manifest = build_rows(pilot, output, COMMIT, pin, "no_action")
+    assert manifest["variant"] == "no_action"
     rows = _read(
         output,
         "select possession_seq, reason, exposure, control_points, action_events, "
@@ -404,17 +404,17 @@ def test_ineligible_dispositions_carry_no_lineup_ids(tmp_path: Path) -> None:
     assert [(r[2], r[3]) for r in rows] == [(e, e) for e in (False, True, True, True, False, False)]
 
 
-def test_variant_b_excludes_period_end_pseudo_possessions_only(tmp_path: Path) -> None:
+def test_period_end_start_variant_excludes_only_those_possessions(tmp_path: Path) -> None:
     pilot, pin = _pilot(tmp_path, _period_end_start)
     output = tmp_path / "out"
-    manifest = build_rows(pilot, output, COMMIT, pin)
-    assert manifest["variant"] == "B"
+    manifest = build_rows(pilot, output, COMMIT, pin, "period_end_start")
+    assert manifest["variant"] == "period_end_start"
     rows = _read(
         output,
         "select possession_seq, reason, exposure, offense_lineup_id is null "
         "from '@/possession_disposition.parquet' order by 1",
     )
-    assert rows[4] == (5, "period_end_pseudo", 0, True)
+    assert rows[4] == (5, "period_end_start", 0, True)
     assert [r[1] for r in rows if r[0] != 5] == [
         "eligible",
         "multiple_lineups",
@@ -426,25 +426,25 @@ def test_variant_b_excludes_period_end_pseudo_possessions_only(tmp_path: Path) -
         (1,),
         (6,),
     ]
-    assert manifest["reconciliation"]["all|all"]["period_end_pseudo_possessions"] == 1  # type: ignore[index]
+    assert manifest["reconciliation"]["all|all"]["period_end_start_possessions"] == 1  # type: ignore[index]
     assert not any(manifest["identity_violations"].values())  # type: ignore[attr-defined]
 
 
-def test_variant_b_keeps_outcome_free_possessions_and_c_keeps_everything(tmp_path: Path) -> None:
+def test_canonical_is_the_default_and_keeps_every_pilot_eligible_possession(tmp_path: Path) -> None:
     def both(data: dict[str, Any]) -> None:
         _no_action(data)
         _period_end_start(data)
         data["first_kinds"] = {}
 
     pilot, pin = _pilot(tmp_path, both)
-    kept = build_rows(pilot, tmp_path / "b", COMMIT, pin, "B")
-    assert kept["reconciliation"]["all|all"]["eligible_possessions"] == 3  # type: ignore[index]
-    everything = build_rows(pilot, tmp_path / "c", COMMIT, pin, "C")
-    assert everything["reconciliation"]["all|all"]["eligible_possessions"] == 3  # type: ignore[index]
-    dropped = build_rows(pilot, tmp_path / "a", COMMIT, pin, "A")
+    default = build_rows(pilot, tmp_path / "d", COMMIT, pin)
+    assert default["variant"] == "canonical"
+    assert default["reconciliation"]["all|all"]["eligible_possessions"] == 3  # type: ignore[index]
+    shifted = build_rows(pilot, tmp_path / "p", COMMIT, pin, "period_end_start")
+    assert shifted["reconciliation"]["all|all"]["eligible_possessions"] == 3  # type: ignore[index]
+    dropped = build_rows(pilot, tmp_path / "n", COMMIT, pin, "no_action")
     assert dropped["reconciliation"]["all|all"]["eligible_possessions"] == 2  # type: ignore[index]
-    assert len({kept["build_id"], everything["build_id"], dropped["build_id"]}) == 3 or (
-        kept["build_id"] != dropped["build_id"]
-    )
+    assert dropped["build_id"] != default["build_id"]
+    assert shifted["build_id"] != default["build_id"]
     with pytest.raises(ValueError, match="variant"):
         build_rows(pilot, tmp_path / "x", COMMIT, pin, "Z")

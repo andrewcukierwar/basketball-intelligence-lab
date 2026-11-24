@@ -42,18 +42,21 @@ OUTPUT_TABLES = (
 REASONS = (
     "eligible",
     "multiple_lineups",
-    "period_end_pseudo",
+    "period_end_start",
     "no_action",
     "pilot_excluded",
     "unresolved_control",
 )
-# Canonical variant B excludes accepted possessions whose first event is ``period_end``. A is the
-# outcome-based no-action exclusion kept as a sensitivity alternative. C keeps everything.
-VARIANTS = ("B", "A", "C")
+# The canonical variant keeps every accepted stable-lineup possession, so its rows equal the
+# pilot-eligible set: the pilot already excludes starts with under 3 s left (ADR-0019). The other
+# two are sensitivity alternatives. ``period_end_start`` drops accepted possessions whose first
+# event is ``period_end``, which are run-outs after a change of control. ``no_action`` drops
+# accepted possessions with no shot, free throw, turnover, foul or violation event.
+VARIANTS = ("canonical", "period_end_start", "no_action")
 EXCLUSION = {
-    "B": ("period_end_pseudo", "coalesce(a.first_kind, '') = 'period_end'"),
-    "A": ("no_action", "a.action_events = 0"),
-    "C": ("none", "false"),
+    "period_end_start": ("period_end_start", "coalesce(a.first_kind, '') = 'period_end'"),
+    "no_action": ("no_action", "a.action_events = 0"),
+    "canonical": ("none", "false"),
 }
 # Events that give a possession a player-attributable outcome. A possession with none of them
 # inside its own half-open sequence interval is a no-action (run-out) possession.
@@ -176,7 +179,7 @@ WITH d AS (
          count(*) FILTER (reason = 'eligible') AS eligible,
          count(*) FILTER (reason = 'multiple_lineups') AS multiple_lineups,
          count(*) FILTER (reason = 'no_action') AS no_action,
-         count(*) FILTER (reason = 'period_end_pseudo') AS period_end_pseudo,
+         count(*) FILTER (reason = 'period_end_start') AS period_end_start,
          count(*) FILTER (reason = 'pilot_excluded') AS pilot_excluded,
          count(*) FILTER (reason = 'unresolved_control') AS unresolved_control,
          count(*) FILTER (reason = 'eligible' AND offense_team_id = home_team_id)
@@ -194,7 +197,7 @@ SELECT g.game_id, g.season_type, g.strata, g.accepted, g.quarantine_reason, g.st
        coalesce(d.possessions, 0) AS possessions, coalesce(d.eligible, 0) AS eligible,
        coalesce(d.multiple_lineups, 0) AS multiple_lineups,
        coalesce(d.no_action, 0) AS no_action,
-       coalesce(d.period_end_pseudo, 0) AS period_end_pseudo,
+       coalesce(d.period_end_start, 0) AS period_end_start,
        coalesce(d.pilot_excluded, 0) AS pilot_excluded,
        coalesce(d.unresolved_control, 0) AS unresolved_control,
        coalesce(d.home_model_offense_exposure, 0) AS home_model_offense_exposure,
@@ -319,11 +322,11 @@ CHECKS = {
                      count(*) filter (status = 'excluded') e,
                      count(*) filter (status = 'unresolved') u
                    from possession group by game_id) p using (game_id)
-        where r.possessions <> r.eligible + r.multiple_lineups + r.no_action + r.period_end_pseudo
+        where r.possessions <> r.eligible + r.multiple_lineups + r.no_action + r.period_end_start
                                + r.pilot_excluded
                                + r.unresolved_control
            or r.possessions <> coalesce(p.n, 0)
-           or r.eligible + r.multiple_lineups + r.no_action + r.period_end_pseudo
+           or r.eligible + r.multiple_lineups + r.no_action + r.period_end_start
               <> coalesce(p.a, 0)
            or r.pilot_excluded <> coalesce(p.e, 0) or r.unresolved_control <> coalesce(p.u, 0)
            or (not r.accepted and r.possessions + r.allocations <> 0)""",
@@ -368,20 +371,20 @@ CHECKS = {
 
 # Checks that apply to one exclusion variant only.
 VARIANT_CHECKS = {
-    "A": {
+    "no_action": {
         "no_action_possessions_have_no_events_and_score_zero": """
         select count(*) from possession_disposition
         where (reason = 'no_action') <> (pilot_status = 'accepted' and action_events = 0)
            or (reason = 'no_action' and control_points <> 0)"""
     },
-    "B": {
-        "period_end_pseudo_possessions_start_on_period_end_and_score_zero": """
+    "period_end_start": {
+        "period_end_start_possessions_start_on_period_end_and_score_zero": """
         select count(*) from possession_disposition
-        where (reason = 'period_end_pseudo')
+        where (reason = 'period_end_start')
               <> (pilot_status = 'accepted' and first_event_kind = 'period_end')
-           or (reason = 'period_end_pseudo' and (control_points <> 0 or action_events <> 0))"""
+           or (reason = 'period_end_start' and (control_points <> 0 or action_events <> 0))"""
     },
-    "C": {},
+    "canonical": {},
 }
 
 
@@ -465,7 +468,7 @@ def build_rows(
     output: Path,
     code_commit: str,
     pilot_manifest_sha256: str,
-    variant: str = "B",
+    variant: str = "canonical",
 ) -> dict[str, object]:
     if variant not in VARIANTS:
         raise ValueError(f"Unknown exclusion variant {variant}")
@@ -606,9 +609,9 @@ def main() -> None:
     cli.add_argument(
         "--variant",
         choices=VARIANTS,
-        default="B",
-        help="B excludes period-end pseudo-possessions (canonical), A the no-action "
-        "possessions (sensitivity), C keeps all",
+        default="canonical",
+        help="canonical keeps all accepted stable-lineup possessions; period_end_start and "
+        "no_action are sensitivity exclusions",
     )
     args = cli.parse_args()
     manifest = build_rows(
