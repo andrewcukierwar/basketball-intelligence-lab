@@ -4,7 +4,7 @@
 
 ## Select the cohort
 
-Pin the pilot manifest, its source snapshot and its manifest-listed table digests. Use its accepted, complete final streams for the 2022–23 regular season and playoffs. Within that snapshot, resolve the game revision through each stream's official game revision. Join possession, stint, lineup and score allocation on both game ID and stream revision. Quarantined games contribute one game disposition and zero modeling rows. Report regular-season and playoff coverage separately, including the overlapping adjudication strata in the pilot's game review.
+Pin the pilot manifest, its source snapshot and its manifest-listed table digests. Use its accepted, complete final streams for the 2022–23 regular season and playoffs. Within that snapshot, resolve the game revision through each stream's official game revision. Join possession, stint, lineup and score allocation on both game ID and stream revision. Quarantined games contribute one game disposition and zero modeling rows. Report regular-season and playoff coverage separately, including the overlapping adjudication strata in the pilot's game review. The same contract applies to the other pinned seasons built in #93; see the multi-season section of [docs/data-pilot.md](../data-pilot.md).
 
 The pilot has played dates but lacks verified historical publication times and earlier revisions. Carry the game date, stream availability time and basis from the pinned inputs. Use those rows for retrospective chronological analysis. Strict rolling-origin availability at historical game dates is unavailable for this snapshot. Apply the separate [evaluation contract](../validation-strategy.md) before any dated fit.
 

@@ -41,3 +41,15 @@ Independent review has not been run.
 ## Next actions
 
 Independent review of the diff, then push and PR on the lead's authorization. The row sets are the input for the #26 fits, which remain unauthorized here.
+
+## Independent review
+
+A fresh Opus reviewer approved with no blocking findings. It checked the following:
+- **2022–23:** byte-identical reproduction.
+- **2021–22:** its own interval-overlap query gave 223,043 eligible and 32,974 multiple-lineup possessions, matching the build.
+- **`build_id`:** all seven are distinct.
+- **Snapshots and inputs:** the raw snapshot and archive digests and all pinned inputs match for every season.
+
+Non-blocking follow-ups:
+- The builder copies the snapshot digest rather than re-hashing it. The docs now say so.
+- No real season contains a null-team quarantined game, so only the synthetic fixture covers that path.
