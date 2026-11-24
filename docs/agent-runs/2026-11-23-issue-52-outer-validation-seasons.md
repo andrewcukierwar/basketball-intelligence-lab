@@ -79,3 +79,23 @@ Constraints:
 - Run an independent review of the diff from `5ed99fb`, then decide on push and PR.
 - Ask the maintainer whether the 0.1% unresolved-possession limit applies per season type.
 - Consider a follow-up issue on box-log minute-total defects and on unresolved-possession boundaries before #26.
+
+## Independent review
+
+A fresh Opus reviewer approved d38d286 with no blocking findings. It made these checks independently:
+- **2022–23 rebuild:** row counts match for all 10 tables, EXCEPT ALL finds 0 differing rows in either direction once `ingested_at` is excluded, and eight Parquet files are byte-identical.
+- **Home designation:** V3 confirms the V2 orientation for all five null-flag games. A wrong swap would fail `v3_box_final_mismatch`.
+- **Pins:** all 60 code pins match the #51 register.
+- **Results:** game and quarantine counts match the docs.
+- **Holdout:** `pinned_season` refuses 2025 and later.
+- **Network:** the test suite made no network connections.
+
+It did not rerun `evidence`, so the external-agreement figures are the implementer's.
+
+Nonblocking items are tracked as a follow-up:
+- `check` should validate the season against the holdout allow-list itself.
+- `snapshot_season` is unused.
+- A quarantined game keeps its provisional home orientation.
+- The accepted and contradicted designation paths need `_build_game` tests.
+
+Open maintainer decision: whether the M1 0.1% unresolved-possession limit applies per season type. The 2024–25 playoffs are at 0.135%, while the whole season is at 0.070%.
