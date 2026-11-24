@@ -235,6 +235,24 @@ V2 remains the event source of record.
 - **Consequences:** Players with no history get the league rate. Single-season retrospective evidence; outer seasons must confirm before any default is fixed.
 - **Links:** [Issue #32](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/32), [ADR-0016](#adr-0016--fixed-constant-baselines-and-season-type-keyed-history-for-skill-targets)
 
+## ADR-0020 — Build without liveData where the archive lacks it, as a weaker-verification stratum
+
+- **Date:** 2026-11-23
+- **Status:** Accepted for the 2017–18 through 2021–22 builds ([#25](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/25)). ADR-0018 and ADR-0019 are reserved for other work.
+- **Evidence class:** Original BIL design.
+- **Context:** The #51 register records NBA liveData (`cdnnba`) as absent from the pinned Shufinskiy inventory for 2017–18, 2018–19 and 2019–20. The pilot read liveData as a required build input under ADR-0011, so those seasons could not be built.
+- **Decision:**
+  - Pin every other feed for these seasons. The snapshot omits liveData, and the build passes no liveData to the cross-feed reader.
+  - Without liveData, ADR-0011's starter rule falls back to the box-guided search. Its V3 period-defect rule cannot be met, so those games stay quarantined. The data.nba relabel rule still applies.
+  - Label every game without liveData evidence `no_livedata`, a lower-trust stratum in `evidence`.
+  - `evidence` stages an empty liveData table for such a season and adds a V3 versus data.nba period comparison.
+  - Acceptance thresholds do not change.
+- **Evidence:** 2019–20 meets every M1 threshold without liveData. Its lineups agree with Bentes on 99.97% of court time, and all 20 box-inferred starter team-periods match Bentes. Its 3 V3 period-score quarantines are exactly the 3 games where V3 and data.nba disagree. The 2022–23 rebuild is row-identical to `issue-19-v6` apart from `ingested_at`.
+- **Consequences:**
+  - Seasons before 2020–21 have weaker verification for starters and period scores. Downstream fits should treat `no_livedata` as a sensitivity stratum.
+  - Any other missing feed is still an error.
+- **Links:** [Development seasons](data-pilot.md#development-seasons-201718-through-202122), [Feed coverage audit](research/nba-feed-coverage.md)
+
 ## Decision template
 
 ### ADR-XXXX — Title

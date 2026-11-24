@@ -30,7 +30,7 @@ Then check the exported tables independently. The check reads the output tables,
   data/raw/2022-23/issue-5-v2
 ```
 
-The same commands build other pinned seasons. Seasons are keyed by starting year, and `build`, `check` and `evidence` read the season recorded in the snapshot or manifest. `capture` and `capture-evidence` take `--season` (default `2022`). `--from-local DIR` copies already captured bytes instead of downloading them and checks every pin. Pins exist for 2022–23 through 2024–25 only. The 2025–26 holdout and later seasons are refused under [#42](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/42). See [the outer-validation seasons](#outer-validation-seasons-202324-and-202425).
+The same commands build other pinned seasons. Seasons are keyed by starting year, and `build`, `check` and `evidence` read the season recorded in the snapshot or manifest. `capture` and `capture-evidence` take `--season` (default `2022`). `--from-local DIR` copies already captured bytes instead of downloading them and checks every pin. Pins exist for 2017–18 through 2024–25 only. The 2025–26 holdout and later seasons are refused under [#42](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/42). The pinned archive has no NBA liveData before 2020–21, so those snapshots omit it (ADR-0020). See [the outer-validation seasons](#outer-validation-seasons-202324-and-202425) and [the development seasons](#development-seasons-201718-through-202122).
 
 The possession check examines consecutive possession rows within each period, including parser-excluded rows. If they share an offense, both rows must be unresolved unless a flagrant foul occurred in the earlier possession or the possession immediately before it. The check looks up flagrant fouls in the pinned V2 archive by game and source event ID. This is the same within-period exception used by the pinned parser.
 
@@ -394,3 +394,162 @@ uv run python -m bil.features.skill_decay_build \
 ```
 
 Outputs, all Parquet except the manifest: `fits` (statistic, clock, fit window and cutoff, seed, parameters, objective, evaluations, bound hits), `clock_selection` (inner-fold losses per clock and the selected clock per outer block), `predictions` (outer-block targets with every clock's and baseline's prediction and pregame group fields), `scores` (log loss and weighted MSE levels, plus model-minus-baseline and clock deltas with game-clustered bootstrap intervals for the pooled blocks), `exclusions` (reason counts for every outer-block target), `snapshots` (date-specific skill estimates at each outer block's start) and `manifest.json` (inputs, frozen settings, #31 reconciliation, #31 unscored-target reasons, runtime and peak memory).
+
+## Development seasons: 2017–18 through 2021–22
+
+[Issue #25](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/25) builds the five seasons before 2022–23 with the pilot rules and the [M1 thresholds](#m1-acceptance-for-the-202223-pilot) unchanged. All five builds used commit `4b72175` and parser version `pbpstats-1.3.11-bil-v6` on 2026-11-23. The 2025–26 holdout was not built, and none of its payloads were read.
+
+### Result
+
+Two seasons meet every M1 threshold. Under the falsification rule in #25, the other three are recorded as **unavailable** for the #26 window. Their builds remain private evidence, and the thresholds were not changed.
+
+| Season | M1 status | Threshold missed |
+| --- | --- | --- |
+| 2017–18 | Unavailable | Regular-season game coverage is 85.5%, against a 97% floor. Unresolved possessions are 0.391%, against a 0.1% limit. The overtime (90.2%), technical-free-throw (84.6%) and same-clock-substitution (85.5%) regular-season strata are all below the 95% floor. |
+| 2018–19 | Unavailable | Regular-season overtime stratum is 58 of 67 (86.6%), against the 95% floor. Every other threshold passes. |
+| 2019–20 | Meets M1 | None. This is a weaker-verification season with no liveData. |
+| 2020–21 | Meets M1 | None. |
+| 2021–22 | Unavailable | Regular-season overtime stratum is 55 of 58 (94.8%), against the 95% floor. It misses by part of one game. Every other threshold passes. |
+
+Every build passes 26 of 26 `check` invariants. The 2018–19 and 2021–22 failures rest on small overtime denominators. Whether a stratum floor should make a whole season unavailable is a maintainer decision. It is not settled here.
+
+### Snapshots and commands
+
+Inputs and evidence were copied from the #51 audit capture with no network requests. Each copy was verified against the size and SHA-256 in the audit registers, and those pins are now in `pilot_sources.py`.
+
+```sh
+A=data/raw/historical-feed-audit/2026-11-23
+.venv/bin/python -m bil.data.pilot capture data/raw/2019-20/issue-25-v1 --season 2019 --from-local "$A"
+.venv/bin/python -m bil.data.pilot capture-evidence data/raw/2019-20/issue-25-evidence-v1 --season 2019 --from-local "$A"
+.venv/bin/python -m bil.data.pilot build data/raw/2019-20/issue-25-v1 \
+  data/processed/2019-20/issue-25-v1 --code-commit "$(git rev-parse HEAD)"
+.venv/bin/python -m bil.data.pilot check data/processed/2019-20/issue-25-v1 data/raw/2019-20/issue-25-v1
+.venv/bin/python -m bil.data.pilot evidence data/processed/2019-20/issue-25-v1 \
+  data/raw/2019-20/issue-25-v1 data/raw/2019-20/issue-25-evidence-v1
+```
+
+The other seasons use their own `--season` and directories. For 2017–18 through 2019–20, `capture` verifies 10 inputs and `capture-evidence` verifies 6 files. For 2020–21 and 2021–22, the counts are 12 and 8.
+
+`check-seasons` takes each build directory followed by its snapshot. It checks identity and chronology across seasons:
+- game IDs are unique, and each encodes its season and season type;
+- seasons do not overlap in date;
+- each team's playoff games follow its last regular-season game;
+- every on-court player belongs to that game's box team, so traded players are checked game by game.
+
+Run over these five builds and the 2022–23 rebuild, it found zero violations in 7,562 games. 452 player-seasons appear for more than one team in the box. The same 452 appear on court for more than one team, and 769 players appear in more than one season.
+
+### Weaker-verification stratum: no liveData before 2020–21
+
+The pinned archive has no NBA liveData (`cdnnba`) for 2017–18, 2018–19 or 2019–20. The #51 register already records this. These builds read data.nba alone, and every game carries the `no_livedata` stratum (ADR-0020). Without liveData:
+- starters after the first period always come from the box-guided search;
+- V3 period-score defects cannot be adjudicated, so those games stay quarantined;
+- the liveData evidence comparisons are empty.
+
+data.nba offense relabels, V3 order retries, Bentes and pbpstats.com remain available. `evidence` adds a V3 versus data.nba period comparison for these seasons.
+
+### Coverage
+
+| Season and type | Expected | Accepted | Quarantined | V3 period scores matched / checked | V3 substitutions matched / checked | V3 final matches box |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2017–18 regular | 1,230 | 1,052 (85.5%) | 178 | 1,052 / 1,053 | 1,228 / 1,228 | 1,228 / 1,230 |
+| 2017–18 playoffs | 82 | 80 (97.6%) | 2 | 80 / 80 | 82 / 82 | 82 / 82 |
+| 2018–19 regular | 1,230 | 1,206 (98.0%) | 24 | 1,206 / 1,206 | 1,230 / 1,230 | 1,230 / 1,230 |
+| 2018–19 playoffs | 82 | 80 (97.6%) | 2 | 80 / 80 | 82 / 82 | 82 / 82 |
+| 2019–20 regular | 1,059 | 1,041 (98.3%) | 18 | 1,041 / 1,044 | 1,056 / 1,056 | 1,059 / 1,059 |
+| 2019–20 playoffs | 83 | 82 (98.8%) | 1 | 82 / 82 | 83 / 83 | 83 / 83 |
+| 2020–21 regular | 1,080 | 1,072 (99.3%) | 8 | 1,071 / 1,072 | 1,080 / 1,080 | 1,080 / 1,080 |
+| 2020–21 playoffs | 85 | 85 (100%) | 0 | 85 / 85 | 85 / 85 | 85 / 85 |
+| 2021–22 regular | 1,230 | 1,219 (99.1%) | 11 | 1,216 / 1,219 | 1,228 / 1,228 | 1,228 / 1,230 |
+| 2021–22 playoffs | 87 | 87 (100%) | 0 | 87 / 87 | 87 / 87 | 87 / 87 |
+
+The 2019–20 and 2020–21 schedules were shortened by COVID-19, with 1,059 and 1,080 regular-season games. The 2019–20 restart games were played at one site. The box log flags a home team for all of them, so no game needed V2 home designation. Play-in games (prefix `005`) are outside scope, as before.
+
+| Season | Counted possessions | Parser-excluded | Unresolved possessions: regular / playoffs (share) | Season share | Points outside control / in unresolved possessions |
+| --- | ---: | ---: | --- | ---: | ---: |
+| 2017–18 | 218,906 | 2,481 | 865 in 260 games (0.418%) / 3 in 2 games (0.019%) | 0.391% | 1,047 / 946 |
+| 2018–19 | 256,845 | 2,769 | 165 in 81 games (0.068%) / 10 in 5 games (0.063%) | 0.067% | 1,356 / 194 |
+| 2019–20 | 225,227 | 2,377 | 77 in 41 games (0.036%) / 9 in 6 games (0.055%) | 0.038% | 1,247 / 90 |
+| 2020–21 | 229,190 | 2,499 | 57 in 33 games (0.026%) / 4 in 3 games (0.024%) | 0.026% | 1,219 / 49 |
+| 2021–22 | 256,017 | 2,746 | 64 in 40 games (0.026%) / 4 in 3 games (0.024%) | 0.026% | 1,533 / 77 |
+
+Accepted games by stratum, as accepted / total. Bold marks a value below the 95% floor.
+
+| Stratum | 2017–18 reg / po | 2018–19 reg / po | 2019–20 reg / po | 2020–21 reg / po | 2021–22 reg / po |
+| --- | --- | --- | --- | --- | --- |
+| Overtime | **55 / 61** · 4 / 4 | **58 / 67** · 4 / 4 | 68 / 69 · 6 / 6 | 56 / 56 · 3 / 3 | **55 / 58** · 1 / 1 |
+| Regulation | 997 / 1,169 · 76 / 78 | 1,148 / 1,163 · 76 / 78 | 973 / 990 · 76 / 77 | 1,016 / 1,024 · 82 / 82 | 1,164 / 1,172 · 86 / 86 |
+| Technical free throw | **622 / 735** · 38 / 40 | 759 / 776 · 43 / 45 | 663 / 674 · 47 / 47 | 630 / 635 · 43 / 43 | 784 / 794 · 47 / 47 |
+| Same-clock free-throw substitution | **1,052 / 1,230** · 80 / 82 | 1,206 / 1,230 · 80 / 82 | 1,041 / 1,056 · 82 / 83 | 1,072 / 1,080 · 85 / 85 | 1,218 / 1,229 · 87 / 87 |
+
+Games accepted under each rule, regular season plus playoffs. Every game in these strata was accepted.
+
+| Rule | 2017–18 | 2018–19 | 2019–20 | 2020–21 | 2021–22 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `no_livedata` (all games) | 1,132 | 1,286 | 1,123 | 0 | 0 |
+| `v3_event_order` | 119 | 208 | 61 | 71 | 109 |
+| `v3_primary_order` | 33 | 25 | 3 | 10 | 8 |
+| `inferred_starters` / `immaterial_starters` | 12 / 2 | 11 / 1 | 19 / 0 | 5 / 0 | 4 / 0 |
+| `livedata_starters` (team-periods) | — | — | — | 14 (15) | 10 (12) |
+| `v3_period_defect` | — | — | — | 1 | 3 |
+| `datanba_possession_labels` | 1 | 1 | 1 | 1 | 0 |
+| `unresolved_possessions` | 262 | 86 | 47 | 36 | 43 |
+| `same_clock_box_credit` | 29 | 18 | 26 | 15 | 22 |
+
+### Quarantines
+
+| Season and type | Games | Cause |
+| --- | ---: | --- |
+| 2017–18 regular | 99 | Parser error (`EventOrderError`). |
+| 2017–18 regular | 65 | Parser moved events across clocks. |
+| 2017–18 regular | 14 | Period start not established (4), player plus-minus differs from the box (4), parser `AttributeError` (2), V3 final differs from the box (2), no candidate starters reconcile (1), and V3 period scores differ (1). |
+| 2017–18 playoffs | 2 | Parser moved events across clocks. |
+| 2018–19 regular | 24 | Parser moved events across clocks (10), period start not established (4), `EventOrderError` (4), plus-minus differs (3, two with several matching credit sets), no candidate starters reconcile because every candidate moves events across clocks (2), and a missing period end (1). |
+| 2018–19 playoffs | 2 | Plus-minus differs for 4 players (1) and parser moved events across clocks (1). |
+| 2019–20 regular | 18 | Plus-minus differs (5), parser moved events across clocks (5), game absent from V2 (3, `0021901316` to `0021901318`, as the #51 audit found), V3 period scores differ (3), `EventOrderError` (1), and no candidate starters reconcile (1). |
+| 2019–20 playoffs | 1 | Parser moved events across clocks. |
+| 2020–21 regular | 8 | Parser moved events across clocks (5), `EventOrderError` (1), plus-minus differs (1), and a substitution that conflicts with active IDs (1). |
+| 2021–22 regular | 11 | Parser moved events across clocks (4), `EventOrderError` (3), V3 final differs from the box (2), and plus-minus with several matching credit sets (2). |
+
+**2017–18.** 158 of the 178 regular-season quarantines are from October to December 2017. In those months, 57 of 104, 81 of 213 and 20 of 227 games were quarantined. From January the rate is at most 5% a month. 773 of the 868 unresolved possessions are also from October 2017 to January 2018. Almost all of these failures are event-order failures that the V3 retries could not repair. External agreement is also weakest in this season. Counted possessions equal pbpstats.com's in only 871 of 1,132 games. 31 of the 119 `v3_event_order` games show data.nba order reversals. This points to a defect in the early-season V2 event order (Inferred). It was not investigated further, and no new rule was added for it.
+
+**Period scores without liveData.** The 3 games that 2019–20 quarantines for V3 period scores are exactly the 3 where V3 and data.nba disagree on a period. This fits a V3 defect that ADR-0011 could recover if liveData were archived (Inferred). In 2021–22, the two games where the V3 final differs from the box are also games where V3 alone disagrees with liveData and data.nba. This resembles `0022301202` in 2023–24, but the box was not compared with those feeds here. Both stay quarantined.
+
+### External verification
+
+| Comparison | 2017–18 | 2018–19 | 2019–20 | 2020–21 | 2021–22 |
+| --- | --- | --- | --- | --- | --- |
+| Lineups vs Bentes, time-weighted; all accepted games covered | 99.97%; lowest 99.85% | 99.97%; lowest 99.84% | 99.97%; lowest 99.82% | 99.97%; lowest 99.86% | 99.97%; lowest 99.83% |
+| Disagreements over 2 s | 0 | 0 | 0 | 0 | 0 |
+| Starter team-periods matching Bentes (liveData-set / box-inferred) | — / 13 of 13 | — / 13 of 13 | — / 20 of 20 | 15 of 15 / 5 of 5 | 12 of 12 / 4 of 4 |
+| Live-ball offense vs data.nba, accepted possessions | 273,072 / 273,124 | 322,801 / 322,861 | 282,121 / 282,175 | 285,045 / 285,155 | 321,446 / 321,537 |
+| Counted possessions vs pbpstats.com, games equal / within two | 871 / 942 of 1,132 | 1,185 / 1,227 of 1,286 | 1,060 / 1,104 of 1,123 | 1,111 / 1,153 of 1,157 | 1,257 / 1,301 of 1,306 |
+| Period-end scores, liveData vs data.nba | — | — | — | 4,716 / 4,723 | 5,336 / 5,336 |
+| Period-end scores, V3 vs data.nba | 5,288 / 5,321 | 5,337 / 5,337 | 4,634 / 4,637 | 4,715 / 4,723 | 5,327 / 5,336 |
+| V3-ordered games with any data.nba order reversal: `v3_event_order` / `v3_primary_order` | 31 of 119 / 16 of 33 | 11 of 208 / 3 of 25 | 0 of 61 / 0 of 3 | 1 of 71 / 3 of 10 | 4 of 109 / 0 of 8 |
+
+For 2020–21 and 2021–22, live-ball offense against liveData gives 285,462 / 285,520 and 321,358 / 321,449 events. In 2020–21, data.nba alone differs on period scores in four games, three of them playoff games. V3 alone differs in `0022000750`, which is the accepted `v3_period_defect`. Bentes documents an older process for the 2020–21 playoffs. BIL's lineups still agree with it on 99.97% of court time over the season.
+
+Lineup and offense agreement in 2018–19 through 2021–22 is as strong as in 2022–23. In 2017–18, agreement on accepted games is also high. The low game coverage and weak pbpstats.com agreement come from the excluded early-season games and the unresolved possessions.
+
+### Runtime and memory
+
+Builds ran one at a time on the maintainer's Apple-silicon Mac. Times are wall-clock, and the peak resident set comes from `/usr/bin/time -l`.
+
+| Build | Time | Peak RSS |
+| --- | ---: | ---: |
+| 2017–18 | 62.4 s | 0.82 GB |
+| 2018–19 | 61.1 s | 0.85 GB |
+| 2019–20 | 55.9 s | 0.82 GB |
+| 2020–21 | 57.3 s | 0.76 GB |
+| 2021–22 (run first) | 73.4 s | 0.81 GB |
+| 2022–23 rebuild | 62.8 s | 0.77 GB |
+
+The five seasons took 310 s in total. Memory stays below 0.9 GB per season, so a batch should run seasons in sequence rather than in parallel.
+
+### Pipeline change and 2022–23 equivalence
+
+ADR-0020 makes liveData an optional build input for seasons where the provider archive lacks it. It changes nothing for seasons that have it. The 2022–23 rebuild at `4b72175` (`data/processed/2022-23/issue-25-rebuild-v1`) matches build `issue-19-v6`:
+- the event, actor, lineup, stint, possession, score-allocation, quality-issue and game-review tables are byte-identical;
+- in `game` and `game_stream`, only `ingested_at` differs, and no row differs once it is excluded (EXCEPT ALL in both directions).
+
+`check` passes 26 of 26 on the rebuild. `evidence` reproduces the recorded values: 99.97% Bentes agreement, 1,260 / 1,286 games against pbpstats.com, 5,346 / 5,349 liveData versus data.nba periods, and 35 of 35 starter team-periods.
