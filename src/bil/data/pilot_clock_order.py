@@ -13,8 +13,8 @@ Rule ``same-clock-v1``, derived from event semantics and applied only inside one
 3. A shot at the same clock as the previous rebound is taken by the team that holds the ball, so
    the shot's team must equal the team of the rebound before it. This selects among candidates.
 4. Candidates are never taken from beyond a period boundary event. Events keep their clocks, and
-   only the order inside the group changes. The earliest candidate in V2 order is moved directly
-   before the orphan rebound.
+   only the order inside the group changes. The candidate with the lowest event number (entry
+   order) is moved directly before the orphan rebound.
 5. If an orphan has no candidate, or candidates of different teams remain, the whole game is
    declined and keeps its original failure (ambiguous: materially different readings).
 
@@ -126,7 +126,9 @@ def reorder_same_clock(raw: dict[int, RawEvent]) -> ClockOrder | Declined | None
                 return Declined("no_candidate", key[0], key[1], number)
             if len({_team(pending[position]) for position in candidates}) > 1:
                 return Declined("ambiguous_team", key[0], key[1], number)
-            shot = pending.pop(candidates[0])
+            # Entry order (the lowest event number) separates same-team candidates.
+            first = min(candidates, key=lambda position: int(pending[position].fields["EVENTNUM"]))
+            shot = pending.pop(first)
             out.append(shot)
             out.append(event)
             moves.append((key[0], key[1], int(shot.fields["EVENTNUM"]), number, len(candidates)))
