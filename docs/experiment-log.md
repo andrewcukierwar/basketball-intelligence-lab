@@ -148,8 +148,6 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Limitations / interpretation:** The box log remains the reference, so box defects quarantine games rather than being corrected. Thresholds were set after 2022–23 was observed and were not changed here.
 - **Next decision:** The maintainer decides whether the 0.1% unresolved-possession limit should also apply to each season type. Unresolved-possession boundaries are the main remaining verification gap before #26.
 
-### EXP-0007 — Stat-specific skill decay and league shrinkage, 2022–23
-
 ### EXP-0008 — Stat-specific skill decay and league shrinkage, 2022–23
 
 - **Status:** Run once under a frozen protocol. Awaiting review.
