@@ -381,3 +381,16 @@ Both 2023–24 V3-alone games are explained. `0022300353` is the accepted `v3_pe
 The #51 audit expected the evidence gaps: two 2023–24 regular-season games lack data.nba and pbpstats.com, and one 2024–25 playoff game lacks data.nba and Bentes. These games go through the normal build. Their comparisons and any data.nba-based adjudication are unavailable.
 
 Neither fold falls materially below 2022–23 in coverage or verification, so the falsification condition in #52 is not met.
+
+## Skill decay and shrinkage evaluation
+
+The [#32](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/32) evaluation follows the [frozen protocol](research/skill-decay-protocol.md) and reports in [skill decay results](research/skill-decay-2022-23.md). It reruns the #31 engine on the pooled regular-season and playoff stream, requires the regular-season rows to equal the #31 build exactly, fits per-statistic decay and league shrinkage with Differential Evolution in nested chronological folds, and scores later blocks against the #31 baselines. It refuses any appearance outside 2022–23 and must run from a clean tree, recording `HEAD` in the manifest. Use a new output directory for each run.
+
+```sh
+uv run python -m bil.features.skill_decay_build \
+  data/raw/2022-23/issue-5-v2 \
+  data/processed/2022-23/issue-31-v1/manifest.json \
+  data/processed/2022-23/issue-32-v1
+```
+
+Outputs, all Parquet except the manifest: `fits` (statistic, clock, fit window and cutoff, seed, parameters, objective, evaluations, bound hits), `clock_selection` (inner-fold losses per clock and the selected clock per outer block), `predictions` (outer-block targets with every clock's and baseline's prediction and pregame group fields), `scores` (log loss and weighted MSE levels, plus model-minus-baseline and clock deltas with game-clustered bootstrap intervals for the pooled blocks), `exclusions` (reason counts for every outer-block target), `snapshots` (date-specific skill estimates at each outer block's start) and `manifest.json` (inputs, frozen settings, #31 reconciliation, #31 unscored-target reasons, runtime and peak memory).
