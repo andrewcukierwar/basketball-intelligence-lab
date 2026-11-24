@@ -243,6 +243,7 @@ def test_build_routes_duckdb_spills_to_private_staging(
             "order_repair": False,
             "same_clock_rule": False,
             "order_repair_v2": False,
+            "free_throw_miss_rule": False,
         }
         return []
 

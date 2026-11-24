@@ -20,6 +20,8 @@ import duckdb
 from bil.data.pilot_check import check_build, check_seasons
 from bil.data.pilot_clock_order import RULE_VERSION, ClockOrder, Declined, reorder_same_clock
 from bil.data.pilot_evidence import compare as compare_evidence
+from bil.data.pilot_free_throw import RULE_VERSION as FREE_THROW_RULE_VERSION
+from bil.data.pilot_free_throw import MissEvidence, infer_missing_misses
 from bil.data.pilot_inputs import (
     GAME_PREFIXES,
     CrossFeed,
@@ -266,6 +268,7 @@ def _build_game(
     order_repair: bool = False,
     same_clock_rule: bool = False,
     order_repair_v2: bool = False,
+    free_throw_miss_rule: bool = False,
 ) -> Rows:
     kind = GAME_PREFIXES[game.game_id[:3]]
     cross = cross or CrossFeed()
@@ -281,6 +284,7 @@ def _build_game(
     v2_applied: RepairedV2 | None = None
     v2_declined: DeclinedV2 | None = None
     v2_failed: RepairedV2 | None = None
+    missed_free_throws: MissEvidence | None = None
     periods_reconciled = 0
     periods_match = None
     substitutions_match = None
@@ -338,12 +342,13 @@ def _build_game(
             primary: bool,
             stream: dict[int, RawEvent] = raw,
             archived: list[int] = order,
+            misses: MissEvidence | None = None,
         ) -> StarterChoice[Reconstruction]:
             def attempt(starters: Starters) -> Reconstruction:
                 with TemporaryDirectory(dir=scratch) as game_directory:
                     result = parse_game(
                         game,
-                        stream,
+                        misses.parser_events(stream) if misses is not None else stream,
                         shots,
                         Path(game_directory),
                         archived,
@@ -351,6 +356,21 @@ def _build_game(
                         primary_order=archived if primary else None,
                         between_periods=cross.between_periods if cross.has_livedata else None,
                     )
+                    if misses is not None:
+                        parsed = {event.event_num: event for event in result.events}
+                        for miss in misses.misses:
+                            rebound = parsed.get(miss.rebound)
+                            shot = parsed.get(miss.shot)
+                            if (
+                                rebound is None
+                                or shot is None
+                                or getattr(rebound, "missed_shot", None) is not shot
+                            ):
+                                raise GameIssue(
+                                    "unresolved_event_order",
+                                    "Annotated miss is not the parser's linked rebound shot",
+                                    miss.shot,
+                                )
                     match, reconciled = compare_periods(result.events, game, periods)
                     defect = not match and v3_alone_differs(
                         period_scores(result.events, game), periods, cross
@@ -439,9 +459,27 @@ def _build_game(
                         except GameIssue:
                             v2_failed = offered_v2
                 if clock_ordered is None and repaired is None and v2_applied is None:
-                    if isinstance(first, PeriodScoreMismatch):
-                        periods_match, periods_reconciled = False, first.reconciled
-                    raise first from None
+                    if free_throw_miss_rule and (
+                        first.code == "unresolved_event_order"
+                        or (first.code == "parser_error" and str(first) == "EventOrderError")
+                    ):
+                        missed_free_throws = infer_missing_misses(raw, game, roster)
+                    if missed_free_throws is not None:
+                        try:
+                            choice = reconstruct(False, raw, list(raw), missed_free_throws)
+                        except GameIssue as audit_error:
+                            note = GameIssue(
+                                "free_throw_miss_rejected",
+                                f"{FREE_THROW_RULE_VERSION}: retry failed ({audit_error.code})",
+                            )
+                            issues.append(
+                                _issue_row(game.game_id, len(issues) + 1, note, "warning", refs)
+                            )
+                            missed_free_throws = None
+                    if missed_free_throws is None:
+                        if isinstance(first, PeriodScoreMismatch):
+                            periods_match, periods_reconciled = False, first.reconciled
+                        raise first from None
         built = choice.result
         parsed, rows, v3_order = built.events, built.rows, built.v3_order
         periods_reconciled = built.periods_reconciled
@@ -471,6 +509,27 @@ def _build_game(
                 "offense on every shot, free throw and turnover",
             )
             issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if missed_free_throws is not None:
+            labels.append("free_throw_miss")
+            pairs = ", ".join(
+                f"FT {miss.shot} -> team rebound {miss.rebound}"
+                for miss in missed_free_throws.misses
+            )
+            totals = ", ".join(
+                f"player {shooter} {made}/{attempts}"
+                for shooter, made, attempts in missed_free_throws.box_totals
+            )
+            note = GameIssue(
+                "free_throw_miss",
+                f"{FREE_THROW_RULE_VERSION}: {pairs}; player box FTM/FTA: {totals}",
+            )
+            locators = [refs[1]] + [
+                located(raw_source["artifact_id"], line)
+                for miss in missed_free_throws.misses
+                for number in (miss.shot, miss.rebound)
+                for line in raw[number].row_numbers
+            ]
+            issues.append(_issue_row(game.game_id, len(issues) + 1, note, "warning", locators))
         if clock_ordered is not None:
             labels.append("same_clock_order")
             moved = "; ".join(
@@ -613,7 +672,8 @@ def _build_game(
                 **_version(when, sources, refs),
                 "official_game_revision": 1,
                 "parser_version": PARSER_VERSION,
-                "reconciliation_view_id": f"pinned-pilot:{snapshot_hash}:{game.game_id}",
+                "reconciliation_view_id": f"pinned-pilot:{snapshot_hash}:{game.game_id}"
+                + (f":{FREE_THROW_RULE_VERSION}" if missed_free_throws is not None else ""),
                 "observed_date": game.played_date.isoformat(),
                 "complete": failure is None,
                 "quality": "accepted" if failure is None else "quarantined",
@@ -650,8 +710,9 @@ def _season_games(
     order_repair: bool = False,
     same_clock_rule: bool = False,
     order_repair_v2: bool = False,
+    free_throw_miss_rule: bool = False,
 ) -> Iterator[Rows]:
-    games, players = box_scores(connection, snapshot_dir)
+    games, players = box_scores(connection, snapshot_dir, include_free_throws=free_throw_miss_rule)
     expected = chosen or set(games)
     if expected - games.keys():
         raise ValueError("Requested games must exist in the regular season or playoff box logs")
@@ -708,6 +769,7 @@ def _season_games(
                     order_repair,
                     same_clock_rule,
                     order_repair_v2,
+                    free_throw_miss_rule,
                 )
                 remaining.remove(game_id)
         for game_id in sorted(remaining):
@@ -726,6 +788,7 @@ def _season_games(
                 order_repair,
                 same_clock_rule,
                 order_repair_v2,
+                free_throw_miss_rule,
             )
 
 
@@ -787,6 +850,7 @@ def build_pilot(
     order_repair: bool = False,
     same_clock_rule: bool = False,
     order_repair_v2: bool = False,
+    free_throw_miss_rule: bool = False,
 ) -> dict[str, object]:
     if re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
         raise ValueError("Record a full Git commit for the pilot build")
@@ -813,6 +877,7 @@ def build_pilot(
                 order_repair=order_repair,
                 same_clock_rule=same_clock_rule,
                 order_repair_v2=order_repair_v2,
+                free_throw_miss_rule=free_throw_miss_rule,
             )
             artifacts = write_tables(connection, games, staging, output)
             results = summarize_reviews(read_game_reviews(connection, output))
@@ -822,6 +887,16 @@ def build_pilot(
                 else None
             )
             repair_log = write_order_repair_log(connection, output) if order_repair_v2 else None
+            ft_log = (
+                connection.execute(
+                    "SELECT game_id, code, detail FROM read_parquet(?) "
+                    "WHERE code IN ('free_throw_miss', 'free_throw_miss_rejected') "
+                    "ORDER BY game_id, issue_seq",
+                    [str(output / "quality_issue.parquet")],
+                ).fetchall()
+                if free_throw_miss_rule
+                else None
+            )
         manifest: dict[str, object] = {
             "schema_version": 1,
             "season_start_year": year,
@@ -835,6 +910,19 @@ def build_pilot(
             **(
                 {"same_clock_rule": {"version": RULE_VERSION, "games": clock_log}}
                 if clock_log is not None
+                else {}
+            ),
+            **(
+                {
+                    "free_throw_miss_rule": {
+                        "version": FREE_THROW_RULE_VERSION,
+                        "games": [
+                            {"game_id": game_id, "code": code, "detail": detail}
+                            for game_id, code, detail in ft_log
+                        ],
+                    }
+                }
+                if ft_log is not None
                 else {}
             ),
             "source_snapshot_sha256": snapshot_hash,
@@ -871,6 +959,11 @@ def main() -> None:
         "--order-repair-v2",
         action="store_true",
         help="experimental: safeguarded data.nba entry-order repair of failed games (ADR-0029)",
+    )
+    build.add_argument(
+        "--free-throw-miss-rule",
+        action="store_true",
+        help="retry failed rebounds with a missing free-throw miss marker and matching box evidence",
     )
     build.add_argument(
         "--order-repair",
@@ -959,6 +1052,7 @@ def main() -> None:
             args.order_repair,
             args.same_clock_rule,
             args.order_repair_v2,
+            args.free_throw_miss_rule,
         )
         print(json.dumps(manifest["coverage"], sort_keys=True))
 
