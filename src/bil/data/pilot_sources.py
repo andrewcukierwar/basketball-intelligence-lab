@@ -44,6 +44,34 @@ class Source:
 
 # Shufinskiy archive digests and sizes, as recorded in the issue #51 coverage register.
 _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
+    2002: {
+        "nbastats": ("6b1c65437a657c6caf2cdcaa854e32fe744e07892bb8f511271bc9fe40de3e33", 7_224_056),
+        "nbastats_po": (
+            "848828e1aae7fea9da7905b070bb15249b4d5bee8da5c2475c8817e6c13528d2",
+            534_232,
+        ),
+        "nbastatsv3": (
+            "9d54187e3e120a7be83c1345d73d0e46f5bb84a3a1f4437c71ab2a26b2fe211e",
+            7_327_552,
+        ),
+        "nbastatsv3_po": (
+            "9ff28e25d92b7827efc100132963285be1c727cb6f02504541655b15961245e7",
+            548_196,
+        ),
+        "shotdetail": (
+            "81cb202ca453da71d0922fe981b44dd2fdbfb227cb49628fdb43e1a374bb457a",
+            2_301_360,
+        ),
+        "shotdetail_po": (
+            "5fa7183dc5f5a099e6f37fe1b3cce168d7686d822f319818b28e58ff81dff04c",
+            171_276,
+        ),
+        "pbpstats": ("8b7265fbef64cddccf7bfe1fd30f9fce63656843a2dfea1d41f774f4caf4e629", 5_639_816),
+        "pbpstats_po": (
+            "90ddbb8a89b5a0f212f62c0e8b25af6dabb681e9bf51c6f2d1ba2fbc7d40248a",
+            420_372,
+        ),
+    },
     2004: {
         "nbastats": (
             "c5061b0adfc5d0ab4de86c3dede02d5b313669b3a4f1b3bae78a2306075abe26",
@@ -694,6 +722,10 @@ _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
 
 # Bill Mill team and player box logs as (sha256, bytes), from the issue #51 register.
 _BOX_PINS: dict[int, tuple[tuple[str, int], tuple[str, int]]] = {
+    2002: (
+        ("c2fdc099f71e2eda99f64825bd496fb87288f89fd33095106d0064faa40c8137", 145_139),
+        ("4df5091b79d4940433bb349650a6dc03f5d92d76a9c1930fc93603d6dbd53965", 1_367_996),
+    ),
     2004: (
         ("542d70c7a535ed628e36c3ca40272ae70965f700d64f5983fd98c27909cc2123", 154_216),
         ("83662facc36fef3525acbc1b17096658d764a67a88aafb48947d044419d9db79", 1_480_311),
@@ -770,6 +802,10 @@ _BOX_PINS: dict[int, tuple[tuple[str, int], tuple[str, int]]] = {
 
 # Bentes regular-season and playoff lineup stints as (sha256, bytes, release asset ID).
 _BENTES_PINS: dict[int, tuple[tuple[str, int, int], tuple[str, int, int]]] = {
+    2002: (
+        ("95704f27055d2ccab49e15621c4fb20ba7e1a1fa00cc0278dd6341736beadaaa", 887_802, 582066423),
+        ("8da5fd8bf5a78255e7c0d049314eb33fa1e6bb36d35457de7e1fac8ada7d1544", 87_017, 582065274),
+    ),
     2004: (
         ("a46efac6d99d71a684f5460015ac634db4b55843956276f3295d82c0e7fbdf14", 1_095_351, 603727927),
         ("1a480a7bddc54648cdc9447511973a9aeb6a9d89d169d054353b4e7850b76f80", 86_195, 582065324),
