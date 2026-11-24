@@ -34,6 +34,11 @@ def instant(value: object) -> datetime:
     raise ValidationError(f"expected a UTC instant, got {value!r}")
 
 
+def played_before(played_date: date, rating_date: date) -> bool:
+    """Whether a game's Eastern calendar date is strictly before the rating date."""
+    return played_date < rating_date
+
+
 def eastern_origin(day: date) -> datetime:
     """Translate midnight on an NBA rating date to UTC."""
     return datetime.combine(day, time(), EASTERN).astimezone(UTC)
@@ -192,7 +197,7 @@ def _ineligible_reason(
     if (
         rating_date is not None
         and row.observed_date is not None
-        and row.observed_date >= rating_date
+        and not played_before(row.observed_date, rating_date)
     ):
         return "same_or_later_played_date"
     observed_at = row.finalized_at if row.kind == "outcome" else row.observed_at

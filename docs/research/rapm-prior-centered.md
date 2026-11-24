@@ -50,7 +50,7 @@ The paired-player fixture forces two players to share the same role or sit toget
 | 30 | 70 | 2.1151 |
 | 1,600 | 400 | 2.0262 |
 
-These are synthetic checks of one objective. Choosing prior inputs, penalties, cutoff rules and decay for historical fits requires separate evidence. [ADR-0014](../decisions/0014-prior-centered-rapm.md) · [Parent #34][parent]
+These are synthetic checks of one objective. Choosing prior inputs, penalties and decay for historical fits requires separate evidence; the dated cutoff and decay mechanics are in [rapm-dated-weights.md](rapm-dated-weights.md). [ADR-0014](../decisions/0014-prior-centered-rapm.md) · [Parent #34][parent]
 
 [issue]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/61
 [parent]: https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/34

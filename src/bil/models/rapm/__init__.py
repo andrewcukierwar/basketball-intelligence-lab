@@ -1,5 +1,6 @@
 """Sparse offensive and defensive regularized adjusted plus-minus."""
 
+from bil.models.rapm.dated import DatedRAPMFit, fit_dated_prior_rapm
 from bil.models.rapm.reference import (
     Possession,
     RAPMDesign,
@@ -9,4 +10,13 @@ from bil.models.rapm.reference import (
     fit_rapm,
 )
 
-__all__ = ["Possession", "RAPMDesign", "RAPMFit", "build_design", "fit_prior_rapm", "fit_rapm"]
+__all__ = [
+    "DatedRAPMFit",
+    "Possession",
+    "RAPMDesign",
+    "RAPMFit",
+    "build_design",
+    "fit_dated_prior_rapm",
+    "fit_prior_rapm",
+    "fit_rapm",
+]
