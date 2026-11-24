@@ -27,10 +27,10 @@ Replay the frozen ADR-0025 configuration (`W2`, 730 days, unit weights, 4,000 / 
 | Check | Actual result |
 | --- | --- |
 | compare dev | PASS, all groups, max deviation 0 |
-| compare outer | PASS except 1 explained provenance leaf (addendum commit hash) |
+| compare outer | Formal FAIL under the protocol on 1 provenance leaf (addendum commit hash, changed by the squash merge). Every output and aggregate is identical. The lead judged the ADR-0026 requirement met; this was not a protocol or maintainer waiver. |
 | `uv run pytest -q` | exit 0, 313 passed, 2 skipped |
 | `ruff check`, `ruff format --check`, `mypy src` | all clean |
-| Independent review | Not run |
+| Independent review | Fresh-context reviewer (Sonnet): APPROVE. Rehashed the estimates, walked the outer JSON (2,474 leaves, only timings and one NaN pair differ), reran the script, and confirmed the addendum SHA-256 matches. |
 
 ## Blockers and remaining risks
 

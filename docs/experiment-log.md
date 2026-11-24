@@ -275,7 +275,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 
 ### EXP-0016 — Independent reproducibility replay of the ADR-0025 multi-season RAPM configuration
 
-- **Status:** Completed. Result: numerically identical, with one explained provenance difference.
+- **Status:** Completed. Independently reviewed (approved). Result: numerically identical. **By the protocol's own rule the outer replay formally fails** on one exact-match provenance leaf (`addendum_commit`), caused by the squash merge and not by any output. The lead judged that the maintainer's requirement in ADR-0026, comparing output artifacts and aggregate results under documented tolerances, is met, because every output and aggregate matches at deviation 0. The protocol was not amended to waive the leaf, and the maintainer did not waive it.
 - **Date:** 2026-11-24.
 - **Research question:** Do the existing runner and the pinned inputs regenerate the #26 development and outer artifacts and aggregates under pre-registered tolerances? (ADR-0026 condition for closing #27.) Not model selection: nothing new was tried and the selection was not changed.
 - **Category:** Verification, Original design.
