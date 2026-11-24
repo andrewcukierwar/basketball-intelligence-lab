@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from dataclasses import replace
 from datetime import date, timedelta
@@ -195,6 +196,8 @@ def test_runner_refuses_without_committed_protocol_on_clean_tree(tmp_path):
     assert not output.exists()
     (repo / "stray.txt").unlink()
     assert tg.verify_protocol(protocol, digest, repo)["sha256"] == digest
+    with pytest.raises(tg.ProtocolError, match="no run state"):
+        tg.main_run(tmp_path, output, protocol, digest, repo, resume=True)
 
 
 # --- time ----------------------------------------------------------------------------------------
@@ -578,3 +581,139 @@ def test_joint_fit_keeps_player_quality_out_of_correlated_context():
         accuracy[mode] = float(np.corrcoef(table["offense"], truth)[0, 1])
     assert coefficient["joint"] < coefficient["two_stage"] / 2
     assert accuracy["joint"] > accuracy["two_stage"] + 0.1
+
+
+# --- protocol §10: failures are recorded, never fatal; checkpoints resume identically -----------
+
+
+def _contiguous_rows():
+    return synthetic(tg.REFERENCES["contiguous"], step=12, possessions=30, seed=21)
+
+
+def test_a_failed_fit_marks_its_stage_unavailable_and_the_run_continues(monkeypatch):
+    rows, teams, _ = _contiguous_rows()
+    calendar = calendar_of(rows)
+    second = tg.origin_schedule("contiguous", calendar)[1]
+    real_select = tg.select_penalties
+    real_fit = tg.fit_season
+
+    def select(od, kernel):
+        if od.label == second.key and kernel == tg.PRIMARY_KERNEL:
+            raise ValueError("unpenalized columns are collinear with each other or the intercept")
+        return real_select(od, kernel)
+
+    def fit(od, target, *args, **kwargs):
+        note = kwargs.get("note", "")
+        if note == "boot1" or (note == "half2" and target == 2020):
+            raise np.linalg.LinAlgError("singular")
+        return real_fit(od, target, *args, **kwargs)
+
+    monkeypatch.setattr(tg, "select_penalties", select)
+    monkeypatch.setattr(tg, "fit_season", fit)
+    result = tg.run_reference(rows, teams, "contiguous", calendar, [], bootstrap_replicates=3)
+    summary = result.summary
+    assert [f["origin"] for f in summary["failed_origins"]] == [second.key]
+    assert "collinear" in summary["failed_origins"][0]["reason"]
+    assert second.key not in result.tables and len(result.frozen) == 4
+    stages = {f["stage"] for f in summary["failures"]}
+    assert f"contiguous/origin/{second.key}" in stages
+    assert "contiguous/split_half/2020" in stages
+    assert summary["split_half_seasons"] == [2018, 2019, 2021, 2022]
+    for season in tg.REFERENCES["contiguous"]:
+        boot = summary["bootstrap"][str(season)]
+        assert len(boot["failed_replicates"]) == 1 and "replicate 1" in boot["failed_replicates"][0]
+        assert boot["min_replicates_with_label"] <= 2
+    # Nothing is substituted for the failed origin, and the later analyses still ran.
+    assert not any(
+        k.endswith(second.cutoff.isoformat()) for k in summary["label_revision_vs_final"]
+    )
+    assert summary["evaluation_labels"]["cv_mse"] and summary["sensitivity"]
+
+
+def test_a_failed_final_origin_leaves_the_final_analyses_unavailable(monkeypatch):
+    rows, teams, _ = _contiguous_rows()
+    calendar = calendar_of(rows)
+    final = tg.origin_schedule("contiguous", calendar)[-1]
+    real_select = tg.select_penalties
+
+    def select(od, kernel):
+        if od.label == final.key:
+            raise RuntimeError("joint RAPM solve is not finite")
+        return real_select(od, kernel)
+
+    monkeypatch.setattr(tg, "select_penalties", select)
+    result = tg.run_reference(rows, teams, "contiguous", calendar, [], bootstrap_replicates=2)
+    assert result.summary["final_analyses"].startswith("unavailable")
+    assert len(result.frozen) == 4 and not result.eval_tables and not result.errors
+
+
+def test_leakage_guards_are_never_swallowed(monkeypatch):
+    rows, teams, _ = _contiguous_rows()
+
+    def broken(*args, **kwargs):
+        raise AssertionError("a fit row is not strictly before its cutoff")
+
+    monkeypatch.setattr(tg, "select_penalties", broken)
+    with pytest.raises(AssertionError, match="strictly before"):
+        tg.run_reference(rows, teams, "contiguous", calendar_of(rows), [], bootstrap_replicates=2)
+
+
+def _dump(result):
+    return json.dumps(result.summary, sort_keys=True, default=repr)
+
+
+def test_resumed_checkpoints_reproduce_the_run_exactly(tmp_path, monkeypatch):
+    rows, teams, _ = _contiguous_rows()
+    calendar = calendar_of(rows)
+    first_log: list[dict] = []
+    first = tg.run_reference(
+        rows,
+        teams,
+        "contiguous",
+        calendar,
+        first_log,
+        bootstrap_replicates=2,
+        checkpoints=tg.Checkpoints(tmp_path / "checkpoints", first_log),
+    )
+    progress = (tmp_path / "progress.jsonl").read_text().splitlines()
+    assert progress and all(json.loads(line)["status"] == "computed" for line in progress)
+    # Simulate an interruption: drop some stages, then resume. Completed stages are reloaded
+    # (fits are not repeated) and the dropped ones recomputed to the same values.
+    files = sorted((tmp_path / "checkpoints").glob("*.pkl"))
+    for path in files[::3]:
+        path.unlink()
+    resumed_log: list[dict] = []
+    resumed = tg.run_reference(
+        rows,
+        teams,
+        "contiguous",
+        calendar,
+        resumed_log,
+        bootstrap_replicates=2,
+        checkpoints=tg.Checkpoints(tmp_path / "checkpoints", resumed_log),
+    )
+    assert _dump(resumed) == _dump(first)
+    assert [f.label_digests for f in resumed.frozen] == [f.label_digests for f in first.frozen]
+    assert len(resumed_log) == len(first_log)
+    statuses = {
+        json.loads(line)["status"]
+        for line in (tmp_path / "progress.jsonl").read_text().splitlines()
+    }
+    assert statuses == {"computed", "resumed"}
+
+    # With every stage checkpointed, a resume performs no fit at all.
+    def no_fit(*args, **kwargs):
+        raise AssertionError("a resumed stage was refitted")
+
+    monkeypatch.setattr(tg, "fit_joint", no_fit)
+    again_log: list[dict] = []
+    again = tg.run_reference(
+        rows,
+        teams,
+        "contiguous",
+        calendar,
+        again_log,
+        bootstrap_replicates=2,
+        checkpoints=tg.Checkpoints(tmp_path / "checkpoints", again_log),
+    )
+    assert _dump(again) == _dump(first)

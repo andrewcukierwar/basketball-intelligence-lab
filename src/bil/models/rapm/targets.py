@@ -21,13 +21,16 @@ import argparse
 import csv
 import hashlib
 import json
+import os
+import pickle
 import shutil
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -456,8 +459,9 @@ def fit_joint(
     target = np.concatenate((project(root * (response / response_scale)), np.zeros(2 * m)))
     result = lsqr(system, target, atol=1e-12, btol=1e-12)
     solution, stop = result[0], result[1]
-    if stop not in _CONVERGED or not np.all(np.isfinite(solution)):
-        raise RuntimeError(f"joint RAPM solve failed to converge (LSQR stop {stop})")
+    if not np.all(np.isfinite(solution)):
+        raise RuntimeError(f"joint RAPM solve is not finite (LSQR stop {stop})")
+    # A finite solve that stopped without converging is kept and recorded (protocol §10).
     effects = solution * scales * response_scale
     for block in (slice(0, m), slice(m, 2 * m)):
         active = used[block]
@@ -475,6 +479,7 @@ def fit_joint(
         "iterations": float(result[2]),
         "scaled_residual_norm": float(result[3]),
         "condition_estimate": float(result[6]),
+        "converged": float(stop in _CONVERGED),
         "fit_seconds": time.perf_counter() - started,
         "rows": float(n),
     }
@@ -959,39 +964,45 @@ class HalfPairs:
     exposure: NDArray[np.float64]  # full target-season possessions, both roles
 
 
-def split_half_reliability(
-    od: OriginData, kernel: Kernel, penalties: tuple[float, float]
-) -> dict[int, dict[str, HalfPairs]]:
-    """Fit every target on two alternating-game halves and pair the labels by role.
+def split_half_target(
+    od: OriginData,
+    target: int,
+    kernel: Kernel,
+    penalties: tuple[float, float],
+    halves: tuple[NDArray[np.bool_], NDArray[np.bool_]],
+) -> dict[str, HalfPairs]:
+    """Fit one target on two alternating-game halves and pair the labels by role.
 
     A role's label is paired for players with at least ``MIN_ROLE_POSSESSIONS`` possessions in
     that role in the target season in both halves. Both halves use the frozen penalties, and
     the games of every season in the kernel alternate, so the halves share no possession.
     """
-    first, second = split_halves(od.rows, np.arange(len(od.rows), dtype=np.int64))
-    out: dict[int, dict[str, HalfPairs]] = {}
-    for target in od.seasons:
-        halves = []
-        for i, keep in enumerate((first, second), start=1):
-            fit = fit_season(od, target, kernel, *penalties, keep=keep, note=f"half{i}")
-            halves.append(labels(od, fit, keep))
-        a, b = halves
-        ia, ib = _join(a, b)
-        off_pos, def_pos = season_exposure(od, target)
-        ids = np.asarray(od.design.player_ids, dtype=np.int64)
-        full = (off_pos + def_pos)[np.searchsorted(ids, a["player_id"][ia])]
-        out[target] = {}
-        for role in ("offense", "defense"):
-            enough = (a[f"{role}_possessions"][ia] >= MIN_ROLE_POSSESSIONS) & (
-                b[f"{role}_possessions"][ib] >= MIN_ROLE_POSSESSIONS
-            )
-            out[target][role] = HalfPairs(
-                a["player_id"][ia][enough],
-                a[role][ia][enough],
-                b[role][ib][enough],
-                full[enough],
-            )
+    tables = []
+    for i, keep in enumerate(halves, start=1):
+        fit = fit_season(od, target, kernel, *penalties, keep=keep, note=f"half{i}")
+        tables.append(labels(od, fit, keep))
+    a, b = tables
+    ia, ib = _join(a, b)
+    off_pos, def_pos = season_exposure(od, target)
+    ids = np.asarray(od.design.player_ids, dtype=np.int64)
+    full = (off_pos + def_pos)[np.searchsorted(ids, a["player_id"][ia])]
+    out: dict[str, HalfPairs] = {}
+    for role in ("offense", "defense"):
+        enough = (a[f"{role}_possessions"][ia] >= MIN_ROLE_POSSESSIONS) & (
+            b[f"{role}_possessions"][ib] >= MIN_ROLE_POSSESSIONS
+        )
+        out[role] = HalfPairs(
+            a["player_id"][ia][enough], a[role][ia][enough], b[role][ib][enough], full[enough]
+        )
     return out
+
+
+def split_half_reliability(
+    od: OriginData, kernel: Kernel, penalties: tuple[float, float]
+) -> dict[int, dict[str, HalfPairs]]:
+    """``split_half_target`` for every target season of the origin."""
+    halves = split_halves(od.rows, np.arange(len(od.rows), dtype=np.int64))
+    return {t: split_half_target(od, t, kernel, penalties, halves) for t in od.seasons}
 
 
 def reliability_summary(
@@ -1028,6 +1039,54 @@ def reliability_summary(
     return out
 
 
+def bootstrap_target(
+    od: OriginData,
+    target: int,
+    kernel: Kernel,
+    penalties: tuple[float, float],
+    table: Mapping[str, NDArray[Any]],
+    *,
+    replicates: int = BOOTSTRAP_REPLICATES,
+    seed: int = BOOTSTRAP_SEED,
+    reference: str = "",
+) -> dict[str, Any]:
+    """Game-clustered bootstrap standard errors of one season's labels.
+
+    Each replicate redraws the games of the origin's rows with replacement (multinomial game
+    counts), multiplies the kernel weights by the counts and refits the joint model with the
+    frozen penalties. Labels are centred with the full-sample target-season exposures. A
+    replicate whose fit fails is recorded and left out; it never stops the others.
+    """
+    games = len(od.rows.game_ids)
+    rng = np.random.default_rng([seed, target, sum(map(ord, reference))])
+    draws = {
+        role: np.full((replicates, table["player_id"].size), np.nan)
+        for role in ("offense", "defense")
+    }
+    centre = season_exposure(od, target)
+    failures: list[str] = []
+    for b in range(replicates):
+        counts = rng.multinomial(games, np.full(games, 1.0 / games)).astype(np.float64)
+        try:
+            fit = fit_season(
+                od, target, kernel, *penalties, multiplicity=counts[od.rows.game], note=f"boot{b}"
+            )
+        except FIT_FAILURES as exc:
+            failures.append(f"replicate {b}: {type(exc).__name__}: {exc}")
+            continue
+        replicate = labels(od, fit, centre=centre)
+        ia, ib = _join(table, replicate)
+        for role in ("offense", "defense"):
+            draws[role][b, ia] = replicate[role][ib]
+    with np.errstate(invalid="ignore"):
+        out: dict[str, Any] = {
+            f"{role}_se": np.nanstd(values, axis=0, ddof=1) for role, values in draws.items()
+        }
+    out["replicates_with_label"] = np.sum(~np.isnan(draws["offense"]), axis=0).astype(np.float64)
+    out["failed_replicates"] = failures
+    return out
+
+
 def bootstrap_labels(
     od: OriginData,
     kernel: Kernel,
@@ -1037,47 +1096,26 @@ def bootstrap_labels(
     replicates: int = BOOTSTRAP_REPLICATES,
     seed: int = BOOTSTRAP_SEED,
     reference: str = "",
-) -> dict[int, dict[str, NDArray[np.float64]]]:
-    """Game-clustered bootstrap standard errors of each label (multinomial game counts).
-
-    Each replicate redraws the games of the origin's rows with replacement, multiplies the
-    kernel weights by the game counts and refits the joint model with the frozen
-    penalties. Labels are centred with the full-sample target-season exposures.
-    """
-    out: dict[int, dict[str, NDArray[np.float64]]] = {}
-    games = len(od.rows.game_ids)
-    for target in od.seasons:
-        table = tables[target]
-        rng = np.random.default_rng([seed, target, sum(map(ord, reference))])
-        draws = {
-            role: np.full((replicates, table["player_id"].size), np.nan)
-            for role in (
-                "offense",
-                "defense",
-            )
-        }
-        centre = season_exposure(od, target)
-        for b in range(replicates):
-            counts = rng.multinomial(games, np.full(games, 1.0 / games)).astype(np.float64)
-            fit = fit_season(
-                od, target, kernel, *penalties, multiplicity=counts[od.rows.game], note=f"boot{b}"
-            )
-            replicate = labels(od, fit, centre=centre)
-            ia, ib = _join(table, replicate)
-            for role in ("offense", "defense"):
-                draws[role][b, ia] = replicate[role][ib]
-        out[target] = {
-            f"{role}_se": np.nanstd(values, axis=0, ddof=1) for role, values in draws.items()
-        }
-        out[target]["replicates_with_label"] = np.sum(~np.isnan(draws["offense"]), axis=0).astype(
-            np.float64
+) -> dict[int, dict[str, Any]]:
+    """``bootstrap_target`` for every target season of the origin."""
+    return {
+        t: bootstrap_target(
+            od,
+            t,
+            kernel,
+            penalties,
+            tables[t],
+            replicates=replicates,
+            seed=seed,
+            reference=reference,
         )
-    return out
+        for t in od.seasons
+    }
 
 
 def exposure_summary(
     tables: Mapping[int, Mapping[str, NDArray[Any]]],
-    errors: Mapping[int, Mapping[str, NDArray[np.float64]]] | None = None,
+    errors: Mapping[int, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Label spread, shrinkage and bootstrap reliability by target-season exposure band."""
     pooled = {k: np.concatenate([t[k] for t in tables.values()]) for k in LABEL_FIELDS}
@@ -1144,13 +1182,82 @@ def season_summary(tables: Mapping[int, Mapping[str, NDArray[Any]]]) -> dict[str
 # --- the reference run -----------------------------------------------------------------------
 
 
+# Fit failures that protocol §10 records instead of stopping the run. Leakage and identity
+# guards raise AssertionError, which is never caught.
+FIT_FAILURES: tuple[type[Exception], ...] = (ValueError, RuntimeError, np.linalg.LinAlgError)
+T = TypeVar("T")
+
+
+class Checkpoints:
+    """Run each stage once, record a failure instead of raising, and persist the outcome.
+
+    With a directory, every stage's outcome and its fit-log entries are pickled atomically under
+    a key, and a resumed run reloads them instead of recomputing. Every stage is deterministic,
+    so resuming does not change any result. ``progress.jsonl`` records each stage.
+    """
+
+    def __init__(self, directory: Path | None, log: list[dict[str, Any]]) -> None:
+        self.directory = directory
+        self.log = log
+        self.failures: list[dict[str, str]] = []
+        if directory is not None:
+            directory.mkdir(parents=True, exist_ok=True)
+
+    def _path(self, key: str) -> Path:
+        assert self.directory is not None
+        return self.directory / f"{hashlib.sha256(key.encode()).hexdigest()[:40]}.pkl"
+
+    def attempt(self, key: str, compute: Callable[[], T]) -> tuple[bool, T | str]:
+        started = time.perf_counter()
+        if self.directory is not None and self._path(key).is_file():
+            with self._path(key).open("rb") as handle:
+                payload = pickle.load(handle)
+            if payload["key"] != key:
+                raise AssertionError(f"checkpoint {key} holds another stage")
+            self.log.extend(payload["log"])
+            ok, value, status = payload["ok"], payload["value"], "resumed"
+        else:
+            first = len(self.log)
+            try:
+                value = compute()
+                ok = True
+            except FIT_FAILURES as exc:
+                value = f"{type(exc).__name__}: {exc}"
+                ok = False
+            status = "computed"
+            if self.directory is not None:
+                temporary = self._path(key).with_suffix(".tmp")
+                with temporary.open("wb") as handle:
+                    pickle.dump(
+                        {"key": key, "ok": ok, "value": value, "log": self.log[first:]}, handle
+                    )
+                os.replace(temporary, self._path(key))
+        if not ok:
+            self.failures.append({"stage": key, "reason": str(value)})
+        if self.directory is not None:
+            with (self.directory.parent / "progress.jsonl").open("a") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "at": datetime.now(timezone.utc).isoformat(),
+                            "stage": key,
+                            "status": status,
+                            "ok": ok,
+                            "seconds": round(time.perf_counter() - started, 3),
+                        }
+                    )
+                    + "\n"
+                )
+        return ok, value
+
+
 @dataclass
 class ReferenceResult:
     frozen: list[FrozenTarget]
     tables: dict[str, dict[int, dict[str, NDArray[Any]]]]  # origin key -> season -> table
     eval_tables: dict[int, dict[str, NDArray[Any]]]
     sensitivity_tables: dict[str, dict[int, dict[str, NDArray[Any]]]]
-    errors: dict[int, dict[str, NDArray[np.float64]]]
+    errors: dict[int, dict[str, Any]]
     summary: dict[str, Any]
 
 
@@ -1190,6 +1297,20 @@ def year_to_year(
     return out
 
 
+def _target_set(
+    rows: Rows,
+    teams: NDArray[np.int64],
+    origin: Origin,
+    kernel: Kernel,
+    log: list[dict[str, Any]],
+    **kwargs: Any,
+) -> tuple[FrozenTarget, dict[int, dict[str, NDArray[Any]]], dict[str, Any]]:
+    """``build_target_set`` without the origin data, which is rebuilt when needed."""
+    record, tables, od, search = build_target_set(rows, teams, origin, kernel, log, **kwargs)
+    search["players"] = od.design.size
+    return record, tables, search
+
+
 def run_reference(
     rows: Rows,
     teams: NDArray[np.int64],
@@ -1199,17 +1320,38 @@ def run_reference(
     *,
     bootstrap_replicates: int = BOOTSTRAP_REPLICATES,
     provenance: Mapping[str, str] | None = None,
+    checkpoints: Checkpoints | None = None,
 ) -> ReferenceResult:
-    """Every rolling origin, then reliability, evaluation labels and sensitivities at the last."""
+    """Every rolling origin, then reliability, evaluation labels and sensitivities at the last.
+
+    Protocol §10: a stage whose fit fails is recorded with its reason and nothing is
+    substituted. A failed origin is unavailable. If the final origin fails, the final-origin
+    analyses are unavailable too.
+    """
+    ck = checkpoints if checkpoints is not None else Checkpoints(None, log)
+    first_failure = len(ck.failures)
     origins = origin_schedule(reference, calendar)
     frozen: list[FrozenTarget] = []
     tables: dict[str, dict[int, dict[str, NDArray[Any]]]] = {}
     per_origin: dict[str, Any] = {}
-    final_od: OriginData | None = None
+    failed_origins: list[dict[str, Any]] = []
     for origin in origins:
-        record, origin_tables, od, search = build_target_set(
-            rows, teams, origin, PRIMARY_KERNEL, log, provenance=provenance
+        ok, value = ck.attempt(
+            f"{reference}/origin/{origin.key}",
+            partial(_target_set, rows, teams, origin, PRIMARY_KERNEL, log, provenance=provenance),
         )
+        if not ok:
+            failed_origins.append(
+                {
+                    "origin": origin.key,
+                    "closes_season": origin.closes_season,
+                    "status": "unavailable",
+                    "reason": value,
+                }
+            )
+            continue
+        assert not isinstance(value, str)
+        record, origin_tables, search = value
         frozen.append(record)
         tables[origin.key] = origin_tables
         per_origin[origin.key] = {
@@ -1217,86 +1359,147 @@ def run_reference(
             "cutoff": origin.cutoff.isoformat(),
             "seasons": list(record.seasons),
             "rows": record.rows,
-            "players": od.design.size,
             "offense_ridge": record.offense_ridge,
             "defense_ridge": record.defense_ridge,
             "input_digest": record.input_digest,
             "label_counts": {str(s): int(t["player_id"].size) for s, t in origin_tables.items()},
             **search,
         }
-        final_od = od
-    assert final_od is not None
+    final = origins[-1]
+    summary: dict[str, Any] = {
+        "reference": reference,
+        "seasons": list(REFERENCES[reference]),
+        "artifact_label": ARTIFACT_LABEL,
+        "origins": per_origin,
+        "unavailable_origins": unavailable_origins(reference),
+        "failed_origins": failed_origins,
+        "final_origin": final.key,
+    }
+    if final.key not in tables:
+        summary["final_analyses"] = "unavailable: the final origin could not be fitted"
+        summary["failures"] = ck.failures[first_failure:]
+        return ReferenceResult(frozen, tables, {}, {}, {}, summary)
     last = frozen[-1]
     penalties = (last.offense_ridge, last.defense_ridge)
-    final_tables = tables[origins[-1].key]
+    final_tables = tables[final.key]
+    final_od = origin_data(
+        rows, teams, eligible_mask(rows, REFERENCES[reference], final.cutoff), log, label=final.key
+    )
+    if final_od.digest != last.input_digest:
+        raise AssertionError("the rebuilt final origin differs from its frozen inputs")
 
-    # Reliability at the final origin.
-    split = reliability_summary(
-        split_half_reliability(final_od, PRIMARY_KERNEL, penalties), final_tables
-    )
-    errors = bootstrap_labels(
-        final_od,
-        PRIMARY_KERNEL,
-        penalties,
-        final_tables,
-        replicates=bootstrap_replicates,
-        reference=reference,
-    )
+    # Reliability at the final origin, one stage per target season.
+    halves = split_halves(final_od.rows, np.arange(len(final_od.rows), dtype=np.int64))
+    pairs: dict[int, dict[str, HalfPairs]] = {}
+    errors: dict[int, dict[str, Any]] = {}
+    for target in final_od.seasons:
+        half_ok, half_value = ck.attempt(
+            f"{reference}/split_half/{target}",
+            partial(split_half_target, final_od, target, PRIMARY_KERNEL, penalties, halves),
+        )
+        if half_ok:
+            assert not isinstance(half_value, str)
+            pairs[target] = half_value
+        boot_ok, boot_value = ck.attempt(
+            f"{reference}/bootstrap/{target}",
+            partial(
+                bootstrap_target,
+                final_od,
+                target,
+                PRIMARY_KERNEL,
+                penalties,
+                final_tables[target],
+                replicates=bootstrap_replicates,
+                reference=reference,
+            ),
+        )
+        if boot_ok:
+            assert not isinstance(boot_value, str)
+            errors[target] = boot_value
+    split = reliability_summary(pairs, final_tables)
 
     # Label revision as later seasons arrive: as frozen (each origin's own penalties), and
     # refitted with the final penalties so that data change is separated from penalty change.
     revision: dict[str, Any] = {}
     revision_fixed: dict[str, Any] = {}
     for origin in origins[:-1]:
-        _, fixed_tables, _, _ = build_target_set(
-            rows,
-            teams,
-            origin,
-            PRIMARY_KERNEL,
-            log,
-            penalties=penalties,
-            scenario="revision_final_penalties",
+        if origin.key not in tables:
+            continue
+        ok, value = ck.attempt(
+            f"{reference}/revision_final_penalties/{origin.key}",
+            partial(
+                _target_set,
+                rows,
+                teams,
+                origin,
+                PRIMARY_KERNEL,
+                log,
+                penalties=penalties,
+                scenario="revision_final_penalties",
+            ),
         )
         for season, table in tables[origin.key].items():
             key = f"{season}@{origin.cutoff.isoformat()}"
             revision[key] = compare_labels(table, final_tables[season])
-            revision_fixed[key] = compare_labels(fixed_tables[season], final_tables[season])
+            if ok:
+                assert not isinstance(value, str)
+                revision_fixed[key] = compare_labels(value[1][season], final_tables[season])
 
     # Evaluation labels for #30: season-only (K0) labels at the final origin with their own
     # cross-validated penalties. Each uses only its own season's rows.
-    eval_record, eval_tables, _, eval_search = build_target_set(
-        rows, teams, origins[-1], SEASON_ONLY_KERNEL, log, scenario=EVALUATION_SCENARIO
+    eval_tables: dict[int, dict[str, NDArray[Any]]] = {}
+    eval_meta: dict[str, Any] = {"scenario": EVALUATION_SCENARIO}
+    ok, value = ck.attempt(
+        f"{reference}/{EVALUATION_SCENARIO}",
+        partial(
+            _target_set, rows, teams, final, SEASON_ONLY_KERNEL, log, scenario=EVALUATION_SCENARIO
+        ),
     )
-    for season, table in eval_tables.items():
-        if table["kernel_seasons"][0] != str(season):
-            raise AssertionError("an evaluation label read a row of another season")
-    eval_meta = {
-        "scenario": EVALUATION_SCENARIO,
-        "kernel": eval_record.kernel,
-        "offense_ridge": eval_record.offense_ridge,
-        "defense_ridge": eval_record.defense_ridge,
-        "cv_mse": eval_search.get("cv_mse"),
-        "label_counts": {str(s): int(t["player_id"].size) for s, t in eval_tables.items()},
-        "year_to_year": year_to_year(eval_tables, calendar),
-        "primary_vs_season_only": {
-            str(s): compare_labels(final_tables[s], t) for s, t in eval_tables.items()
-        },
-    }
+    if ok:
+        assert not isinstance(value, str)
+        eval_record, eval_tables, eval_search = value
+        for season, table in eval_tables.items():
+            if set(table["kernel_seasons"].tolist()) != {str(season)}:
+                raise AssertionError("an evaluation label read a row of another season")
+        eval_meta.update(
+            {
+                "kernel": eval_record.kernel,
+                "offense_ridge": eval_record.offense_ridge,
+                "defense_ridge": eval_record.defense_ridge,
+                "cv_mse": eval_search.get("cv_mse"),
+                "label_counts": {str(s): int(t["player_id"].size) for s, t in eval_tables.items()},
+                "year_to_year": year_to_year(eval_tables, calendar),
+                "primary_vs_season_only": {
+                    str(s): compare_labels(final_tables[s], t) for s, t in eval_tables.items()
+                },
+            }
+        )
+    else:
+        eval_meta["status"] = f"unavailable: {value}"
 
     # Sensitivities at the final origin; each reselects its penalties by the same CV.
     sensitivity_tables: dict[str, dict[int, dict[str, NDArray[Any]]]] = {}
     sensitivity: dict[str, Any] = {}
     for name, kernel, available, mode in sensitivity_scenarios(reference, rows):
-        record, scenario_tables, _, search = build_target_set(
-            rows,
-            teams,
-            origins[-1],
-            kernel,
-            log,
-            available=available,
-            scenario=name,
-            offset_mode=mode,
+        ok, value = ck.attempt(
+            f"{reference}/sensitivity/{name}",
+            partial(
+                _target_set,
+                rows,
+                teams,
+                final,
+                kernel,
+                log,
+                available=available,
+                scenario=name,
+                offset_mode=mode,
+            ),
         )
+        if not ok:
+            sensitivity[name] = {"status": f"unavailable: {value}"}
+            continue
+        assert not isinstance(value, str)
+        record, scenario_tables, search = value
         sensitivity_tables[name] = scenario_tables
         sensitivity[name] = {
             "kernel": kernel.name,
@@ -1313,21 +1516,28 @@ def run_reference(
             "cv_mse": search.get("cv_mse"),
         }
 
-    summary = {
-        "reference": reference,
-        "seasons": list(REFERENCES[reference]),
-        "artifact_label": ARTIFACT_LABEL,
-        "origins": per_origin,
-        "unavailable_origins": unavailable_origins(reference),
-        "final_origin": origins[-1].key,
-        "split_half": split,
-        "exposure": exposure_summary(final_tables, errors),
-        "seasons_final": season_summary(final_tables),
-        "label_revision_vs_final": revision,
-        "label_revision_vs_final_fixed_penalties": revision_fixed,
-        "evaluation_labels": eval_meta,
-        "sensitivity": sensitivity,
-    }
+    summary.update(
+        {
+            "split_half": split,
+            "split_half_seasons": sorted(pairs),
+            "bootstrap": {
+                str(t): {
+                    "failed_replicates": e["failed_replicates"],
+                    "min_replicates_with_label": float(np.min(e["replicates_with_label"]))
+                    if e["replicates_with_label"].size
+                    else None,
+                }
+                for t, e in errors.items()
+            },
+            "exposure": exposure_summary({t: final_tables[t] for t in errors}, errors),
+            "seasons_final": season_summary(final_tables),
+            "label_revision_vs_final": revision,
+            "label_revision_vs_final_fixed_penalties": revision_fixed,
+            "evaluation_labels": eval_meta,
+            "sensitivity": sensitivity,
+            "failures": ck.failures[first_failure:],
+        }
+    )
     return ReferenceResult(frozen, tables, eval_tables, sensitivity_tables, errors, summary)
 
 
@@ -1464,13 +1674,33 @@ def main_run(
     protocol: Path,
     protocol_sha256: str | None,
     repo: Path = REPO_ROOT,
+    *,
+    resume: bool = False,
 ) -> dict[str, Any]:
-    """The single phase-2 run: refuses without the committed protocol on a clean tree."""
+    """The single phase-2 run: refuses without the committed protocol on a clean tree.
+
+    ``resume`` continues an interrupted run in its own directory. It refuses unless the
+    directory's ``run_state.json`` names the same code commit, protocol digest and input rows,
+    then reloads the completed stages from their checkpoints. Every stage is deterministic, so
+    a resumed run writes the same results as an uninterrupted one.
+    """
     freeze = verify_protocol(protocol, protocol_sha256, repo)
     provenance = {"code_commit": freeze["head_commit"], "protocol_sha256": freeze["sha256"]}
     started = time.perf_counter()
-    output_dir.mkdir(parents=True, exist_ok=False)
+    state_path = output_dir / "run_state.json"
+    if resume:
+        if not state_path.is_file():
+            raise ProtocolError(f"{output_dir} has no run state to resume")
+        state = json.loads(state_path.read_text())
+        if state["provenance"] != provenance or state["version"] != TARGET_VERSION:
+            raise ProtocolError("the run to resume used another commit, protocol or version")
+        if (output_dir / "manifest.json").exists():
+            raise ProtocolError("the run already finished")
+    else:
+        output_dir.mkdir(parents=True, exist_ok=False)
     temp = output_dir / "duckdb_tmp"
+    if temp.exists():
+        shutil.rmtree(temp)
     temp.mkdir()
     calendar: dict[int, tuple[date, date]] = {}
     strata: dict[int, dict[str, int]] = {}
@@ -1489,7 +1719,34 @@ def main_run(
     teams = team_codes(
         np.concatenate([np.asarray(s.data["offense_team_id"]) for s in loads]), rows.game
     )
+    rows_digest = input_digest(rows, teams)
+    if resume:
+        if state["rows_digest"] != rows_digest:
+            raise ProtocolError("the input rows differ from the run being resumed")
+    else:
+        _write_json(
+            state_path,
+            {
+                "version": TARGET_VERSION,
+                "provenance": provenance,
+                "rows_digest": rows_digest,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    with (output_dir / "progress.jsonl").open("a") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "at": datetime.now(timezone.utc).isoformat(),
+                    "stage": "loaded",
+                    "status": "resumed" if resume else "started",
+                    "rows": len(rows),
+                }
+            )
+            + "\n"
+        )
     log: list[dict[str, Any]] = []
+    checkpoints = Checkpoints(output_dir / "checkpoints", log)
     results: dict[str, Any] = {
         "issue": ISSUE,
         "version": TARGET_VERSION,
@@ -1504,15 +1761,17 @@ def main_run(
     sens_out: list[tuple[Mapping[str, Any], Mapping[str, NDArray[Any]]]] = []
     finals: dict[str, dict[int, dict[str, NDArray[Any]]]] = {}
     for reference in REFERENCES:
-        result = run_reference(rows, teams, reference, calendar, log, provenance=provenance)
+        result = run_reference(
+            rows, teams, reference, calendar, log, provenance=provenance, checkpoints=checkpoints
+        )
         results["references"][reference] = result.summary
         frozen.extend(result.frozen)
         final_key = result.summary["final_origin"]
-        finals[reference] = result.tables[final_key]
+        finals[reference] = result.tables.get(final_key, {})
         for key, by_season in result.tables.items():
             for season, table in sorted(by_season.items()):
                 extra: dict[str, NDArray[Any]] = {}
-                if key == final_key:
+                if key == final_key and season in result.errors:
                     extra = {
                         "offense_se": result.errors[season]["offense_se"],
                         "defense_se": result.errors[season]["defense_se"],
@@ -1560,9 +1819,12 @@ def main_run(
     common = {
         str(s): compare_labels(finals["contiguous"][s], finals["extended"][s])
         for s in REFERENCES["contiguous"]
+        if s in finals["contiguous"] and s in finals["extended"]
     }
     results["reference_agreement_final"] = common
     results["solver"] = _solver_summary([{**e, "temporal": e.get("kernel", "")} for e in log])
+    results["solver"]["unconverged_kept"] = sum(1 for e in log if e.get("converged") == 0.0)
+    results["failures"] = checkpoints.failures
     results["rows"] = {
         "possessions": len(rows),
         "games": len(rows.game_ids),
@@ -1630,8 +1892,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     cli.add_argument("output_dir", type=Path, help="new directory for the target run")
     cli.add_argument("--protocol", type=Path, default=PROTOCOL_PATH)
     cli.add_argument("--protocol-sha256", required=True)
+    cli.add_argument(
+        "--resume", action="store_true", help="continue an interrupted run in its own directory"
+    )
     args = cli.parse_args(argv)
-    manifest = main_run(args.processed, args.output_dir, args.protocol, args.protocol_sha256)
+    manifest = main_run(
+        args.processed, args.output_dir, args.protocol, args.protocol_sha256, resume=args.resume
+    )
     print(json.dumps({k: manifest[k] for k in ("runtime_seconds", "peak_memory_mib", "outputs")}))
 
 
