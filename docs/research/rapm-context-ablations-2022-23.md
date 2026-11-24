@@ -159,8 +159,8 @@ Player totals move little. The largest RMS shift (0.27, W_drop) is below the 0.3
 - **End-of-period decomposition (independent review audit, Original).** 6,028 eligible possessions (2.69%) start with 24 s or less left. They score 80.2 points per 100, against 112.0 for all others.
   - 996 of them (16.5%) are run-out/no-action possessions: no shot, free throw, turnover, foul or violation, and exactly 0 points.
     - 962 start on the `period_end` event itself.
-    - 853 are game-final possessions.
     - 706 are in the 4th quarter, with median absolute margin 13.
+  - Separately, 853 of the 6,028 are game-final possessions. They average 0.6 points per 100, but they are not a subset of the no-action group.
   - The other 5,032 score 96.1 per 100.
   - An end-of-period dummy alone gives an in-sample MSE gain of 26.5, close to the held-out time gain of 25.7. With the no-action possessions removed, it falls to 5.6.
   - No parser artifact was found. Possessions tile the event stream exactly, with no duplicate or zero-length possessions, and the covariates are pre-possession.
