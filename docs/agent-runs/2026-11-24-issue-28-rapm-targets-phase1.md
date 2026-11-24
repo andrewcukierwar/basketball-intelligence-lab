@@ -1,7 +1,7 @@
-# Agent run: #28 RAPM training targets, phase 1 (protocol and runner)
+# Agent run: #28 RAPM training targets (protocol, runner and the single run)
 
 - **Date:** 2026-11-24
-- **Status:** Awaiting independent protocol review. No real-data target was fitted.
+- **Status:** Run completed; results awaiting review. PR opened, not merged.
 - **Related issues:** #28 (this), #30 (consumer), #53, #99 (later seasons enter as new versions)
 - **Branch / commit / PR:** `claude/issue-28-rapm-targets`. No PR yet.
 
@@ -47,8 +47,15 @@ Freeze a protocol for provisional, independent long-window RAPM training targets
 
 The independent review of `0195f99` found two blockers. The evaluation label's estimand varied by fold, and the two-stage offset let context terms absorb player composition. Both were fixed before any real-data fit, together with the recommended changes. The protocol's §13 lists them. The checks were rerun after the fix.
 
+## Phase 2 (the single run)
+
+- **Before the run.** The re-review approved revision 2. Commit `e36ba78` then made every fit failure a recorded, stage-level `unavailable` (protocol §10) and added atomic per-stage checkpoints with `--resume`. Tests show that a resumed run reproduces the results exactly.
+- **The run.** It ran once, from a clean tree at `e36ba78`, into `data/processed/rapm_targets/issue-28-v1` (manifest `40fcfba9…e043`): 6,755 s, 3.0 GiB peak, 8,828 fits, all converged. There were no failures, no resume and no interruption.
+- **Records.** Results are in `docs/research/rapm-targets.md`, ADR-0027 (proposed) and EXP-0017. EPM-U03 is updated.
+- **Data-handling note.** Checkpoints are pickled under `__main__` because the runner runs as `python -m`. A resume works the same way, but reading a checkpoint from another script needs `FrozenTarget` imported into that script's `__main__`.
+
 ## Next actions
 
-1. Independent review of the protocol and runner at the pushed commit.
-2. After approval, run phase 2 once from a clean tree into `data/processed/targets/issue-28-v1/`.
-3. Write the report, ADR-0027 and EXP-0017, then open the PR.
+1. Independent review of the results PR.
+2. Maintainer acceptance of ADR-0027.
+3. #30 registers its reliability weighting, its one-sided-label rule and whether to pool the 2005–08 labels, before any SPM fit.

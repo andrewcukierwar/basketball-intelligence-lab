@@ -379,6 +379,29 @@ V2 remains the event source of record.
     A negative experimental result is an acceptable outcome.
 - **Links:** [ADR-0013](#adr-0013--limit-the-first-historical-rapm-fit-to-stable-lineup-possessions), [ADR-0019](#adr-0019--keep-run-outs-in-rapm-model-rows-and-exclude-only-verified-pseudo-possessions), [ADR-0023](#adr-0023--repair-late-entered-event-order-from-datanba-entry-order-opt-in), [ADR-0025](#adr-0025--two-season-unit-weight-window-with-split-penalties-for-the-multi-season-rapm-baseline), [#110](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/110), [#111](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/111)
 
+## ADR-0027 — Season-centred, jointly context-adjusted long-window RAPM as provisional SPM training targets
+
+- **Date:** 2026-11-24
+- **Status:** Proposed for [#28](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/28) under ADR-0026. Protocol independently reviewed (revision 2 approved). The results await review and maintainer acceptance.
+- **Evidence class:** Original BIL design on Experimental evidence. These targets are a **partial-history methodology replication**, not a full historical EPM replication.
+- **Context:** EPM trains box-score SPM on long-window independent RAPM (Documented), but its target construction, reliability weights and era handling are not public (EPM-U02, EPM-U03). BIL has 10 eligible seasons with a seven-season gap. ADR-0025 is a forward-predictive configuration and is not a label.
+- **Decision:**
+  - Each label belongs to a player and a season and is fitted by its own ridge fit. Weight is 1 inside the target season and `0.5 ** (gap_days / 365)` up to 730 days outside it, so a missing season counts as real elapsed time.
+  - Each fit also has unpenalized home, score-state, game-time and season-by-season-type columns, fitted jointly with the players, and two player penalties chosen per origin by five-fold game-grouped CV inside the eligible rows.
+  - Labels are possession-weighted to zero within each season. Offense and defense are separate, in points per 100.
+  - There are two references: contiguous (2018–19 to 2022–23) and extended (all 10 seasons). One frozen, digest-pinned target set closes each eligible season.
+  - #30 evaluation labels are season-only fits.
+- **Evidence:** [Protocol](research/rapm-targets-protocol.md) (SHA-256 `5fade9a4…4ed2c`) and [results](research/rapm-targets.md), EXP-0017.
+  - Every origin was fitted, and all 8,828 fits converged.
+  - Split-half full-sample reliability is 0.66–0.69 for offense and 0.63–0.64 for defense. It is about 0.4 below 2,000 possessions in a season.
+  - Year-to-year persistence of season-only labels is r 0.2–0.4.
+  - The joint and two-stage fits agree at r 0.998.
+- **Consequences:**
+  - Low-exposure and team-changing players carry noisy labels. #30 must register its reliability weighting and its treatment of one-sided labels.
+  - The extended reference changes only the 2018–19 labels among the modern seasons. It mainly adds the 2005–08 and 2015–17 player-seasons.
+  - Newly eligible seasons (#53, #99) enter as a new target version.
+- **Links:** [ADR-0026](#adr-0026--maintainer-decisions-of-2026-11-24-m2-acceptance-informed-rapm-comparators-and-partial-history-spm-targets), [ADR-0025](#adr-0025--two-season-unit-weight-window-with-split-penalties-for-the-multi-season-rapm-baseline), [ADR-0012](#adr-0012--center-the-zero-prior-rapm-player-blocks-separately), [ADR-0015](decisions/0015-dated-rapm-clock-and-decay.md)
+
 ## Decision template
 
 ### ADR-XXXX — Title
