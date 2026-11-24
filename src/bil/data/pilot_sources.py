@@ -44,6 +44,34 @@ class Source:
 
 # Shufinskiy archive digests and sizes, as recorded in the issue #51 coverage register.
 _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
+    2001: {
+        "nbastats": ("197e9221e36cd84c91c83704af79e8da6120ee9084e2b7fd61b7665555b03666", 7_177_180),
+        "nbastats_po": (
+            "beaf420cccc3022063d31840578eeb8131953cab112f3b72d9c203efbee8fa9e",
+            431_636,
+        ),
+        "nbastatsv3": (
+            "adcaeee9423c4404404bccf92c85fc8c774db88b957c6ec12df2051fb8756187",
+            7_264_092,
+        ),
+        "nbastatsv3_po": (
+            "d48daa2a2886a14b602cb1037ee0965fdc425616f33917ec341d6de1cb77bf4b",
+            440_152,
+        ),
+        "shotdetail": (
+            "2a8a136e546806a4e6f4f0a23a3353b874d3a2b5ea32bcef73bed20a4655a272",
+            2_280_324,
+        ),
+        "shotdetail_po": (
+            "032d90df63a0b5fd9a4c568a6bd2a6345e1a22afaec854697837382f8028d0c0",
+            137_164,
+        ),
+        "pbpstats": ("401fa9159355e2936d3ce7ff45e69ac43478923f6988b4ed5c54a302475a6137", 5_613_412),
+        "pbpstats_po": (
+            "b1f09b56488db62cd0ec02080834d35dd87a76d296d3d8ad00a04356937a9940",
+            341_204,
+        ),
+    },
     2002: {
         "nbastats": ("6b1c65437a657c6caf2cdcaa854e32fe744e07892bb8f511271bc9fe40de3e33", 7_224_056),
         "nbastats_po": (
@@ -70,6 +98,34 @@ _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
         "pbpstats_po": (
             "90ddbb8a89b5a0f212f62c0e8b25af6dabb681e9bf51c6f2d1ba2fbc7d40248a",
             420_372,
+        ),
+    },
+    2003: {
+        "nbastats": ("864a20c81c09d9db0b0eb681291da78fd65db0cb50e499c4dc13f9ad494c1184", 7_199_696),
+        "nbastats_po": (
+            "c5810cd6d88f322d5835bb0faa1e8da38bf11542c0fbc338cb7f642e702346c0",
+            486_752,
+        ),
+        "nbastatsv3": (
+            "afa45748c3db1511c1171c68385cda0b70b0d6ff5a2e38d44b953fdde334b84e",
+            7_283_548,
+        ),
+        "nbastatsv3_po": (
+            "d0505f165899ea666eb4f82fb1a4881e0aa27b04866589ac2210fe683acfdf58",
+            499_528,
+        ),
+        "shotdetail": (
+            "558be852d48c95ec6d3ff1b6b9e172b3447cc3e56fa946caa171bfed6832f9b0",
+            2_273_324,
+        ),
+        "shotdetail_po": (
+            "a4d454a15361579de6210b2a35998de10ef2728da4ce85c9db9583c5cbf69bd6",
+            153_928,
+        ),
+        "pbpstats": ("4ff1fcbe259143e2a47212ebcffd9ad4932031e80bf235a18aa3d08d4634574a", 5_595_948),
+        "pbpstats_po": (
+            "bbbf8aa4eea224efb011ff4326c61943bed6436c1d67a5fd7bd873e3d93e3a6d",
+            383_388,
         ),
     },
     2004: {
@@ -722,9 +778,17 @@ _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
 
 # Bill Mill team and player box logs as (sha256, bytes), from the issue #51 register.
 _BOX_PINS: dict[int, tuple[tuple[str, int], tuple[str, int]]] = {
+    2001: (
+        ("2b3ff428c21fa77bef94e777aaeaa8a9fb3667c72eba5956884a541588b9c43d", 142_965),
+        ("62d57e9ce5af53922449ccd152f523bdb703a5be2216e70819414a373b0d7d94", 1_341_776),
+    ),
     2002: (
         ("c2fdc099f71e2eda99f64825bd496fb87288f89fd33095106d0064faa40c8137", 145_139),
         ("4df5091b79d4940433bb349650a6dc03f5d92d76a9c1930fc93603d6dbd53965", 1_367_996),
+    ),
+    2003: (
+        ("37317de5a137631fa2df1ef7276bcccb58d5e8b696d4bb75cefda28af7cb33fd", 145_681),
+        ("7a460750008ca8f7be62634f43572ab9c8cf8101f2b24451827b4fb1da9652b0", 1_368_214),
     ),
     2004: (
         ("542d70c7a535ed628e36c3ca40272ae70965f700d64f5983fd98c27909cc2123", 154_216),
@@ -802,9 +866,17 @@ _BOX_PINS: dict[int, tuple[tuple[str, int], tuple[str, int]]] = {
 
 # Bentes regular-season and playoff lineup stints as (sha256, bytes, release asset ID).
 _BENTES_PINS: dict[int, tuple[tuple[str, int, int], tuple[str, int, int]]] = {
+    2001: (
+        ("d4cd62ce3eeced79d39bd767c9f42d51b0b4130ced53b85482cb6ab54cd30c21", 898_158, 582066369),
+        ("65378dae648a7a4f1a7ef0ce02c395cba04cb9146f41be08420d40cc23f8173d", 68_697, 582065246),
+    ),
     2002: (
         ("95704f27055d2ccab49e15621c4fb20ba7e1a1fa00cc0278dd6341736beadaaa", 887_802, 582066423),
         ("8da5fd8bf5a78255e7c0d049314eb33fa1e6bb36d35457de7e1fac8ada7d1544", 87_017, 582065274),
+    ),
+    2003: (
+        ("dda015c7b02d7fd420baa739c57ad5f7c63c6822cefeaae0d4ab98bdc1014862", 968_383, 603727863),
+        ("2039aa3e8df08df91b9624f11089623997007021eb7e9264b9e59bfbdfa1edaf", 79_278, 582065296),
     ),
     2004: (
         ("a46efac6d99d71a684f5460015ac634db4b55843956276f3295d82c0e7fbdf14", 1_095_351, 603727927),
