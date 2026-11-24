@@ -56,3 +56,11 @@ Bounded feasibility only: diagnose the 2017–18 event-order quarantines, probe 
 
 - Independent review of the diff from `99d558c`.
 - The lead creates the batch issues from the recommendation in the research note and decides on ADR-0023.
+
+## Independent review
+
+A fresh Opus reviewer requested one change. The documentation described the order repair as only moving late-entered events later. A replay showed that shifts go both ways (160 of 384 earlier) and include scoring events. That correction is in c6c8490. A focused re-review approved c06b92c, reproduced `--shifts` exactly, and confirmed the `ord` assertion is safe for every season.
+
+Remaining minor items:
+- The "events with an actor" figures (377, of which 38 moved over 24 s) count replays as actor events, because replays carry a non-zero PLAYER1_ID.
+- The build warning text still says "late-entered".
