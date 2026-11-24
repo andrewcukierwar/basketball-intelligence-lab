@@ -228,6 +228,14 @@ Playoffs are scored separately and never pooled. RAPM is inconclusive in the pla
 8. **Confirmatory 2025–26 holdout.** Whether and when to register it. It was never read.
 9. **Experiment log.** #23 and #24 have no EXP entries in `experiment-log.md`. The reports stand in for them. Propose adding entries, a documentation follow-up outside this task's scope.
 
+## 7a. Reproducibility replay (EXP-0016)
+
+The frozen ADR-0025 configuration was replayed independently with the unchanged runner, from a clean tree, under a [protocol](rapm-replay-protocol.md) committed before the run (see [EXP-0016](../experiment-log.md)). This is verification, not selection.
+
+- **Development and outer artifacts reproduce exactly.** The selected configuration (`W2`, 4,000 / 8,000), all eight candidate MSEs, deltas and bootstrap intervals, row counts, input and outcome digests, the fit logs, 3,575 coefficient values and every prediction array match with maximum deviation 0, against a tolerance of 1e-8 relative. `player_estimates.csv` is byte-identical.
+- **One provenance leaf differs.** The recorded addendum commit is `7f9b85e` in the replay and `57fe88e` originally, because the #26 PR was squash-merged. The addendum's SHA-256 is unchanged.
+- **Scope.** Same machine and library versions, pinned inputs. It does not test other platforms or rebuilding the inputs, and it does not validate the modeling choices.
+
 ## 8. Reproduce and verify this report
 
 Every figure above comes from the linked reports, ADRs and EXP-0005, EXP-0006, EXP-0011, EXP-0012, EXP-0013, EXP-0014 and EXP-0015. To reproduce the fits, use the commands in each report's Reproduce section, with the pins in section 2.1 and the locked environment:
