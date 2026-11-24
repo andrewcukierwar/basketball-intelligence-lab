@@ -8,6 +8,7 @@ from bil.models.rapm.reference import (
     build_design,
     fit_prior_rapm,
     fit_rapm,
+    fit_rapm_diagnostics,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "fit_dated_prior_rapm",
     "fit_prior_rapm",
     "fit_rapm",
+    "fit_rapm_diagnostics",
 ]
