@@ -136,7 +136,7 @@ Game-clustered 95% percentile bootstrap intervals throughout, calendar-week-clus
 - **Clock.** Dated fits keep rows with `played_date` strictly before the cutoff in Eastern calendar dates. The evidence has played dates but no verified historical publication times.
 - **2022–23 exposure profile** (#23): median 1,786 offensive possessions per player (p05 54, p95 4,812), 541 players, 34.4% of players under 1,000 offensive possessions.
 
-Status of the formal records: ADR-0012, ADR-0014, ADR-0015 and ADR-0019 are Accepted. **ADR-0013**, which limits the baseline to stable-lineup possessions, is still marked Proposed in `DECISIONS.md`, although every M2 result rests on it. ADR-0025 is Proposed.
+Status of the formal records: ADR-0012, ADR-0014 and ADR-0015 are Accepted for the synthetic reference, and ADR-0019 is Accepted. **ADR-0013**, which limits the baseline to stable-lineup possessions, is still marked Proposed in `DECISIONS.md`, although every M2 result rests on it. ADR-0025 is Proposed.
 
 ## 5. Remaining EPM uncertainties
 
@@ -146,10 +146,10 @@ The register [epm-uncertainties.md](epm-uncertainties.md) now carries an "M2 sta
 | --- | --- | --- | --- |
 | EPM-U01 target and exclusions | Partially resolved (Original) | Row, response and exposure definitions, ledger reconciliation with 16 identity checks, ADR-0019 exclusion rule, garbage-time down-weighting and exclusion rejected | Multiple-lineup possessions (12.64%) are excluded and not modeled. EPM's actual target and garbage-time rule are unpublished. ADR-0013 is Proposed |
 | EPM-U08 home and score state | Open (Experimental) | One-season and outer-season context evidence: time and score help held-out scoring, home is inconclusive, fitted and offset treatments are indistinguishable | The multi-season baseline carries no context terms. Neutral court is untestable (flags null). Time gain depends on run-out eligibility. No registered outer context test |
-| EPM-U09 prior strength | Open (M5) | A zero prior recovers baseline RAPM exactly on synthetic data, and prior penalties pull toward priors in the numerical tests | Penalty strength with real SPM priors, rookies and missing priors |
+| EPM-U09 prior strength | Open (M5; Experimental) | A zero prior recovers baseline RAPM exactly on synthetic data, and prior penalties pull toward priors in the numerical tests | Penalty strength with real SPM priors, rookies and missing priors |
 | EPM-U10 signs and centering | Resolved for the estimator contract (Original) | Sign, unit, role-block centering and total-impact convention in ADR-0012 and ADR-0014, with oracle checks | Daily league centering of team ratings is not implemented. Reporting rules for components |
-| EPM-U12 snapshots and cutoffs | Partially addressed | All M2 results are labeled `retrospective_capture_bound`, with played-date clocks | No contemporaneous publication evidence exists. No live-equivalence claim |
-| EPM-U13 feeds and parser | Partially resolved (Original) | 26 `check` invariants pass for every build, time-weighted Bentes lineup agreement of 99.97% or better in the 2016–17, 2017–18 and 2019–20 builds (older-era probes 99.996% to 100%), discrepancies tracked by season and reason (EXP-0007, EXP-0009, EXP-0012, EXP-0013) | EPM's exact feed is unknown. Weaker-verification strata remain (section 6). 2017–18 fails the hard limits |
+| EPM-U12 snapshots and cutoffs | Partially addressed (Original) | All M2 results are labeled `retrospective_capture_bound`, with played-date clocks | No contemporaneous publication evidence exists. No live-equivalence claim |
+| EPM-U13 feeds and parser | Partially resolved (Original) | 26 `check` invariants pass for every build, time-weighted Bentes lineup agreement of 99.97% or better in every season build from 2016–17 through 2024–25 (EXP-0007, EXP-0009) (older-era probes 99.996% to 100%), discrepancies tracked by season and reason (EXP-0007, EXP-0009, EXP-0012, EXP-0013) | EPM's exact feed is unknown. Weaker-verification strata remain (section 6). 2017–18 fails the hard limits |
 | EPM-U14 recency weighting | Partially resolved (Experimental) | Strict clock and unnormalized exponential decay (ADR-0015). Windows of 1, 2, 3 and 5 seasons and decays with 90- to 730-day half-lives compared. The result is a near-tie | Interaction with prior strength (M5). Whether any default survives the 2025–26 holdout. EPM's clock and factors |
 
 U02 to U07 and U11 belong to M3 and later and have no M2 evidence.
@@ -167,10 +167,10 @@ Eligibility follows [ADR-0022](../DECISIONS.md) and the [matrix](../data-pilot.m
 | 2018–19, 2019–20, 2020–21, 2021–22, 2022–23 | Primary training (2018–19 and 2021–22 conditional on the missingness analysis) | Yes, development folds |
 | 2023–24, 2024–25 | Outer validation (2024–25 playoffs carry a 0.135% unresolved share, a documented warning) | Yes, outer scoring only |
 | 2025–26 and later | Confirmatory holdout, never read | No |
-| 2015–16, 2016–17, 2005–06, 2006–07, 2007–08 | Eligible history with warnings, row sets built, weaker verification | **No** |
+| 2015–16, 2016–17, 2005–06, 2006–07, 2007–08 | Eligible history with row sets built and weaker verification; 2015–16, 2016–17 and 2005–06 carry warnings, while 2006–07 and 2007–08 meet without warnings | **No** |
 | 2004–05, 2012–13, 2013–14, 2014–15 | Unavailable: miss a 97% coverage floor by 1 to 6 games | No |
 | 2017–18 | Excluded: fails coverage (85.5%) and unresolved limit (0.391%) | No |
-| 2008–09 through 2011–12 | Not built. A same-clock rebound rule is needed. 2010–11 probe: 96.5% regular-season coverage | No |
+| 2008–09 through 2011–12 | Not built as a batch; 2010–11 was built as a probe (EXP-0013) without a row set. A same-clock rebound rule is needed. 2010–11 probe: 96.5% regular-season coverage | No |
 | 2001–02 through 2003–04 | Not probed | No |
 
 No RAPM has been fit on any season before 2018–19, so #28's full 2003–04 through 2022–23 target does not yet exist. Where hard limits are missed, seasons are recorded unavailable and no threshold was loosened.
@@ -205,10 +205,10 @@ Playoffs are scored separately and never pooled. RAPM is inconclusive in the pla
 
 | # | M2 item | Assessment | Evidence |
 | --- | --- | --- | --- |
-| 1 | Sparse design matrices and ridge estimators, benchmarked against independent reference implementations | **Met** | Dense-oracle agreement within 1e-8 (largest observed 6.5e-11 to 8.99e-11), OpenRAPM agreement to 6.790e-10 (EXP-0006, PR #65). Only one external implementation, on shared synthetic fixtures |
+| 1 | Sparse design matrices and ridge estimators, benchmarked against independent reference implementations | **Met** | Dense-oracle agreement within 1e-8 (largest observed coefficient deltas 6.5e-11 to 8.99e-11; largest fitted-rate delta 1.4127e-10), OpenRAPM agreement to 6.790e-10 (EXP-0006, PR #65). Only one external implementation, on shared synthetic fixtures |
 | 2 | Synthetic known-coefficient simulations, sensitivity checks, solver equivalence | **Met** | EXP-0005: recovery within 2e-5, penalty and sample sensitivity, paired-player aliasing, weight-and-penalty rescaling invariance (PR #18, #71, #73) |
 | 3 | Home, score-state, temporal and regularization choices introduced separately | **Met as experiments, with open verdicts** | #24 (home, score, time, offset versus fitted, weighting), #77 (split penalty), #26 (window and decay). Home and fitted-versus-offset are undecided, no context enters the multi-season baseline, and the time effect depends on run-outs |
-| 4 | Multi-season RAPM with coefficient stability by sample and window | **Met, with weak stability** | Seven seasons, 1,066,152 development rows, eight candidates, split-half, year-over-year and refit stability, four sensitivity scenarios. Split-half r 0.46 for `W2`, near-tied selection |
+| 4 | Multi-season RAPM with coefficient stability by sample and window | **Met, with weak stability** | Seven seasons built; development used 1,066,152 rows from five seasons, eight candidates, split-half, year-over-year and refit stability, four sensitivity scenarios. Split-half r 0.46 for `W2`, near-tied selection |
 | 5 | Exit gate, part 1: numerical correctness on controlled cases | **Met** | Items 1 and 2 |
 | 6 | Exit gate, part 2: multi-season impact ratings reproducible | **Partially met** | Pinned inputs, frozen protocol and addendum, a runner that enforces them, 3,970 and 20 converged fits, and one independent reproduction of a headline delta. Not yet independently re-run end to end from raw data. Each run executed once. The selection (ADR-0025) is not accepted and is a near-tie. Ratings are noisy and RAPM does not beat context-only |
 | 7 | Exit gate, part 3: holdout reports reproducible | **Partially met** | Outer-validation reports for 2023–24 and 2024–25 follow a pre-frozen addendum and report negative results. They are development evidence for later registration. The confirmatory 2025–26 holdout has not been run, and the playoff outer result is inconclusive. Whether M2 requires the confirmatory run is a maintainer decision |
@@ -218,7 +218,8 @@ Playoffs are scored separately and never pooled. RAPM is inconclusive in the pla
 ### Open for the maintainer
 
 1. **ADR-0025 acceptance.** Proposed and independently reviewed (approved). Accept, modify (for example `W3`, `H365` or `H730`, which are equally supported) or reject `W2` with split penalties. The outer seasons were not used to check the choice.
-2. **ADR-0019 departure from literal option (b).** Confirm the canonical row set that keeps the 962 `period_end` run-outs, or override and adopt `period_end_start` (the sensitivity variant). The row set affects the size of the context comparator's advantage. Repository documents record the independent re-review of the canonical decision as pending (EXP-0011, #74 and #82 handoff). This report found no later record of it.
+2. **ADR-0019 departure from literal option (b).** Confirm the canonical row set that keeps the 962 `period_end` run-outs, or override and adopt `period_end_start` (the sensitivity variant). The row set affects the size of the context comparator's advantage. A focused independent re-review approved the canonical decision (commit abed529) before PR #91 merged. EXP-0011, ADR-0019 and the #74/#82 handoff now record it.
+   - Related open question (EXP-0011): after the period-end analysis, an end-of-period effect of about −16 points per 100 remains unexplained. Game-final possessions are an untested candidate (**Inferred**).
 3. **ADR-0013.** Still marked Proposed. Accept the stable-lineup restriction (12.64% of accepted possessions excluded), or ask for a multiple-lineup treatment.
 4. **ADR-0023.** Proposed, opt-in, off by default (event-order repair from data.nba entry order). It is not used by any M2 result. Even with it, 2017–18 stays 5 games short of coverage (96.6%) and 0.283% unresolved against the 0.1% limit. The safeguard options (i) to (iv) are undecided. Issue #99 (2017–18) is blocked on it.
 5. **#53 backfill status.** Batches 1 to 3 are merged ([#96](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/96), [#97](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/97), [#98](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/98); PRs #101, #102, #103). #53 itself is open. Still open: 2008–09 through 2011–12 (needs a same-clock rebound rule), 2001–02 through 2003–04 (probe), 2017–18 (#99). Four seasons are unavailable (2004–05, 2012–13, 2013–14, 2014–15). The M2 multi-season fit does not need this history. #28 does.
