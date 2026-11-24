@@ -202,6 +202,62 @@ _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
             377_204,
         ),
     },
+    2012: {
+        "nbastats": ("debf24484f7c68adaeba0d16c76efd464879cdf3d042fe9a9df7103e79c3f712", 7_805_676),
+        "nbastats_po": (
+            "0b1802af3f3caaa97ef6ae394201fc56507cf812d6dc047770b19d896c41ebdb",
+            529_880,
+        ),
+        "nbastatsv3": (
+            "35544361ed9c850d55ea6d092d7228a44398d9547c35b69f2de7b4581f9e1436",
+            7_749_740,
+        ),
+        "nbastatsv3_po": (
+            "f9ec57ddf67d172e1f8f48cff4834257fb8dac0bcece1c476f197d5d9547c75d",
+            542_692,
+        ),
+        "shotdetail": (
+            "c626b0c04e6dc425fce11514a7a86e60dc1261565a1fa8b289f9bb31ff62c5a4",
+            2_552_452,
+        ),
+        "shotdetail_po": (
+            "cbe6de451cc739a65f3ba4344606dc72c61738d66c98dacceb0c4f2243ae523f",
+            174_108,
+        ),
+        "pbpstats": ("3d646db38f684f8fdbc69f36715b74f2e15841ea1903c26f3b7878057d6f7179", 5_850_800),
+        "pbpstats_po": (
+            "bd5847a8dccf37e123bd123f0368b8e13304ea02c19b0a7404b9b39a421f22d4",
+            402_056,
+        ),
+    },
+    2013: {
+        "nbastats": ("9a75bb65e46176d98c523c471afc68c6584afbe9e785d66b433e9612f821f18f", 7_977_376),
+        "nbastats_po": (
+            "e5be228ad464792651ee97106babde22304fb485eee732693664e64f9c37fac3",
+            556_092,
+        ),
+        "nbastatsv3": (
+            "c9c070f31126eed1336ba2cffd08af9888fa2829ccdd3069b588ea49f79eac59",
+            8_007_752,
+        ),
+        "nbastatsv3_po": (
+            "ceb96782f30495c941c3727f32607081afb3e8e992f215e703647486d6f1a5f0",
+            570_284,
+        ),
+        "shotdetail": (
+            "de5098ccc7cd3f95c128f77fb29e7c3fcfb1987b368e93c6e121a03fbecb2de0",
+            2_584_176,
+        ),
+        "shotdetail_po": (
+            "f09e28497ba816acb7ede3f2ce4e5aff2385298e57df60921e067c6a83bad2c5",
+            183_592,
+        ),
+        "pbpstats": ("484ee36310448cffdf3e4ec0575d3d70d75b71998f34d70b6468273ec8912fab", 5_980_396),
+        "pbpstats_po": (
+            "9b77b6c052eb1d321ae2effaa27980eaddd010690287eec1444e3999d856a6da",
+            420_940,
+        ),
+    },
     2014: {
         "nbastats": ("f6a48f32ed7887d6e1885354a9e46b8852040a9f9ce344eaa18e634803cd2eaf", 8_024_656),
         "nbastats_po": (
@@ -228,6 +284,37 @@ _ARCHIVE_PINS: dict[int, dict[str, tuple[str, int]]] = {
         "pbpstats_po": (
             "cc34880fc5d1c2b513ba3ec70f737b0ae8a98260d25ba3383dec263d91bcd750",
             410_844,
+        ),
+    },
+    2015: {
+        "nbastats": ("217087b27259e34ec9c82a596335a36ce6580e5f9129e186e6a1b4f0dc592ebf", 8_307_212),
+        "nbastats_po": (
+            "22c51b2347c62bb68859e65db3f34657933cdbebfc29797d33c74bd93f527211",
+            568_364,
+        ),
+        "nbastatsv3": (
+            "7bbb1e8a1512dd2877be97cb73d990c424a2f7488137ca5d7a6285e2afea873e",
+            8_278_740,
+        ),
+        "nbastatsv3_po": (
+            "14c5a5577c9051c0c4e825e33b130c89dbee581e45f29972ccdd6a9f2a2c3e91",
+            575_984,
+        ),
+        "shotdetail": (
+            "ac48fad67cabf79f8a5a726aa55ea4a8c793a85eaa3835d38b46f2d0e37495a3",
+            2_609_520,
+        ),
+        "shotdetail_po": (
+            "013c10bdb44f668c8cda755079a967d25aa5714532b77dc70401e5f4bf14e333",
+            184_616,
+        ),
+        "pbpstats": (
+            "43470995870cdaea1eb727dcb03909c47bbf549e87abc2f286f32297b011a56c",
+            15_103_876,
+        ),
+        "pbpstats_po": (
+            "a7a96740cf82d2e439ffb81186a707115a42fc56677790fd08273b42f48f7c7d",
+            1_118_824,
         ),
     },
     2016: {
@@ -627,9 +714,21 @@ _BOX_PINS: dict[int, tuple[tuple[str, int], tuple[str, int]]] = {
         ("14febf00675b74c53f3e7d76383fabfb5128409ad85a9e800b17c973d5186b45", 159_888),
         ("4bdfd03b37236c054a7282c2e9fa5685e8df4368abb69645657c39ede897416d", 1_564_330),
     ),
+    2012: (
+        ("281491dafbdde0b1f05e7ec889a7c23019da3598cddc61fec047fe1ec7e308a5", 159_432),
+        ("aac022ae62eb7413d84d5be2766834ac2b71b14207eec01d4e57226db98b5401", 1_601_083),
+    ),
+    2013: (
+        ("068d32966fde965a7efd33e318727106d17828e8537e88a164f305450880c1f4", 160_756),
+        ("988bfdf665893ea87aa7d72af02373255ae9af1b414870bda799ba5d539b9673", 1_580_395),
+    ),
     2014: (
         ("9c122bd1362c0911b5b47cd5992d97c74b6e8060b6a3a09641b0a085c6e70d8c", 159_901),
         ("8be6e39f9f7431015b81795c20aada4d475a3967f19ce70b05bf6015377ceb4d", 1_601_065),
+    ),
+    2015: (
+        ("86e7afe4432057aa3775f03fa4af7bd24704b289172a364d5551e6e527d4e043", 160_008),
+        ("6875ef5245ee653fb0c8cd2257d09eba81d0645a564c5a57b0693d3be52b9c0a", 1_616_455),
     ),
     2016: (
         ("5f437d5802e09e87dda9ce2fd5e73db189d061222cbc9d6e82625862b1d6e950", 159_695),
@@ -691,9 +790,21 @@ _BENTES_PINS: dict[int, tuple[tuple[str, int, int], tuple[str, int, int]]] = {
         ("fa8ca61be522d874dd605e65a92805ad7ad3055c210b9d56487827b861a1ef79", 1_091_849, 582066733),
         ("560bd168c66b30d53fe883b09b07bf4a20b48ff52c9bafb54403164d9cabceb4", 78_653, 582065564),
     ),
+    2012: (
+        ("28370a2cb0ad4d0cfc9da153fc1203ca6f9bc0bc1985139cf815072756f21e74", 1_097_451, 582066790),
+        ("e6e34bb1837ad17504518be7b53f8363c5104bd21a27f9c6131e47d1508ba9ae", 88_455, 582065628),
+    ),
+    2013: (
+        ("ae9ceeb16edae501975bacb9a203df2030b5fdc390d164b5b17c6825a7043800", 1_148_288, 582066845),
+        ("10d72a3ad60adf3f3da08cb97447af3864b702f79cf8458e27b733ae7102cbe3", 89_813, 582065655),
+    ),
     2014: (
         ("7294a7660e5c317956ef8304770553971b0d4759c7ef7d6bb73c871645d428a4", 1_258_026, 603727989),
         ("9a9a1acce5f63eeec2f8ef58b2121f7e4e37bd74651acb60eb9ebf76e9714295", 85_984, 582065693),
+    ),
+    2015: (
+        ("28ec706dfbd745a3dd6f902c7f37adb3361a71a1ea83e628c21a3fd44ba36d19", 1_196_376, 582066911),
+        ("dde5ade6aeb776832bdb835ddecf29137d268784e17e1ba93df2e729a908c25a", 91_987, 582065720),
     ),
     2016: (
         ("616df99ca344f68d08f134d5449a8cdf130e38ec88c16c3201b9face2d82f70b", 1_283_777, 582066943),
