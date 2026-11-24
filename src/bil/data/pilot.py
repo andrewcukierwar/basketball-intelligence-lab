@@ -448,6 +448,13 @@ def _build_game(
             )
             warning = GameIssue("same_clock_order", f"{RULE_VERSION}: {moved}")
             issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if clock_ordered is None and clock_declined is not None:
+            note = GameIssue(
+                "same_clock_declined",
+                f"{RULE_VERSION} declined ({clock_declined.reason}) at period "
+                f"{clock_declined.period} {clock_declined.clock}, rebound {clock_declined.rebound}",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, note, "warning", refs))
         if reordered is not None:
             labels.append("datanba_event_order")
             shifts = [abs(shift) for _, _, shift in reordered.clamped.values()]

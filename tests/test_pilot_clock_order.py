@@ -188,3 +188,26 @@ def test_rebound_after_a_jump_ball_without_a_miss_is_still_an_orphan() -> None:
         ev(3, 4, "5:00", A, "REBOUND"),
     )
     assert reorder_same_clock(raw) == Declined("no_candidate", "1", "5:00", 3)
+
+
+def test_a_miss_that_needs_its_own_rebound_is_not_reused() -> None:
+    raw = stream(
+        ev(1, 2, "5:00", A, "MISS"),
+        ev(2, 4, "4:58", A, "REBOUND"),
+        ev(3, 4, "4:58", A, "REBOUND"),
+        ev(4, 4, "4:58", A, "REBOUND"),
+        ev(9, 2, "4:58", A, "MISS tip"),
+    )
+    assert reorder_same_clock(raw) == Declined("no_candidate", "1", "4:58", 4)
+
+
+def test_a_candidate_without_a_team_is_ambiguous_with_a_teamed_candidate() -> None:
+    blank = ev(8, 2, "4:58", "", "MISS")
+    blank.fields["PLAYER1_ID"] = ""
+    raw = stream(
+        ev(1, 1, "5:00", A, "made"),
+        ev(2, 4, "4:58", A, "REBOUND"),
+        blank,
+        ev(9, 2, "4:58", A, "MISS"),
+    )
+    assert reorder_same_clock(raw) == Declined("ambiguous_team", "1", "4:58", 2)

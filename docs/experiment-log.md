@@ -272,3 +272,23 @@ Do not overwrite negative or unexpected results. New experiments should be appen
   - [Report](research/rapm-multiseason.md)
 - **Limitations / interpretation:** Near-tie selection. `W5` was truncated in development. Neutral sites are not coded. The context advantage rests on end-of-period run-outs (#82). Retrospective, not confirmatory.
 - **Next decision:** Review, then whether informed RAPM (#30 and later) should take the RAPM-with-context-offset model as its comparator.
+
+### EXP-0018 — Same-clock shot, tip and rebound ordering rule, 2008–09 through 2011–12 and older seasons
+
+- **Status:** Completed. Each build ran once. A fresh reviewer found no blocker (see the handoff).
+- **Date:** 2026-11-24.
+- **Research question:** Does a deterministic same-clock rule, derived from event semantics and not tuned on reconciliation, recover games that fail on a rebound with no missed shot before it, without changing any accepted game and without relaxing any check?
+- **Category:** Experimental, Original design. No EPM output was used.
+- **Code SHA / run ID:** `15923601` (rule `same-clock-v1`). Builds `issue-111-rule-v4` for 2001–02 to 2016–17 and 2018–19, `issue-111-base-v1` default builds of the four target seasons, `quality/issue-111-v2`.
+- **Datasets/checksums and cutoff:** Pinned archives from the #51 register for 2008–09, 2009–10 and 2011–12 (new pins) and earlier pinned seasons, captured with `--from-local`. No 2025–26 or later file was read.
+- **Train / validation / test periods:** None. Dataset construction, no model.
+- **Model and configuration:** Retry only after V2 and V3-primary fail. Orphan rebound takes the single same-team missed field goal later in its clock group, else the game is declined.
+- **Baselines:** The default build (no rule) of each season.
+- **Metrics and uncertainty:** Accepted games, hard-gate coverage, unresolved share, row identity of previously accepted games, agreement with Bentes order and lineups, 26 `check` invariants. Counts only.
+- **Results:**
+  - Four target seasons gain 4, 12, 23 and 9 regular games. 2010–11 reaches 1,209 of 1,230 and 81 of 81 playoffs and meets ADR-0022.
+  - 2004–05 (playoffs 82 of 84) and 2014–15 (79 of 81) also meet. 2011–12 (81 of 84), 2012–13 (1,192 of 1,229), 2013–14 and 2001–02 to 2003–04 still fail.
+  - Previously accepted games: 0 differing rows in 17 builds, 2018–19 unchanged. 26 of 26 checks pass everywhere.
+  - [Report](research/same-clock-rebound-order.md)
+- **Limitations / interpretation:** Moves are verified by reconciliation and by Bentes order (itself derived from V2), not by an independent order feed. 44 of 55 declined games in the target seasons are a separate free-throw marker defect. Same-team ties are declined.
+- **Next decision:** Independent review, then whether to file the missing-`MISS ` free-throw rule.
