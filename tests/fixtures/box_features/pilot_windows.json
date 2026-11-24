@@ -1,0 +1,80 @@
+{
+  "source_capture_at": "2026-11-23T18:00:00Z",
+  "source_availability_basis": "capture_bound",
+  "player_id": "9001",
+  "appearances": [
+    {"game_id": "0022209991", "player_id": "9001", "team_id": "100", "opp_team_id": "300", "season_type": "regular", "game_date": "2023-01-02", "min": 18, "fgm": 3, "fga": 6, "fg3m": 1, "fg3a": 2, "ftm": 2, "fta": 2, "pts": 9, "oreb": 1, "dreb": 2, "ast": 3, "tov": 1, "stl": 1, "blk": 0, "pf": 2},
+    {"game_id": "0022209992", "player_id": "9001", "team_id": "200", "opp_team_id": "300", "season_type": "regular", "game_date": "2023-01-10", "min": 12, "fgm": 2, "fga": 4, "fg3m": 0, "fg3a": 0, "ftm": 0, "fta": 0, "pts": 4, "oreb": 0, "dreb": 1, "ast": null, "tov": 1, "stl": 0, "blk": 1, "pf": 1},
+    {"game_id": "0022209993", "player_id": "9001", "team_id": "200", "opp_team_id": "100", "season_type": "regular", "game_date": "2023-01-11", "min": 24, "fgm": 5, "fga": 9, "fg3m": 2, "fg3a": 4, "ftm": 1, "fta": 2, "pts": 13, "oreb": 1, "dreb": 3, "ast": 4, "tov": 2, "stl": 2, "blk": 0, "pf": 2},
+    {"game_id": "0042209994", "player_id": "9001", "team_id": "200", "opp_team_id": "100", "season_type": "playoffs", "game_date": "2023-04-18", "min": 6, "fgm": 0, "fga": 0, "fg3m": 0, "fg3a": 0, "ftm": 1, "fta": 2, "pts": 1, "oreb": 0, "dreb": 0, "ast": 0, "tov": 0, "stl": 0, "blk": 0, "pf": 0}
+  ],
+  "cases": [
+    {
+      "mode": "dated_retrospective",
+      "rating_date": "2023-01-11",
+      "season_types": ["regular"],
+      "eligible_game_ids": ["0022209991", "0022209992"],
+      "minutes_ms": 1800000,
+      "points": 13,
+      "features": {
+        "fg3_pct": {"numerator": 1, "denominator": 2, "value": 0.5, "covered_appearances": 2},
+        "ft_pct": {"numerator": 2, "denominator": 2, "value": 1.0, "covered_appearances": 2},
+        "ast_per_36": {"numerator": 3, "denominator": 1080000, "value": 6.0, "covered_appearances": 1},
+        "dreb_per_36": {"numerator": 3, "denominator": 1800000, "value": 3.6, "covered_appearances": 2}
+      }
+    },
+    {
+      "mode": "same_window",
+      "start_date": "2023-01-10",
+      "end_date": "2023-01-10",
+      "season_types": ["regular"],
+      "eligible_game_ids": ["0022209992"],
+      "minutes_ms": 720000,
+      "points": 4,
+      "features": {
+        "fg3_pct": {"numerator": 0, "denominator": 0, "value": null, "covered_appearances": 1},
+        "ft_pct": {"numerator": 0, "denominator": 0, "value": null, "covered_appearances": 1},
+        "ast_per_36": {"numerator": null, "denominator": null, "value": null, "covered_appearances": 0},
+        "stl_per_36": {"numerator": 0, "denominator": 720000, "value": 0.0, "covered_appearances": 1}
+      }
+    },
+    {
+      "mode": "same_window",
+      "start_date": "2023-01-01",
+      "end_date": "2023-01-11",
+      "season_types": ["regular"],
+      "eligible_game_ids": ["0022209991", "0022209992", "0022209993"],
+      "minutes_ms": 3240000,
+      "points": 26,
+      "features": {
+        "fg2_pct": {"numerator": 7, "denominator": 13, "value": 0.5384615384615384, "covered_appearances": 3},
+        "ast_per_36": {"numerator": 7, "denominator": 2520000, "value": 6.0, "covered_appearances": 2}
+      }
+    },
+    {
+      "mode": "same_window",
+      "start_date": "2023-01-01",
+      "end_date": "2023-06-30",
+      "season_types": ["playoffs"],
+      "eligible_game_ids": ["0042209994"],
+      "minutes_ms": 360000,
+      "points": 1,
+      "features": {
+        "fg3_share": {"numerator": 0, "denominator": 0, "value": null, "covered_appearances": 1},
+        "ft_pct": {"numerator": 1, "denominator": 2, "value": 0.5, "covered_appearances": 1}
+      }
+    },
+    {
+      "mode": "strict",
+      "rating_date": "2023-01-11",
+      "effective_cutoff": "2023-01-11T05:00:00Z",
+      "season_types": ["regular"],
+      "eligible_game_ids": [],
+      "minutes_ms": null,
+      "points": null,
+      "features": {
+        "ft_pct": {"numerator": null, "denominator": null, "value": null, "covered_appearances": 0}
+      }
+    }
+  ]
+}
