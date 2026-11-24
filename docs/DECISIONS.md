@@ -235,10 +235,27 @@ V2 remains the event source of record.
 - **Consequences:** Players with no history get the league rate. Single-season retrospective evidence; outer seasons must confirm before any default is fixed.
 - **Links:** [Issue #32](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/32), [ADR-0016](#adr-0016--fixed-constant-baselines-and-season-type-keyed-history-for-skill-targets)
 
+## ADR-0019 — Keep run-outs in RAPM model rows and exclude only verified pseudo-possessions
+
+- **Date:** 2026-11-23
+- **Status:** **Accepted. Maintainer decision 2026-11-23, principle B:** exclude only verified pseudo-possessions that offer no live-ball opportunity, keep run-outs, and never condition eligibility on later actions or realized outcomes. Applies to the historical RAPM row set ([#82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)). **Departure from the literal option:** the maintainer selected option (b), excluding the 962 possessions that start on `period_end`, conditional on verifying that the start event is sufficient evidence and that no legitimate live-ball possession is removed. Verification failed, because all 962 had 3–24 s of live-ball clock after a change of control. Applying the maintainer's stated principle, the canonical set therefore departs from literal option (b) and adds no exclusion beyond the pilot's under-3 s rule. Literal (b) is kept as the `period_end_start` sensitivity variant. The maintainer may override this.
+- **Evidence class:** Original BIL design.
+- **Context:** The review of #24 found that possessions starting near a period's end drive most of the measured time-of-period effect. Many are run-outs that score 0. The first implementation excluded every possession with no action event. Independent review judged that a material change, because it filters rows by how each possession turned out.
+- **Decision:**
+  - The canonical row set adds no exclusion beyond the pilot's. The pilot already marks genuine pseudo-possessions as `excluded`. The canonical rows are the pilot-eligible set (accepted, stable lineup), identical to `issue-59-v1`. The registered #23 and #24 results stand.
+  - Two sensitivity alternatives are versioned and selectable with `--variant`: `period_end_start` drops accepted possessions whose first event is `period_end`, and `no_action` drops accepted possessions with no shot, free throw, turnover, foul or violation event.
+  - The rule was not chosen by whether player RAPM beats the context-only comparator.
+- **Verification (2022–23, `scripts/audit_period_end_possessions.py`):** The condition that a `period_end` start shows no live-ball opportunity fails.
+  - All 962 accepted `period_end`-first possessions begin after a change of control (312 defensive rebounds, 297 made shots, 260 turnovers and 93 final free throws) with 3 to 24 s on the clock (median 9 s). 729 are in the final period.
+  - The first audit measured duration over the possession's own events, which is zero for a one-event possession, so it showed nothing about the clock.
+  - The pilot's 1,567 excluded `period_end` starts all have under 3 s left, and 1 unresolved start has 1 s. The pilot rule covers the real pseudo-possessions.
+- **Consequences:** The baseline keeps run-outs. Sensitivity runs show small differences: RAPM versus league −14.09 (canonical), −13.16 (`period_end_start`) and −13.17 (`no_action`), but a larger fall in the time-block gain (−25.7 against about −5). A model fit on canonical rows scores 1.7 to 1.9 MSE worse than fits on the sensitivity rows on canonical held-out rows. These describe the sample and do not select the rule.
+- **Links:** [Row contract](research/rapm-historical-rows.md), [Report](research/rapm-no-action-2022-23.md), [Protocol v3](research/rapm-no-action-protocol-v3.md)
+
 ## ADR-0020 — Build without liveData where the archive lacks it, as a weaker-verification stratum
 
 - **Date:** 2026-11-23
-- **Status:** Accepted for the 2017–18 through 2021–22 builds ([#25](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/25)). ADR-0018 and ADR-0019 are reserved for other work.
+- **Status:** Accepted for the 2017–18 through 2021–22 builds ([#25](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/25)).
 - **Evidence class:** Original BIL design.
 - **Context:** The #51 register records NBA liveData (`cdnnba`) as absent from the pinned Shufinskiy inventory for 2017–18, 2018–19 and 2019–20. The pilot read liveData as a required build input under ADR-0011, so those seasons could not be built.
 - **Decision:**

@@ -36,7 +36,28 @@ def _game_tables(data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     game = data["game"]
     revision = game["stream_revision"]
     scope = {"game_id": game["game_id"], "stream_revision": revision}
+    quiet = set(data.get("no_action_seqs", []))
+    events = [
+        {
+            **scope,
+            "seq": row["start_seq"],
+            "period": row["period"],
+            "remaining_ms": None,
+            "elapsed_ms": None,
+            "observed_at": WHEN,
+            "kind": data.get("first_kinds", {}).get(str(row["possession_seq"]), "shot"),
+            "team_id": row["offense_team_id"],
+            "home_delta": None,
+            "away_delta": None,
+            "revises_seq": None,
+            "source_event_id": None,
+            "source_refs": [],
+        }
+        for row in data["possessions"]
+        if row["possession_seq"] not in quiet
+    ]
     return {
+        "event": events,
         "game": [
             {
                 "game_id": game["game_id"],
@@ -139,8 +160,7 @@ def test_fixture_dispositions_rows_and_totals(tmp_path: Path) -> None:
 
     dispositions = _read(
         output,
-        "select possession_seq, reason, control_points, "
-        "case when reason = 'eligible' then 1 else 0 end "
+        "select possession_seq, reason, control_points, exposure "
         "from '@/possession_disposition.parquet' order by 1",
     )
     assert dispositions == [
@@ -264,6 +284,26 @@ def _duplicate_score(data: dict[str, Any]) -> None:
     data["game"]["home_final"] += 2
 
 
+def _no_action(data: dict[str, Any]) -> None:
+    data["no_action_seqs"] = [5]
+
+
+def _equal_gap_and_overlap(data: dict[str, Any]) -> None:
+    """Possession 5 spans seqs 10-13. Its stints still cover three seqs: overlap 1, gap 1."""
+    stints = data["stints"]
+    last = stints.pop()
+    template = {**last, "end_elapsed_ms": last["start_elapsed_ms"]}
+    stints += [
+        {**template, "stint_seq": 3, "start_seq": 6, "end_seq": 11},
+        {**template, "stint_seq": 4, "start_seq": 10, "end_seq": 12},
+        {**template, "stint_seq": 5, "start_seq": 13, "end_seq": 15},
+    ]
+
+
+def _period_end_start(data: dict[str, Any]) -> None:
+    data["first_kinds"] = {"5": "period_end"}
+
+
 def _stint_gap(data: dict[str, Any]) -> None:
     data["stints"][2]["start_seq"] = 7
     data["stints"][2]["end_seq"] = 15
@@ -299,6 +339,7 @@ def _shared_player(data: dict[str, Any]) -> None:
     ("mutation", "check"),
     [
         (_duplicate_score, "score_allocations_classified_once"),
+        (_equal_gap_and_overlap, r"failed.*\{'stints_contiguous_within_period': 2\}"),
         (_stint_gap, "accepted_possessions_covered_once_by_actual_stints"),
         (_final_score_gap, "allocations_reconcile_to_final_score_by_side"),
         (_control_by_defense, "control_points_scored_by_offense"),
@@ -314,3 +355,96 @@ def test_pilot_ledger_gaps_block_the_build(tmp_path: Path, mutation: Mutation, c
     with pytest.raises(ValueError, match=check):
         build_rows(pilot, output, COMMIT, pin)
     assert not output.exists()
+
+
+def test_no_action_possession_is_excluded_but_kept_in_the_ledger(tmp_path: Path) -> None:
+    pilot, pin = _pilot(tmp_path, _no_action)
+    output = tmp_path / "out"
+    manifest = build_rows(pilot, output, COMMIT, pin, "no_action")
+    assert manifest["variant"] == "no_action"
+    rows = _read(
+        output,
+        "select possession_seq, reason, exposure, control_points, action_events, "
+        "offense_lineup_id is null from '@/possession_disposition.parquet' order by 1",
+    )
+    assert rows[4] == (5, "no_action", 0, 0, 0, True)
+    assert all(row[4] == 1 for row in rows if row[0] != 5)
+    assert _read(output, "select possession_seq from '@/model_row.parquet' order by 1") == [
+        (1,),
+        (6,),
+    ]
+    games = _read(
+        output,
+        "select no_action, eligible, home_modeled_points + away_modeled_points "
+        "from '@/game_reconciliation.parquet' where accepted",
+    )
+    assert games == [(1, 2, 4)]
+    summary = manifest["reconciliation"]
+    assert summary["all|all"]["no_action_possessions"] == 1  # type: ignore[index]
+    assert not any(manifest["identity_violations"].values())  # type: ignore[attr-defined]
+
+
+def test_ineligible_dispositions_carry_no_lineup_ids(tmp_path: Path) -> None:
+    pilot, pin = _pilot(tmp_path)
+    output = tmp_path / "out"
+    build_rows(pilot, output, COMMIT, pin)
+    rows = _read(
+        output,
+        "select reason, exposure, offense_lineup_id is null, defense_lineup_id is null "
+        "from '@/possession_disposition.parquet' order by possession_seq",
+    )
+    assert [(r[0], r[1]) for r in rows] == [
+        ("eligible", 1),
+        ("multiple_lineups", 0),
+        ("pilot_excluded", 0),
+        ("unresolved_control", 0),
+        ("eligible", 1),
+        ("eligible", 1),
+    ]
+    assert [(r[2], r[3]) for r in rows] == [(e, e) for e in (False, True, True, True, False, False)]
+
+
+def test_period_end_start_variant_excludes_only_those_possessions(tmp_path: Path) -> None:
+    pilot, pin = _pilot(tmp_path, _period_end_start)
+    output = tmp_path / "out"
+    manifest = build_rows(pilot, output, COMMIT, pin, "period_end_start")
+    assert manifest["variant"] == "period_end_start"
+    rows = _read(
+        output,
+        "select possession_seq, reason, exposure, offense_lineup_id is null "
+        "from '@/possession_disposition.parquet' order by 1",
+    )
+    assert rows[4] == (5, "period_end_start", 0, True)
+    assert [r[1] for r in rows if r[0] != 5] == [
+        "eligible",
+        "multiple_lineups",
+        "pilot_excluded",
+        "unresolved_control",
+        "eligible",
+    ]
+    assert _read(output, "select possession_seq from '@/model_row.parquet' order by 1") == [
+        (1,),
+        (6,),
+    ]
+    assert manifest["reconciliation"]["all|all"]["period_end_start_possessions"] == 1  # type: ignore[index]
+    assert not any(manifest["identity_violations"].values())  # type: ignore[attr-defined]
+
+
+def test_canonical_is_the_default_and_keeps_every_pilot_eligible_possession(tmp_path: Path) -> None:
+    def both(data: dict[str, Any]) -> None:
+        _no_action(data)
+        _period_end_start(data)
+        data["first_kinds"] = {}
+
+    pilot, pin = _pilot(tmp_path, both)
+    default = build_rows(pilot, tmp_path / "d", COMMIT, pin)
+    assert default["variant"] == "canonical"
+    assert default["reconciliation"]["all|all"]["eligible_possessions"] == 3  # type: ignore[index]
+    shifted = build_rows(pilot, tmp_path / "p", COMMIT, pin, "period_end_start")
+    assert shifted["reconciliation"]["all|all"]["eligible_possessions"] == 3  # type: ignore[index]
+    dropped = build_rows(pilot, tmp_path / "n", COMMIT, pin, "no_action")
+    assert dropped["reconciliation"]["all|all"]["eligible_possessions"] == 2  # type: ignore[index]
+    assert dropped["build_id"] != default["build_id"]
+    assert shifted["build_id"] != default["build_id"]
+    with pytest.raises(ValueError, match="variant"):
+        build_rows(pilot, tmp_path / "x", COMMIT, pin, "Z")

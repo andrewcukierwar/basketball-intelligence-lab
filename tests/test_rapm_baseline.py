@@ -172,3 +172,24 @@ def test_pin_verification_rejects_a_changed_row_set(tmp_path: Path):
         (tmp_path / name).write_text("{}")
     with pytest.raises(ValueError, match="SHA-256"):
         verify_pins(tmp_path)
+
+
+def test_later_row_set_is_pinned_by_manifest_digest(tmp_path: Path):
+    import hashlib
+    import json
+
+    from bil.models.rapm.baseline import EVIDENCE_TIER, pin_from_manifest
+
+    names = [n for n in PINNED_DIGESTS if n != "manifest.json"]
+    for name in names:
+        (tmp_path / name).write_text(name)
+    listed = [{"filename": n, "sha256": hashlib.sha256(n.encode()).hexdigest()} for n in names]
+    manifest = {"build_id": "b" * 64, "evidence_tier": EVIDENCE_TIER, "output_artifacts": listed}
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest))
+    pin = pin_from_manifest(tmp_path, hashlib.sha256(path.read_bytes()).hexdigest())
+    verify_pins(tmp_path, pin)
+    with pytest.raises(ValueError, match="SHA-256"):
+        verify_pins(tmp_path)
+    with pytest.raises(ValueError, match="frozen"):
+        pin_from_manifest(tmp_path, "0" * 64)

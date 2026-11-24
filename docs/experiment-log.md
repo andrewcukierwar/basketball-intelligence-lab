@@ -191,3 +191,14 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Inputs and configuration:** Pinned `issue-5-v2` logs, frozen `issue-32-v1` fits, [frozen protocol](research/skill-context-protocol.md) (commit `9642a51`), code commit `9483a40`, output `issue-33-v1`. 2,496 penalized likelihood fits, game- and player-clustered bootstrap with 2,000 replicates.
 - **Results:** All 194,764 base predictions and 26,481 snapshot rows reproduced #32 exactly, and no context input used a date on or after its game. The matchup-specific forecast lowered log loss in 12 of 13 statistics (10 with game-clustered intervals excluding zero), with MSE changes of −0.02% to −0.88%. Opponent allowed rates carried the gain (retained for 9 statistics). Home, rest and team terms did not beat an intercept-only control. Aging was untestable (no birthdates). Playoffs got worse for 4 statistics. [Full results](research/skill-context-2022-23.md)
 - **Scope:** Single-season evidence only. Outer seasons 2023–24 and 2024–25 must be run before any context is adopted.
+
+### EXP-0011 — Run-outs and period-end possessions in the RAPM row set, 2022–23
+
+- **Status:** Sensitivity runs under frozen protocols v1 and v2 (v2 superseded), then one cohort comparison under v3. Independent review of the canonical decision pending.
+- **Date:** 2026-11-23 and 2026-11-24.
+- **Research question:** Do possessions that start a period's end, or contain no action, need exclusion from the RAPM row set, and what do the alternatives change?
+- **Category:** Experimental (retrospective replay, one season), with an Original row rule.
+- **Inputs and configuration:** `issue-19-v6`. Row sets `issue-82-canonical-v1` (equal to `issue-59-v1`), `issue-82-period-end-start-v1` and `issue-82-noaction-v1`, built at `0c6d111`. [Protocol v3](research/rapm-no-action-protocol-v3.md) commit `abf011b`. $\lambda$ = 4,000, bootstrap seed 2023.
+- **Results:** All 962 accepted `period_end`-first possessions begin after a change of control with 3 to 24 s left, while the pilot's 1,567 excluded ones all have under 3 s, so the canonical set stays the pilot-eligible set and the #23 and #24 results stand. Sensitivity: RAPM vs league −14.09 canonical, −13.16 `period_end_start`, −13.17 `no_action`. `T_fit` −25.69 against about −5. On canonical held-out rows, fits on the sensitivity rows score 1.74 (1.01 to 2.42) and 1.86 (1.10 to 2.57) MSE better. [Report](research/rapm-no-action-2022-23.md)
+- **Limitations / interpretation:** One season. A first audit that used possession-internal duration was invalid and led to a withdrawn v2 protocol. A residual end-of-period effect remains unexplained.
+- **Next decision:** Whether game-final possessions need a treatment, and how to read the canonical time effect in later reports.
