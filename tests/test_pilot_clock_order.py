@@ -43,7 +43,7 @@ def test_tip_in_attempt_entered_late_is_placed_before_the_second_rebound() -> No
     result = reorder_same_clock(raw)
     assert order(result) == [1, 2, 9, 3, 4]
     assert isinstance(result, ClockOrder)
-    assert result.moves == (("1", "4:58", 9, 3, 1),)
+    assert result.moves == (("1", "4:58", 9, 3),)
 
 
 def test_ordered_stream_and_and_one_need_no_change() -> None:
@@ -161,7 +161,7 @@ def test_substitution_between_miss_and_rebound_is_not_an_orphan() -> None:
     assert reorder_same_clock(raw) is None
 
 
-def test_same_team_candidates_are_taken_in_entry_order() -> None:
+def test_two_same_team_candidates_are_ambiguous_and_the_game_is_declined() -> None:
     raw = stream(
         ev(1, 2, "5:00", A, "MISS"),
         ev(2, 4, "4:58", A, "REBOUND"),
@@ -169,7 +169,4 @@ def test_same_team_candidates_are_taken_in_entry_order() -> None:
         ev(9, 2, "4:58", A, "MISS tip late"),
         ev(7, 2, "4:58", A, "MISS tip early"),
     )
-    result = reorder_same_clock(raw)
-    assert order(result) == [1, 2, 7, 3, 9]
-    assert isinstance(result, ClockOrder)
-    assert result.moves == (("1", "4:58", 7, 3, 2),)
+    assert reorder_same_clock(raw) == Declined("ambiguous_candidates", "1", "4:58", 3)

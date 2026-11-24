@@ -444,8 +444,7 @@ def _build_game(
             labels.append("same_clock_order")
             moved = "; ".join(
                 f"{period} {clock} missed shot {shot} placed before rebound {rebound}"
-                f" ({count} candidate{'s' if count != 1 else ''})"
-                for period, clock, shot, rebound, count in clock_ordered.moves
+                for period, clock, shot, rebound in clock_ordered.moves
             )
             warning = GameIssue("same_clock_order", f"{RULE_VERSION}: {moved}")
             issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
