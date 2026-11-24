@@ -214,6 +214,8 @@ V2 remains the event source of record.
 
 ## ADR-0014 — Season-pinned builds and V2 home designation for unflagged box games
 
+## ADR-0017 — Season-pinned builds and V2 home designation for unflagged box games
+
 - **Date:** 2026-11-23
 - **Status:** Accepted for the 2023–24 and 2024–25 outer-validation builds ([#52](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/52)).
 - **Evidence class:** Original BIL design.

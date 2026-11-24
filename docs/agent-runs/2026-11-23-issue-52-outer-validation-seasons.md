@@ -26,7 +26,7 @@ Constraints:
 
 - **`pilot_sources.py`:** Per-season pins for 2022–2024 build and evidence inputs. The digests and sizes come from the #51 register CSVs. 2022 pins and names are byte-for-byte unchanged, which was checked against the previous module. Seasons from 2025 are refused. `capture`/`capture-evidence` take `--season` and `--from-local DIR`. A local copy is verified before and after copying. Its `retrieved_at` is the audit file's mtime, and the snapshot gains a `local_capture` field.
 - **`pilot.py`, `pilot_check.py`, `pilot_evidence.py`:** Season-specific file names are read from the snapshot or manifest year. `game.season_start_year` follows the snapshot.
-- **`pilot_inputs.py` and `pilot.py`:** The 2024–25 Bill Mill team log has `home = null` for both teams in five regular-season games, and without a rule the build stopped with a `ValueError`. Those games now keep a provisional order. V2 description columns must designate the home team unanimously, and the V3 final must then match the box points. Accepted games carry the `v2_home_designation` warning and stratum. Otherwise the game is quarantined as `unresolved_home_designation`. See ADR-0014.
+- **`pilot_inputs.py` and `pilot.py`:** The 2024–25 Bill Mill team log has `home = null` for both teams in five regular-season games, and without a rule the build stopped with a `ValueError`. Those games now keep a provisional order. V2 description columns must designate the home team unanimously, and the V3 final must then match the box points. Accepted games carry the `v2_home_designation` warning and stratum. Otherwise the game is quarantined as `unresolved_home_designation`. See ADR-0017.
 - **Tests:** Six new synthetic test functions (eight cases) in `tests/test_pilot.py`. They cover:
   - provider-year naming;
   - holdout and unpinned-season refusal;
@@ -38,7 +38,7 @@ Constraints:
   Three existing tests were updated for the new signatures.
 - **Docs:**
   - outer-season section in `docs/data-pilot.md`;
-  - ADR-0014;
+  - ADR-0017;
   - EXP-0007;
   - README status line.
 

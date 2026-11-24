@@ -141,7 +141,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
   - 2024–25 accepted 1,205 of 1,230 regular-season and 84 of 84 playoff games.
   - Both pass 26 of 26 checks and every M1 threshold.
   - Bentes lineup agreement is 99.97% for both seasons.
-  - Five 2024–25 games needed ADR-0014's V2 home designation.
+  - Five 2024–25 games needed ADR-0017's V2 home designation.
   - The 2022–23 rebuild is row-identical.
   - The unresolved-possession share rose to 0.039% and 0.070%. The 2024–25 playoffs alone reach 0.135%.
   - 14 of 25 quarantines in 2024–25 trace to box-log minute totals that do not sum to the game length. [Full results](data-pilot.md#outer-validation-seasons-202324-and-202425)
