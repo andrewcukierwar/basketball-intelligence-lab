@@ -17,7 +17,7 @@ from typing import cast
 
 import duckdb
 
-from bil.data.pilot_check import check_build
+from bil.data.pilot_check import check_build, check_seasons
 from bil.data.pilot_evidence import compare as compare_evidence
 from bil.data.pilot_inputs import (
     GAME_PREFIXES,
@@ -656,6 +656,12 @@ def main() -> None:
     check = subcommands.add_parser("check", help="check an exported build's invariants")
     check.add_argument("output_dir", type=Path)
     check.add_argument("snapshot_dir", type=Path)
+    seasons = subcommands.add_parser(
+        "check-seasons", help="check identity and chronology across several season builds"
+    )
+    seasons.add_argument(
+        "pairs", nargs="+", type=Path, help="each build directory followed by its snapshot"
+    )
     args = cli.parse_args()
     if args.action == "check":
         results = check_build(args.output_dir, args.snapshot_dir)
@@ -664,6 +670,15 @@ def main() -> None:
             print(f"{'FAIL' if count else 'ok  '} {name}: {count}")
         print(f"{len(results) - len(failed)} of {len(results)} checks passed.")
         if failed:
+            raise SystemExit(1)
+    elif args.action == "check-seasons":
+        if len(args.pairs) % 2:
+            raise SystemExit("Pass a snapshot directory after each build directory")
+        violations, roster = check_seasons(list(zip(args.pairs[::2], args.pairs[1::2])))
+        for name, count in violations.items():
+            print(f"{'FAIL' if count else 'ok  '} {name}: {count}")
+        print(json.dumps(roster, sort_keys=True))
+        if any(violations.values()):
             raise SystemExit(1)
     elif args.action == "evidence":
         recorded = json.loads((args.output_dir / "manifest.json").read_text(encoding="utf-8"))

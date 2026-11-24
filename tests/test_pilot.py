@@ -1124,3 +1124,71 @@ def test_evidence_without_livedata_compares_v3_with_datanba_only(tmp_path: Path)
         scores = pilot_evidence.period_score_agreement(connection, tmp_path, 2017)
         assert scores["periods_compared"] == 0
         assert scores["v3_datanba_periods_compared"] == 1 and scores["v3_equals_datanba"] == 1
+
+
+def _season_build(root: Path, year: int, games: list[tuple[str, str]], lineup_team: str) -> Path:
+    """Write a minimal build and snapshot: one lineup per game, player 7 traded after game 1."""
+    build, snapshot = root / f"build-{year}", root / f"snapshot-{year}"
+    build.mkdir()
+    snapshot.mkdir()
+    (build / "manifest.json").write_text(json.dumps({"season_start_year": year}), "utf-8")
+    values = ", ".join(
+        f"('{game_id}', {year}, '{'regular' if game_id[:3] == '002' else 'playoffs'}', "
+        f"date '{played}', '100', '200')"
+        for game_id, played in games
+    )
+    teams = [lineup_team] + ["300"] * (len(games) - 1)
+    with duckdb.connect() as connection:
+        connection.execute(
+            f"copy (select * from (values {values}) t(game_id, season_start_year, season_type, "
+            f"game_date, home_team_id, away_team_id)) to '{build / 'game.parquet'}' (format parquet)"
+        )
+        lineups = ", ".join(f"('{g}', '{t}', ['7'])" for (g, _), t in zip(games, teams))
+        connection.execute(
+            f"copy (select * from (values {lineups}) t(game_id, team_id, player_ids)) "
+            f"to '{build / 'lineup.parquet'}' (format parquet)"
+        )
+        box = ", ".join(f"('{g}', '7', '{t}')" for (g, _), t in zip(games, ["100", "300"]))
+        connection.execute(
+            f"copy (select * from (values {box}) t(game_id, player_id, team_id)) "
+            f"to '{snapshot / 'player_game_logs.parquet'}' (format parquet)"
+        )
+    return build
+
+
+def test_cross_season_checks_cover_identity_chronology_and_trades(tmp_path: Path) -> None:
+    from bil.data.pilot_check import check_seasons
+
+    good = [
+        (
+            _season_build(
+                tmp_path, 2017, [("0021700001", "2017-10-17"), ("0041700001", "2018-04-14")], "100"
+            ),
+            2017,
+        ),
+        (
+            _season_build(
+                tmp_path, 2018, [("0021800001", "2018-10-16"), ("0041800001", "2019-04-13")], "100"
+            ),
+            2018,
+        ),
+    ]
+    pairs = [(build, tmp_path / f"snapshot-{year}") for build, year in good]
+    violations, roster = check_seasons(pairs)
+    assert set(violations.values()) == {0}
+    # Player 7 moves from team 100 to team 300 within each season.
+    assert roster["player_seasons_with_several_box_teams"] == 2
+    assert roster["player_seasons_on_court_for_several_teams"] == 2
+    assert roster["players_in_several_seasons"] == 1
+
+    # A wrong season code, overlapping seasons, an early playoff date and a lineup team that
+    # differs from the box are each counted.
+    bad = _season_build(
+        tmp_path, 2019, [("0021800002", "2019-04-20"), ("0041900001", "2019-04-01")], "200"
+    )
+    violations, _ = check_seasons([*pairs, (bad, tmp_path / "snapshot-2019")])
+    assert violations["game_id_encodes_season_and_type"] == 1
+    assert violations["seasons_in_date_order"] == 1
+    assert violations["playoffs_after_each_team_regular_season"] == 2
+    assert violations["lineup_team_matches_player_box"] == 1
+    assert violations["game_ids_unique_across_seasons"] == 0
