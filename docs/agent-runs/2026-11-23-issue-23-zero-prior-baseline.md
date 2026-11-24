@@ -1,7 +1,7 @@
 # Agent run: first historical zero-prior RAPM baseline (2022–23)
 
 - **Date:** 2026-11-23
-- **Status:** Awaiting review (independent review not yet run)
+- **Status:** Independently reviewed (approved)
 - **Related issues:** #23 (depends on #22, #59, #6, #64, #65)
 - **Branch / commit / PR:** `claude/issue-23-zero-prior-baseline`; protocol `26cb127`, runner and tests `82b3452`, report and handoff in the final commit. No push, no PR.
 
@@ -45,3 +45,12 @@ No independent review was performed. Nothing was pushed.
 1. Independent review, then PR when authorized.
 2. Follow-ups to consider as issues: a size-matched random exclusion control; separate role penalties chosen on the same chronological folds; a context-only baseline; use of this fold design as the shared development check for the informed-prior models (#61, #64).
 3. Outer folds (2023–24, 2024–25) and the 2025–26 holdout remain untouched and need their own registered protocol.
+
+## Independent review
+
+A fresh Opus reviewer approved the work with no blocking findings. It checked:
+- Fold splits: there is no leakage into fitting, centering, the player universe or the penalty choice.
+- Provenance: protocol commit, then runner commit, then the clean-tree run.
+- Target scaling and the game-clustered bootstrap.
+
+It independently recomputed fold R2 (league MSE 14,067.469 and model MSE 14,054.001), and both match results.json. Its documentation suggestions were applied. A context-only comparator, separate offense and defense penalties, a random-exclusion control and per-fit diagnostics are tracked in #77.

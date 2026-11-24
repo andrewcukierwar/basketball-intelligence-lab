@@ -35,11 +35,11 @@ Delta = MSE(model) − MSE(league), in (points per 100 possessions)². Negative 
 | R1 | 14,153.2 | 14,146.2 | −7.0 | −14.0 to −0.03 |
 | R2 | 14,067.5 | 14,054.0 | −13.5 | −20.6 to −6.4 |
 | R3 | 14,168.5 | 14,150.5 | −18.0 | −27.8 to −8.4 |
-| R4 | 14,056.7 | 14,036.9 | −19.8 | −30.3 to −9.8 |
+| R4 | 14,056.6 | 14,036.8 | −19.8 | −30.3 to −9.8 |
 | Pooled R1–R4 (selection folds) | 14,109.5 | 14,095.4 | −14.1 | −18.3 to −9.8 |
 | P1 playoffs (not used in selection) | 14,022.1 | 14,014.2 | −8.0 | −24.0 to +7.5 |
 
-The gain grows with fit size across R1 to R4, as expected. RMSE is 118.72 against 118.78 for the league model. Pooled ablations: offense-only −9.2, defense-only +1.1 (defense alone is not better than the league average). The pooled team-game aggregate RMSE (summed predicted against actual points for a team in a game) is 10.45 for the model, 10.69 for the league model, 10.58 offense-only and 10.78 defense-only. On the playoff fold the model's team-game RMSE is 10.42 against 10.32 for the league model, so the possession-level gain there does not carry to game totals. Regular season and playoffs are never pooled.
+The gain grows across R1 to R4. Fit size is confounded with time of season, so attributing this to fit size is **Inferred**. RMSE is 118.72 against 118.78 for the league model. Pooled ablations: offense-only −9.2, defense-only +1.1 (defense alone is not better than the league average). The pooled team-game aggregate RMSE (summed predicted against actual points for a team in a game) is 10.45 for the model, 10.69 for the league model, 10.58 offense-only and 10.78 defense-only. On the playoff fold the model's team-game RMSE is 10.42 against 10.32 for the league model, so the possession-level gain there does not carry to game totals. Regular season and playoffs are never pooled.
 
 ## Regularization sensitivity
 
@@ -56,7 +56,7 @@ Pooled R1–R4 held-out MSE by penalty. The league MSE is 14,109.5.
 | 16,000 | 14,100.5 | −8.9 | −11.0 to −7.0 | −5.1 | −1.7 |
 | 32,000 | 14,103.6 | −5.8 | −7.1 to −4.6 | −3.3 | −1.4 |
 
-The minimum is interior, so the grid was not extended. The curve is flat within about 1 MSE unit over 2,000 to 4,000 and within about 2 units to 8,000. Weak penalties (250 and 500) lose to the league average with the defense-only ablation worst, which suggests overfit defensive effects (**Inferred**). $\lambda^\*$ was chosen on R1–R4 only, so those scores are optimistic. P1 was scored after the choice. The grid choice used no EPM output.
+The minimum is interior, so the grid was not extended. The curve is flat within about 1 MSE unit over 2,000 to 4,000 and within about 2 units to 8,000. Weak penalties (250 and 500) lose to the league average with the defense-only ablation worst, which suggests overfit defensive effects (**Inferred**). $\lambda^\*$ was chosen on R1–R4 only, so those scores are optimistic, although the pooled delta is negative at every $\lambda \ge 1{,}000$. P1 was scored after the choice. The grid choice used no EPM output.
 
 ## Final-fit exposure and estimates (in-sample, descriptive)
 
@@ -111,7 +111,7 @@ The shifts scale roughly with the possessions removed. Without a size-matched ra
 
 ## Optimizer, runtime and memory
 
-All 53 fits stopped with LSQR code 2 (least-squares solution within tolerance, atol and btol 1e-12), with 8 to 82 iterations (median 26). The final 224,039-row fit took 0.41 s, 28 iterations, scaled residual norm 1.77 and a condition estimate of 34.4. The largest condition estimate was 170.9. All 53 fits took 14.5 s in total and the whole run, including loading, scoring, bootstraps and the exclusion, stability and per-stratum fits, took 19.1 s on one machine (Python 3.14.3, NumPy 2.5.5, SciPy 1.18.1, DuckDB 2.0.1). Peak resident memory was 898 MiB. Wall times are from one run, not repeated.
+All 53 logged fits stopped with LSQR code 2 (least-squares solution within tolerance, atol and btol 1e-12), with 8 to 82 iterations (median 26). The final 224,039-row fit took 0.41 s, 28 iterations, scaled residual norm 1.77 and a condition estimate of 34.4. The largest condition estimate was 170.9. All 53 fits took 14.5 s in total and the whole run, including loading, scoring, bootstraps and the exclusion, stability and per-stratum fits, took 19.1 s on one machine (Python 3.14.3, NumPy 2.5.5, SciPy 1.18.1, DuckDB 2.0.1). Peak resident memory was 898 MiB. Wall times are from one run, not repeated. Two further split-half stability fits are not logged. They converged, because the solver raises an error otherwise. Deviation from the protocol: results.json stores aggregate solver diagnostics plus the final fit, not per-fit records (tracked in #77).
 
 ## Limitations
 
