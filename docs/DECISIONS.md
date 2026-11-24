@@ -235,10 +235,27 @@ V2 remains the event source of record.
 - **Consequences:** Players with no history get the league rate. Single-season retrospective evidence; outer seasons must confirm before any default is fixed.
 - **Links:** [Issue #32](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/32), [ADR-0016](#adr-0016--fixed-constant-baselines-and-season-type-keyed-history-for-skill-targets)
 
+## ADR-0019 — Keep run-outs in RAPM model rows and exclude only verified pseudo-possessions
+
+- **Date:** 2026-11-23
+- **Status:** **Accepted. Maintainer decision 2026-11-23, principle B:** exclude only verified pseudo-possessions that offer no live-ball opportunity, keep run-outs, and never condition eligibility on later actions or realized outcomes. Applies to the historical RAPM row set ([#82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)).
+- **Evidence class:** Original BIL design.
+- **Context:** The review of #24 found that possessions starting near a period's end drive most of the measured time-of-period effect. Many are run-outs that score 0. The first implementation excluded every possession with no action event. Independent review judged that a material change, because it filters rows by how each possession turned out.
+- **Decision:**
+  - The canonical row set adds no exclusion beyond the pilot's. The pilot already marks genuine pseudo-possessions as `excluded`. The canonical rows are the pilot-eligible set (accepted, stable lineup), identical to `issue-59-v1`. The registered #23 and #24 results stand.
+  - Two sensitivity alternatives are versioned and selectable with `--variant`: `period_end_start` drops accepted possessions whose first event is `period_end`, and `no_action` drops accepted possessions with no shot, free throw, turnover, foul or violation event.
+  - The rule was not chosen by whether player RAPM beats the context-only comparator.
+- **Verification (2022–23, `scripts/audit_period_end_possessions.py`):** The condition that a `period_end` start shows no live-ball opportunity fails.
+  - All 962 accepted `period_end`-first possessions begin after a change of control (312 defensive rebounds, 297 made shots, 260 turnovers and 93 final free throws) with 3 to 24 s on the clock (median 9 s). 729 are in the final period.
+  - The first audit measured duration over the possession's own events, which is zero for a one-event possession, so it showed nothing about the clock.
+  - The pilot's 1,567 excluded `period_end` starts all have under 3 s left, and 1 unresolved start has 1 s. The pilot rule covers the real pseudo-possessions.
+- **Consequences:** The baseline keeps run-outs. Sensitivity runs show small differences: RAPM versus league −14.09 (canonical), −13.16 (`period_end_start`) and −13.17 (`no_action`), but a larger fall in the time-block gain (−25.7 against about −5). A model fit on canonical rows scores 1.7 to 1.9 MSE worse than fits on the sensitivity rows on canonical held-out rows. These describe the sample and do not select the rule.
+- **Links:** [Row contract](research/rapm-historical-rows.md), [Report](research/rapm-no-action-2022-23.md), [Protocol v3](research/rapm-no-action-protocol-v3.md)
+
 ## ADR-0020 — Build without liveData where the archive lacks it, as a weaker-verification stratum
 
 - **Date:** 2026-11-23
-- **Status:** Accepted for the 2017–18 through 2021–22 builds ([#25](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/25)). ADR-0018 and ADR-0019 are reserved for other work.
+- **Status:** Accepted for the 2017–18 through 2021–22 builds ([#25](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/25)).
 - **Evidence class:** Original BIL design.
 - **Context:** The #51 register records NBA liveData (`cdnnba`) as absent from the pinned Shufinskiy inventory for 2017–18, 2018–19 and 2019–20. The pilot read liveData as a required build input under ADR-0011, so those seasons could not be built.
 - **Decision:**
@@ -275,18 +292,3 @@ V2 remains the event source of record.
 **Evidence:** Primary source, tests, ablation and evaluation  
 **Consequences:** Tradeoffs and limitations  
 **Links:** Relevant issues, PRs and research reports
-
-## ADR-0019 — Exclude period-end pseudo-possessions from RAPM model rows
-
-- **Date:** 2026-11-23
-- **Status:** **Accepted, option B. Maintainer decision 2026-11-23.** It applies to the historical RAPM row set (`issue-82-B-v1`, [#82](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/82)).
-- **Evidence class:** Original BIL design.
-- **Context:** The review of #24 found that possessions starting near a period's end drive most of the measured time-of-period effect. Many are run-outs that score 0. Independent review judged the first implementation (exclude every possession with no action event) a material methodology change, because it filters rows by how each possession turned out.
-- **Decision:**
-  - Give an accepted possession the disposition `period_end_pseudo` when its first event is `period_end`. Exclude it from model rows (exposure 0) but keep it in the disposition and reconciliation ledgers. The check follows the pilot-status check and precedes the lineup rule.
-  - Keep real possessions with intentional run-outs, held balls and other outcome-free endings in model rows. Eligibility never depends on later actions or realized outcomes.
-  - The rule was not chosen or justified by whether player RAPM beats the context-only comparator.
-  - Keep two versioned sensitivity alternatives, selectable with `--variant`: **A** excludes accepted possessions with no shot, free throw, turnover, foul or violation event (`no_action`, `issue-82-v1`), and **C** keeps everything (`issue-59-v1`). B is the default.
-- **Evidence:** `scripts/audit_period_end_possessions.py` on `issue-19-v6`: 962 of 256,456 accepted possessions begin with `period_end`. None has a shot, free throw, turnover, foul, violation or jump ball, a score delta or allocation, a nonzero game-clock duration or a period-boundary span, and each is followed by `period_start` or the end of the stream. There are no exceptions. All 962 were eligible stable-lineup rows and score 0, so modeled points (249,091) are unchanged. The 962 are also the 962 `period_end` starts the #24 review counted.
-- **Consequences:** The baseline estimates scoring over live-ball possessions. Whole-game total use must add back the zero-point period-end rows. B, A and C give nearly identical player results (RAPM vs league −13.16, −13.17 and −14.09 on their own cohorts) and a time-block gain that falls from −25.7 (C) to −5.2 (B). On a common held-out cohort a B fit scores 2.46 MSE better than a C fit. These are descriptions of the sample, not reasons for the rule.
-- **Links:** [Row contract](research/rapm-historical-rows.md), [Report](research/rapm-no-action-2022-23.md), [Protocol v2](research/rapm-no-action-protocol-v2.md), [Protocol v1 (A)](research/rapm-no-action-protocol.md)

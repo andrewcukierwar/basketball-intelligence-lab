@@ -164,7 +164,7 @@ Player totals move little. The largest RMS shift (0.27, W_drop) is below the 0.3
   - The other 5,032 score 96.1 per 100.
   - An end-of-period dummy alone gives an in-sample MSE gain of 26.5, close to the held-out time gain of 25.7. With the no-action possessions removed, it falls to 5.6.
   - No parser artifact was found. Possessions tile the event stream exactly, with no duplicate or zero-length possessions, and the covariates are pre-possession.
-  - The effect is real game structure combined with a possession-definition choice. Whether no-action possessions should be eligible was decided in #82 ([ADR-0019](../DECISIONS.md)). The [no-action report](rapm-no-action-2022-23.md) gives the rerun.
+  - The effect is real game structure combined with a possession-definition choice. Whether no-action possessions should be eligible was decided in #82 ([ADR-0019](../DECISIONS.md)): they stay, because a `period_end` start does not show a pseudo-possession. The [report](rapm-no-action-2022-23.md) gives the audit and the sensitivity runs that drop them.
 - The 0–2 s bucket (149 possessions, about 207 points per 100) is probably intentional-foul free throws (**Inferred**).
 - No neutral-court evidence, and multiple-lineup possessions (12.6%) are excluded as in #23.
 - The penalty was fixed at the #23 value. A context-aware $\lambda$ or separate role penalties (#77) were not searched.
