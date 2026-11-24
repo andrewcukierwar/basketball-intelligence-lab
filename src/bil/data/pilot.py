@@ -254,6 +254,9 @@ def _build_game(
     raw: dict[int, RawEvent] = {}
     rows: Rows = {}
     failure = None
+    clock_ordered: ClockOrder | None = None
+    clock_declined: Declined | None = None
+    clock_failed: ClockOrder | None = None
     periods_reconciled = 0
     periods_match = None
     substitutions_match = None
@@ -358,9 +361,6 @@ def _build_game(
 
         v3_primary = False
         reordered: OrderRepair | None = None
-        clock_ordered: ClockOrder | None = None
-        clock_declined: Declined | None = None
-        clock_failed: ClockOrder | None = None
         try:
             choice = reconstruct(primary=False)
         except GameIssue as first:
