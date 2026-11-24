@@ -127,7 +127,7 @@ TABLES: dict[str, dict[str, str]] = {
 
 
 def load_appearances(
-    connection: duckdb.DuckDBPyConnection, directory: Path
+    connection: duckdb.DuckDBPyConnection, directory: Path, *, season_start_year: int = 2022
 ) -> tuple[list[Appearance], dict[str, int]]:
     """Read, scope and validate player appearances. Raises on any identity violation."""
     teams = {
@@ -167,7 +167,7 @@ def load_appearances(
         if key in seen or int(raw["player_id"]) <= 0:
             problems["invalid_or_duplicate_key"] += 1
         seen.add(key)
-        if raw["season"] != 2023:
+        if raw["season"] != season_start_year + 1:
             problems["season"] += 1
         own = teams.get((game_id, raw["team_id"]))
         other = teams.get((game_id, raw["opp_team_id"]))
