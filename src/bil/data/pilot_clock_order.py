@@ -10,8 +10,10 @@ Rule ``same-clock-v1``, derived from event semantics and applied only inside one
    them are allowed (the pinned parser repairs those itself).
 2. A rebound with no such predecessor is an orphan. Its missed shot is a later missed field goal
    of the same clock group, entered late. Only a missed field goal can be a tip or putback.
-3. A shot at the same clock as the previous rebound is taken by the team that holds the ball, so
-   the shot's team must equal the team of the rebound before it. This selects among candidates.
+3. A shot at this clock is taken by the team that holds the ball. A rebound gives the ball to its
+   team, and a made field goal or a turnover gives it to the other team, looking back through
+   subs and timeouts. A candidate of another team is excluded. If the ball is not known, the
+   remaining checks decide.
 4. Candidates are never taken from beyond a period boundary event. Events keep their clocks, and
    only the order inside the group changes. The one remaining candidate is moved directly before
    the orphan rebound.
@@ -30,7 +32,7 @@ from dataclasses import dataclass
 from bil.data.pilot_inputs import RawEvent
 
 RULE_VERSION = "same-clock-v1"
-FG_MISS, FT, REBOUND = "2", "3", "4"
+FG_MADE, FG_MISS, FT, REBOUND, TURNOVER = "1", "2", "3", "4", "5"
 SKIPPABLE = ("8", "9")  # substitutions and timeouts
 JUMP_BALL = "10"
 BOUNDARY = ("12", "13")
@@ -68,6 +70,28 @@ def _team(event: RawEvent) -> str:
     return event.fields["PLAYER1_TEAM_ID"] or event.fields["PLAYER1_ID"]
 
 
+def _holder(sequence: list[RawEvent], teams: tuple[str, ...]) -> str | None:
+    """The team that holds the ball after the last event, or None when the event does not say.
+
+    Subs and timeouts are looked through. A rebound gives the ball to its team. A made field
+    goal or a turnover gives it to the other team. Any other event leaves it unknown.
+    """
+    for event in reversed(sequence):
+        kind = event.fields["EVENTMSGTYPE"]
+        if kind in SKIPPABLE:
+            continue
+        team = _team(event)
+        if team not in teams:
+            return None
+        if kind == REBOUND:
+            return team
+        if kind in (FG_MADE, TURNOVER):
+            others = [other for other in teams if other != team]
+            return others[0] if len(others) == 1 else None
+        return None
+    return None
+
+
 def _has_miss_before(sequence: list[RawEvent]) -> bool:
     """Whether the last event is a missed shot, as the pinned parser reads it.
 
@@ -89,6 +113,7 @@ def _has_miss_before(sequence: list[RawEvent]) -> bool:
 def reorder_same_clock(raw: dict[int, RawEvent]) -> ClockOrder | Declined | None:
     """Order same-clock events so each rebound follows a missed shot, or None if none is needed."""
     events = list(raw.values())
+    teams = tuple(sorted({event.fields["PLAYER1_TEAM_ID"] for event in events} - {"", "0"}))
     out: list[RawEvent] = []
     moves: list[tuple[str, str, int, int]] = []
     index = 0
@@ -126,12 +151,11 @@ def reorder_same_clock(raw: dict[int, RawEvent]) -> ClockOrder | Declined | None
                 for position, item in enumerate(pending[:boundary])
                 if item.fields["EVENTMSGTYPE"] == FG_MISS
             ]
-            previous = out[-1] if out and out[-1].fields["EVENTMSGTYPE"] == REBOUND else None
-            if previous is not None and _team(previous):
+            holder = _holder(out, teams)
+            if holder is not None:
+                # A shot at this clock is taken by the team that holds the ball.
                 candidates = [
-                    position
-                    for position in candidates
-                    if _team(pending[position]) == _team(previous)
+                    position for position in candidates if _team(pending[position]) == holder
                 ]
             if not candidates:
                 return Declined("no_candidate", key[0], key[1], number)

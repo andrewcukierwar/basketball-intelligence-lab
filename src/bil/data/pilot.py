@@ -378,7 +378,9 @@ def _build_game(
                         clock_declined = offered_clock
                     elif offered_clock is not None:
                         try:
-                            choice = reconstruct(False, offered_clock.events, order)
+                            choice = reconstruct(
+                                False, offered_clock.events, list(offered_clock.events)
+                            )
                             raw = offered_clock.events
                             clock_ordered = offered_clock
                         except GameIssue:

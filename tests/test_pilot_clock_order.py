@@ -98,7 +98,7 @@ def test_shot_by_the_other_team_is_not_a_candidate_after_a_rebound() -> None:
 
 def test_candidates_of_two_teams_without_a_preceding_rebound_are_ambiguous() -> None:
     raw = stream(
-        ev(1, 1, "5:00", A, "made"),
+        ev(1, 6, "5:00", A, "foul"),
         ev(2, 4, "4:58", A, "REBOUND"),
         ev(8, 2, "4:58", B, "MISS"),
         ev(9, 2, "4:58", A, "MISS"),
@@ -211,3 +211,46 @@ def test_a_candidate_without_a_team_is_ambiguous_with_a_teamed_candidate() -> No
         ev(9, 2, "4:58", A, "MISS"),
     )
     assert reorder_same_clock(raw) == Declined("ambiguous_team", "1", "4:58", 2)
+
+
+def test_putback_made_before_its_rebound_and_miss_is_declined_not_reordered() -> None:
+    # Game 0021500061 P3 8:04: V2 order made putback 272, rebound 271, miss 270 (all one team).
+    # Moving the miss before the rebound would leave a score and then a miss with no change of
+    # possession, so the rule declines.
+    raw = stream(
+        ev(268, 2, "8:10", B, "MISS earlier"),
+        ev(272, 1, "8:04", A, "made putback"),
+        ev(271, 4, "8:04", A, "REBOUND"),
+        ev(270, 2, "8:04", A, "MISS"),
+    )
+    assert reorder_same_clock(raw) == Declined("no_candidate", "1", "8:04", 271)
+
+
+def test_subs_between_the_previous_rebound_and_the_orphan_do_not_hide_the_ball() -> None:
+    raw = stream(
+        ev(1, 2, "5:00", A, "MISS"),
+        ev(2, 4, "4:58", A, "REBOUND"),
+        ev(3, 8, "4:58", A, "SUB"),
+        ev(4, 4, "4:58", B, "REBOUND"),
+        ev(9, 2, "4:58", B, "MISS wrong team"),
+    )
+    assert reorder_same_clock(raw) == Declined("no_candidate", "1", "4:58", 4)
+
+
+def test_a_turnover_hands_the_ball_to_the_other_team() -> None:
+    raw = stream(
+        ev(1, 5, "4:58", A, "Turnover"),
+        ev(2, 4, "4:58", B, "REBOUND"),
+        ev(8, 2, "4:58", A, "MISS wrong team"),
+        ev(9, 2, "4:58", B, "MISS"),
+    )
+    assert order(reorder_same_clock(raw)) == [1, 9, 2, 8]
+
+
+def test_a_made_field_goal_by_the_other_team_allows_the_shot() -> None:
+    raw = stream(
+        ev(1, 1, "4:58", B, "made"),
+        ev(2, 4, "4:58", A, "REBOUND"),
+        ev(9, 2, "4:58", A, "MISS"),
+    )
+    assert order(reorder_same_clock(raw)) == [1, 9, 2]
