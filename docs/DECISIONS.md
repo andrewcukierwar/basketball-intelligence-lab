@@ -304,6 +304,24 @@ V2 remains the event source of record.
 - **Consequences:** Eligibility is now a per-use judgment backed by the diagnostic, so a later change in a build or snapshot needs the diagnostic rerun. A conditionally authorized season whose analysis shows material bias for its use would be reported to the maintainer, who decides. The thresholds themselves were not changed.
 - **Links:** [Issue #89](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/89), [ADR-0020](#adr-0020--build-without-livedata-where-the-archive-lacks-it-as-a-weaker-verification-stratum), [ADR-0017](#adr-0017--season-pinned-builds-and-v2-home-designation-for-unflagged-box-games), [Development seasons](data-pilot.md#development-seasons-201718-through-202122)
 
+## ADR-0023 — Repair late-entered event order from data.nba entry order (opt-in)
+
+- **Date:** 2026-11-23
+- **Status:** Proposed for [#90](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/90). Implemented behind `build --order-repair`, off by default. No default build changes.
+- **Evidence class:** Original BIL design, applying ADR-0010's rule that evidence feeds may adjudicate only narrow, checkable decisions.
+- **Context:** V2 sorts events by clock. A late stat correction keeps its original clock, so V2 can place it before an event that preceded it. 168 of 180 2017–18 quarantines are event-order failures (166 of 178 in the regular season), and their rate follows the rate of such events, which is highest from October to mid-November. V3 order equals V2 order in 37% of them. data.nba `ord` records entry order and is present from 2017–18.
+- **Decision (proposed):** After the V2 attempt and the V3-primary retry both fail, retry in data.nba entry order. Require `ord` for every event, distinct and period-monotone. Within each period keep the longest non-increasing run of clocks (earliest-entered on ties) and give every other event its predecessor's clock. Never re-clock period boundaries. Run every unchanged check on the new stream, label it `datanba_event_order` (lower trust), and record the largest shift. A second use offers the repair to accepted games with unresolved possessions and keeps it only when it leaves fewer. That selection optimizes the hard-gate metric (unresolved possessions), so a reduction in 2017–18's 0.283% is partly selected, not independently found.
+- **What the repair changes:** it gives each displaced event its predecessor's clock, so repaired clocks are monotone by construction. `unsupported_reorder` and `unresolved_clock_reset` cannot fire on those events. No check is relaxed, but those two lose discriminating power on repaired games. In the 225 games of scratch build `-v2`, 384 events were re-clocked, 160 (42%) of them earlier in game time. They include 44 made field goals, 8 free throws and 21 substitutions. Shifts range from -47 s to +518 s: a dunk at -41 s, free throws at +47 s, a turnover at +156 s, a jump ball at +208 s. The largest are replays (+518, +498, +289 s). 41 events moved more than 24 s and 17 games have a shift above 60 s.
+- **Safeguard options for the maintainer (none implemented):**
+  - (i) clamp each displaced event to its nearest kept neighbor's clock, not only its predecessor's;
+  - (ii) cap the shift at about 24 s for events with actors and refuse the repair above that;
+  - (iii) handle replays (type 18) separately, since they carry the largest shifts and no lineup or score effect;
+  - (iv) report signed shifts in the per-game warning and the manifest. `scripts/event_order_diagnostics.py --shifts` already reports them for any repaired build.
+- **Not decided:** which of those safeguards to adopt, and whether to apply the repair to seasons that already pass.
+- **Evidence:** [Backfill feasibility](research/backfill-feasibility.md). On 2017–18, 137 of 168 order-class quarantines recover, `check` passes 26 of 26, and Bentes agreement stays at 99.97%. Coverage reaches 96.6% (5 games short) and unresolved possessions fall from 0.391% to 0.283%, so 2017–18 still fails the hard limits.
+- **Consequences:** data.nba shares upstream lineage with V2 and V3, so the box and Bentes reconciliation carries the verification burden. Not adopting it leaves 2017–18 outside the primary cohort.
+- **Links:** [Issue #90](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/90), [ADR-0010](#adr-0010--pinned-evidence-feeds-verify-builds-but-do-not-feed-them), [ADR-0011](#adr-0011--use-archived-livedata-and-datanba-evidence-for-three-narrow-decisions), [ADR-0020](#adr-0020--build-without-livedata-where-the-archive-lacks-it-as-a-weaker-verification-stratum)
+
 ## Decision template
 
 ### ADR-XXXX — Title

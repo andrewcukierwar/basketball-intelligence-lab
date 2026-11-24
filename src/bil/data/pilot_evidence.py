@@ -17,7 +17,14 @@ from tempfile import TemporaryDirectory
 import duckdb
 
 from bil.data.pilot_inputs import archive_rows, v3_games
-from bil.data.pilot_sources import LIVEDATA, has_livedata, lineup_stat_names
+from bil.data.pilot_sources import (
+    DATANBA,
+    LIVEDATA,
+    datanba_has_order,
+    has_datanba,
+    has_livedata,
+    lineup_stat_names,
+)
 
 FEEDS = {
     "pbpstats": ("GAMEID", ("GAMEID", "PERIOD", "STARTTIME", "ENDTIME", "OPPONENT")),
@@ -55,6 +62,8 @@ LOWER_TRUST = (
     "unresolved_possessions",
     "v2_home_designation",
     "no_livedata",
+    "no_datanba",
+    "datanba_event_order",
 )
 PERIOD_START = "case when {p} <= 4 then ({p} - 1) * 720000 else 2880000 + ({p} - 5) * 300000 end"
 
@@ -71,17 +80,26 @@ def stage_feeds(
 ) -> None:
     """Load the archived evidence CSVs into DuckDB tables keyed by ten-digit game IDs.
 
-    A season without pinned liveData gets an empty ``cdnnba`` table, so every liveData
-    comparison reports nothing rather than a disagreement.
+    A season without pinned liveData or data.nba gets an empty table for that feed, so every
+    comparison with it reports nothing rather than a disagreement. The first data.nba archives
+    lack ``ord``, which stays empty, so their period scores and event order are not compared.
     """
     for name, (game_key, columns) in FEEDS.items():
         path = staging / f"{name}.csv"
-        absent = name == LIVEDATA and not has_livedata(season_start_year)
+        absent = (name == LIVEDATA and not has_livedata(season_start_year)) or (
+            name == DATANBA and not has_datanba(season_start_year)
+        )
         with path.open("w", newline="", encoding="utf-8") as target:
             writer = csv.writer(target)
             writer.writerow(columns)
             for suffix in () if absent else ("", "_po"):
                 for row in archive_rows(evidence / f"{name}{suffix}_{season_start_year}.tar.xz"):
+                    if (
+                        name == DATANBA
+                        and datanba_has_order(season_start_year)
+                        and "ord" not in row
+                    ):
+                        raise ValueError("The pinned data.nba archive must have an ord column")
                     writer.writerow([row.get(column, "") for column in columns])
         connection.execute(
             f"create or replace table {name} as select * replace (lpad({game_key}, 10, '0') as {game_key}) "
@@ -264,8 +282,8 @@ def order_agreement(connection: duckdb.DuckDBPyConnection) -> dict[str, object]:
           select e.game_id, e.seq, d.ord_value,
                  lag(d.ord_value) over (partition by e.game_id order by e.seq) as previous
           from event e
-          join (select distinct GAME_ID, cast(evt as int) as evt, cast(ord as bigint) as ord_value
-                from datanba) d
+          join (select distinct GAME_ID, cast(evt as int) as evt, try_cast(ord as bigint) as ord_value
+                from datanba where try_cast(ord as bigint) is not null) d
             on d.GAME_ID = e.game_id and d.evt = cast(e.source_event_id as int)),
         per_game as (
           select game_id, count(*) filter (where previous > ord_value) as descents
@@ -401,8 +419,9 @@ def period_score_agreement(
            from cdnnba where actionType = 'period' and subType = 'end' group by all"""
     )
     data_nba = scores(
-        """select GAME_ID, PERIOD, last(hs order by cast(ord as bigint)),
-                  last(vs order by cast(ord as bigint)) from datanba group by all"""
+        """select GAME_ID, PERIOD, last(hs order by try_cast(ord as bigint)),
+                  last(vs order by try_cast(ord as bigint)) from datanba
+           where try_cast(ord as bigint) is not null group by all"""
     )
     shared = sorted(v3.keys() & live.keys() & data_nba.keys())
     # Without liveData, V3 and data.nba remain the only two-feed period comparison.

@@ -230,14 +230,16 @@ def test_build_routes_duckdb_spills_to_private_staging(
     (tmp_path / "snapshot.json").write_text("{}", encoding="utf-8")
     output = tmp_path / "output"
 
-    def games(connection: duckdb.DuckDBPyConnection, *args: object) -> list[object]:
+    def games(
+        connection: duckdb.DuckDBPyConnection, *args: object, **options: object
+    ) -> list[object]:
         staging = args[3]
         assert isinstance(staging, Path)
         assert staging.parent == output.parent
         assert connection.execute("SELECT current_setting('temp_directory')").fetchone() == (
             str(staging / "duckdb-spill"),
         )
-        assert args[-1] == 2023
+        assert args[-1] == 2023 and options == {"order_repair": False}
         return []
 
     monkeypatch.setattr(
@@ -826,7 +828,7 @@ def test_season_sources_follow_each_provider_year_convention() -> None:
     assert len(set(digests)) == len(digests)
 
 
-@pytest.mark.parametrize("year", [2025, 2026, 2016])
+@pytest.mark.parametrize("year", [2025, 2026, 2000])
 def test_unpinned_and_holdout_seasons_are_refused(tmp_path: Path, year: int) -> None:
     for make in (pilot_sources.season_sources, pilot_sources.season_evidence_sources):
         with pytest.raises(ValueError, match="holdout" if year >= 2025 else "No pinned"):
@@ -1032,19 +1034,36 @@ def test_checks_and_evidence_read_the_recorded_season_files(tmp_path: Path) -> N
 
 
 def test_seasons_before_livedata_pin_every_other_feed() -> None:
-    assert pilot_sources.SEASONS == (2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024)
+    assert pilot_sources.SEASONS == (
+        2005,
+        2010,
+        2014,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+    )
     for year in pilot_sources.SEASONS:
         names = [source.name for source in pilot_sources.season_sources(year)]
         evidence = [source.name for source in pilot_sources.season_evidence_sources(year)]
         live = pilot_sources.has_livedata(year)
+        data_nba = pilot_sources.has_datanba(year)
         assert live == (year >= 2020)
-        # V2, V3, shot detail and data.nba in both season types, both box logs, and liveData
-        # only where the provider archived it.
-        assert len(names) == (12 if live else 10)
-        assert len(evidence) == (8 if live else 6)
+        assert data_nba == (year >= 2016)
+        assert pilot_sources.datanba_has_order(year) == (year >= 2017)
+        # V2, V3 and shot detail in both season types and both box logs are always required.
+        # liveData and data.nba are pinned only where the provider archived them.
+        assert len(names) == 8 + 2 * live + 2 * data_nba
+        assert len(evidence) == 4 + 2 * live + 2 * data_nba
         assert (f"cdnnba_po_{year}.tar.xz" in names) is live
         assert (f"cdnnba_{year}.tar.xz" in evidence) is live
-        assert f"datanba_po_{year}.tar.xz" in names
+        assert (f"datanba_po_{year}.tar.xz" in names) is data_nba
+        assert (f"datanba_{year}.tar.xz" in evidence) is data_nba
         assert f"pbpstats_{year}.tar.xz" in evidence
     team = {s.name: s for s in pilot_sources.season_sources(2019)}["team_game_logs.parquet"]
     assert team.local_name == "team_game_logs_2020.parquet"
@@ -1061,6 +1080,76 @@ def test_cross_feeds_without_livedata_keep_datanba_evidence(tmp_path: Path) -> N
     feed = cross_feeds(None, tmp_path / "datanba.tar.xz")["0021700001"]
     assert not feed.has_livedata and not feed.live_periods and not feed.between_periods
     assert feed.datanba_periods == {1: (30, 20)} and feed.offense == {7: 100}
+
+
+def test_cross_feeds_without_ord_keep_offense_but_no_scores_or_order(tmp_path: Path) -> None:
+    from bil.data.pilot_inputs import cross_feeds
+
+    # The first two data.nba archives (2016–17) have offense keys and no ``ord`` column.
+    _csv_archive(
+        tmp_path / "datanba.tar.xz",
+        ["GAME_ID", "evt", "oftid", "PERIOD", "hs", "vs"],
+        [["21600001", "7", "100", "1", "30", "20"]],
+    )
+    feed = cross_feeds(None, tmp_path / "datanba.tar.xz")["0021600001"]
+    assert feed.offense == {7: 100}
+    assert feed.datanba_periods == {} and feed.order == {}
+
+
+def test_cross_feeds_require_ord_where_the_pinned_season_has_it(tmp_path: Path) -> None:
+    from bil.data.pilot_inputs import cross_feeds
+
+    _csv_archive(
+        tmp_path / "datanba.tar.xz",
+        ["GAME_ID", "evt", "oftid", "PERIOD", "hs", "vs"],
+        [["21700001", "7", "100", "1", "30", "20"]],
+    )
+    with pytest.raises(ValueError, match="ord column"):
+        cross_feeds(None, tmp_path / "datanba.tar.xz", expect_order=True)
+    assert cross_feeds(None, tmp_path / "datanba.tar.xz")["0021700001"].offense == {7: 100}
+
+
+def test_cross_feeds_without_any_archive_have_no_evidence() -> None:
+    from bil.data.pilot_inputs import cross_feeds
+
+    assert cross_feeds(None, None) == {}
+
+
+def test_pins_match_the_issue_51_register_for_every_pinned_season() -> None:
+    register = Path(__file__).parents[1] / "docs" / "research"
+
+    def rows(name: str) -> list[dict[str, str]]:
+        with (register / f"nba-feed-coverage-{name}.csv").open(encoding="utf-8") as stream:
+            return list(csv.DictReader(stream))
+
+    archive = {
+        (int(row["start_year"]), row["file"]): (row["sha256"], int(row["artifact_bytes"]))
+        for row in rows("shufinskiy")
+        if row["availability"] == "measured"
+    }
+    box = {
+        (int(row["start_year"]), row["file"]): (row["sha256"], int(row["artifact_bytes"]))
+        for row in rows("box")
+        if row["availability"] == "measured"
+    }
+    lineups = {
+        row["file"]: (row["sha256"], int(row["artifact_bytes"]))
+        for row in rows("bentes")
+        if row["feed"] == "lineup_stats" and row["availability"] == "measured"
+    }
+    for year in pilot_sources.SEASONS:
+        for source in (
+            *pilot_sources.season_sources(year),
+            *pilot_sources.season_evidence_sources(year),
+        ):
+            if source.publisher == "shufinskiy":
+                expected = archive[(year, source.name)]
+            elif source.publisher == "billmill":
+                assert source.local_name is not None
+                expected = box[(year, source.local_name)]
+            else:
+                expected = lineups[source.name]
+            assert (source.sha256, source.size_bytes) == expected, (year, source.name)
 
 
 def test_games_without_livedata_carry_a_weaker_verification_stratum(tmp_path: Path) -> None:

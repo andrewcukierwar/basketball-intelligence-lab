@@ -298,14 +298,24 @@ class CrossFeed:
     has_livedata: bool = False
     # data.nba.com offense team for each V2 event number that names one.
     offense: dict[int, int] = field(default_factory=dict)
+    # data.nba.com ``ord`` for each V2 event number: the feed's own event sequence. It is
+    # evidence only, and it is used solely by the opt-in order repair (ADR-0023, proposed).
+    order: dict[int, int] = field(default_factory=dict)
 
 
 def _period_start_clock(period: int) -> str:
     return "PT12M00.00S" if period <= 4 else "PT05M00.00S"
 
 
-def cross_feeds(livedata: Path | None, datanba: Path) -> dict[str, CrossFeed]:
-    """Read both cross-feeds. Without a liveData archive, no game has liveData evidence."""
+def cross_feeds(
+    livedata: Path | None, datanba: Path | None, expect_order: bool = False
+) -> dict[str, CrossFeed]:
+    """Read both cross-feeds. An absent archive leaves its evidence empty for every game.
+
+    The first two data.nba seasons lack the ``ord`` field, so they carry offense keys but no
+    period scores or event order. When ``expect_order`` is set, a missing ``ord`` column is an
+    error instead of silently dropping that evidence.
+    """
     games: dict[str, CrossFeed] = defaultdict(CrossFeed)
     live_ends: dict[tuple[str, int], tuple[int, tuple[int, int]]] = {}
     moves: dict[tuple[str, int, int], tuple[set[int], set[int]]] = defaultdict(
@@ -340,15 +350,19 @@ def cross_feeds(livedata: Path | None, datanba: Path) -> dict[str, CrossFeed]:
         games[game_id].between_periods[(period, team)] = (frozenset(outgoing), frozenset(incoming))
 
     nba_ends: dict[tuple[str, int], tuple[int, tuple[int, int]]] = {}
-    for row in archive_rows(datanba):
+    for row in archive_rows(datanba) if datanba is not None else ():
+        if expect_order and "ord" not in row:
+            raise ValueError("The pinned data.nba archive for this season must have an ord column")
         game_id = nba_game_id(row["GAME_ID"])
         feed = games[game_id]
         if row["oftid"].isdigit() and int(row["oftid"]) and row["evt"].isdigit():
             feed.offense[int(row["evt"])] = int(row["oftid"])
+        if row.get("ord", "").isdigit() and row["evt"].isdigit():
+            feed.order[int(row["evt"])] = int(row["ord"])
         if (
             row["hs"].isdigit()
             and row["vs"].isdigit()
-            and row["ord"].isdigit()
+            and row.get("ord", "").isdigit()
             and row["PERIOD"].isdigit()
         ):
             key = game_id, int(row["PERIOD"])

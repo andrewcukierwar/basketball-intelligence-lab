@@ -220,3 +220,20 @@ Do not overwrite negative or unexpected results. New experiments should be appen
   - Cohort sensitivity (baseline 6,164 games, 1,223,735 possessions, 970 players): excluding 2018–19 changes games by −20.9% and players by −107; excluding 2021–22, −21.2% and −46; both, −42.1% and −163; overtime periods, −0.6% of possessions; overtime games, −5.4% of games; weaker-verification games, −39.1% of games. [Full results](research/season-quality-2017-2025.md)
 - **Limitations / interpretation:** Quarantined games lack events, so their game state is box and final-score only. The permutation tests have low power at 3 to 25 quarantines a season. Lost exposure is a box-log estimate. Flags describe association, not mechanism.
 - **Next decision:** The maintainer decides whether the 2018–19 overtime and November concentration is material for primary training use. The 2021–22 and 2024–25 findings need no action beyond the recorded conditions.
+
+### EXP-0013 — 2017–18 event-order diagnosis and older feed-era builds
+
+- **Status:** Completed. Feasibility only. No independent review yet.
+- **Date:** 2026-11-23.
+- **Research question:** Why do 2017–18 early-season games fail event order, and do older feed eras build under the unchanged pipeline and hard gates?
+- **Category:** Original (data pipeline, not a model).
+- **Code SHA / run ID:** Builds `issue-90-v1` for 2005–06, 2010–11, 2014–15 and 2016–17 at `c079ba8`. Scratch builds `issue-90-order-repair-v1` and `-v2` of 2017–18 at `899464b` and `4fc5cba`. 2022–23 rebuild `issue-90-rebuild-v1` at `4fc5cba`. These are the SHAs in the manifests, from before the branch was rebased onto `99d558c`.
+- **Datasets/checksums and cutoff:** Snapshots copied from the #51 audit capture and checked against its pins. Retrospective capture, no availability claim. The 2025–26 holdout was not touched.
+- **Baselines:** `issue-25-v1` for 2017–18, `issue-19-v6` for 2022–23, and the M1 hard gates under the #89 revision.
+- **Results:**
+  - 2017–18: 168 of 180 quarantines (166 of 178 in the regular season) are event-order failures. The opt-in repair recovers 137 of them. Coverage 96.6%, unresolved 0.283%, so it still fails.
+  - 2016–17 and 2005–06 meet both hard gates. 2014–15 meets them for the regular season and misses 97% in the playoffs by one game. 2010–11 misses regular-season coverage (96.5%) from a same-clock rebound pattern.
+  - All builds pass 26 of 26 checks. The 2022–23 rebuild is row-identical to `issue-19-v6` apart from `ingested_at`.
+- **Limitations / interpretation:** One season per era. 2001–02 to 2003–04 was not probed. The reason for the early-season rate in 2017–18 is Inferred. Starter verification is weaker without liveData and data.nba.
+- **Next decision:** Whether to adopt ADR-0023, and how to split #53 ([recommendation](research/backfill-feasibility.md#part-3-recommended-split-of-53)).
+
