@@ -308,7 +308,7 @@ Do not overwrite negative or unexpected results. New experiments should be appen
   - Split-half SB is 0.66 offense and 0.63 defense (contiguous), and 0.69 and 0.64 (extended).
   - Below 2,000 possessions, offense SB is about 0.4. For team-changers SB is 0.52–0.55.
   - Defense reliability is lowest in 2015–17 (0.55).
-  - One-sided labels correlate 0.86–0.94 with their final values.
+  - One-sided labels correlate 0.86–0.94 with their final values in the contiguous reference. In the extended reference, 2005–06 defense correlates 0.84; 2007–08 correlates 0.99, where only the penalty changes.
   - Extended and contiguous labels are identical from 2019–20 on, and correlate 0.97 in 2018–19.
   - Year-to-year `K0` correlation is 0.2–0.4, and 0.12–0.14 across the 2007–08 to 2015–16 gap.
   - The two-stage and joint fits agree at r 0.998. [Report](research/rapm-targets.md)

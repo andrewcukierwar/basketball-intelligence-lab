@@ -58,7 +58,7 @@ Split-half results pair players with at least 250 possessions in the role in bot
 | `no_livedata` (2018–19, 2019–20) | 0.48 / 0.65 | 0.47 / 0.64 | 0.51 / 0.67 | 0.48 / 0.65 |
 | liveData (2020–21 to 2022–23) | 0.50 / 0.67 | 0.45 / 0.62 | 0.50 / 0.67 | 0.45 / 0.62 |
 
-By season, contiguous offense SB is 0.60 to 0.72 and defense SB is 0.57 to 0.68. The 2022–23 labels are among the lowest (0.62 and 0.57), because they have only backward support.
+By season, contiguous offense SB is 0.60 to 0.72 and defense SB is 0.57 to 0.68. The 2022–23 labels are among the lowest (0.62 and 0.57), probably because they have only backward support (**Inferred**).
 
 **Bootstrap** (100 game-clustered replicates; no replicate failed). The reliability below is $1 - \overline{SE^2}/\mathrm{Var}$ by exposure band. The mean standard error is 0.5 to 1.1 points per 100.
 
@@ -114,7 +114,7 @@ For players with 10,000 or more possessions, the correlations rise to 0.27–0.6
 - **Persistence.** Single-season impact persists weakly: K0 year-to-year correlations are 0.2–0.4, and about 0.1–0.2 across the 2007–08 to 2015–16 gap. The `K365` labels therefore mix in neighbouring seasons, and SPM trained on them inherits that smoothing (Inferred).
 - **The extended reference adds history-season labels but almost no information to modern labels.** Only the 2018–19 labels differ from the contiguous ones. #30's choice between references is mainly whether to train on the 2005–08 and 2015–17 player-seasons.
 - **The joint fit barely differs from the two-stage fit on real data** (r 0.998). Revision 2 was right in principle, and the composition bias the review identified is small here.
-- **One-sided labels at their own origin differ materially from their final values** (r about 0.86–0.94). #30 must register how it uses them (protocol §6).
+- **One-sided labels at their own origin differ materially from their final values** (contiguous reference r about 0.86–0.94. In the extended reference, 2005–06 defense is 0.84, and 2007–08 is 0.99, where only the penalty changes). #30 must register how it uses them (protocol §6).
 - **Playoffs and verification strata matter little.** Removing playoffs changes labels by r of at least 0.98. The `no_livedata` seasons are as reliable as the liveData seasons, and excluding them shifts the 2020–21 labels by r 0.95 and 0.91.
 
 ## Cohorts and the #30 registration

@@ -382,7 +382,7 @@ V2 remains the event source of record.
 ## ADR-0027 — Season-centred, jointly context-adjusted long-window RAPM as provisional SPM training targets
 
 - **Date:** 2026-11-24
-- **Status:** Proposed for [#28](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/28) under ADR-0026. Protocol independently reviewed (revision 2 approved). The results await review and maintainer acceptance.
+- **Status:** **Accepted as provisional partial-history targets** for [#28](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/28) under the maintainer's authorization in ADR-0026. The protocol was independently reviewed (revision 2 approved), and the results were independently reviewed and approved against the run artifacts (PR #118). New seasons from #53 enter only as new target versions.
 - **Evidence class:** Original BIL design on Experimental evidence. These targets are a **partial-history methodology replication**, not a full historical EPM replication.
 - **Context:** EPM trains box-score SPM on long-window independent RAPM (Documented), but its target construction, reliability weights and era handling are not public (EPM-U02, EPM-U03). BIL has 10 eligible seasons with a seven-season gap. ADR-0025 is a forward-predictive configuration and is not a label.
 - **Decision:**
