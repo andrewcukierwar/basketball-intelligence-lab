@@ -34,7 +34,7 @@ Build player-game targets, strictly earlier baselines and exposure-weighted scor
 | `uv sync --locked --extra dev --extra pilot --extra rapm` | Pass |
 | `uv run pytest -q` | 155 passed, 2 skipped (before docs) |
 | `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src` | Pass |
-| Independent review | Not run |
+| Independent review | A fresh Opus reviewer approved 69c6465 with no blocking findings. Its own bil-free script reproduced a decay prediction, regular and playoff league predictions (strictly earlier dates; not the full-season mean) and the `fg3_pct` headline MSE and log loss exactly. |
 
 ## Blockers and remaining risks
 

@@ -41,7 +41,7 @@ Each `(player-game, statistic)` row has one target status and one history status
 | `zero_exposure_history` | covered earlier appearances sum to a zero denominator | none. The ratio is undefined |
 | `has_history` | positive summed denominator | defined for the player baselines |
 
-**Rookie rule (Inferred).** A "rookie" here means no earlier appearance in the loaded data. With one season, veterans in their first 2022–23 game are indistinguishable from true rookies. True rookie status needs a draft or debut registry. Treat the cold cohort as "no prior history in the loaded seasons".
+**Rookie rule (Original convention).** A "rookie" here means no earlier appearance in the loaded data. With one season, veterans in their first 2022–23 game are indistinguishable from true rookies. True rookie status needs a draft or debut registry. Treat the cold cohort as "no prior history in the loaded seasons".
 
 **Missing and zero values.** A valid zero numerator over a positive denominator is an observed zero and is a legitimate target and history value. A missing component is never treated as zero. A zero denominator is a known zero exposure, not missing. The player logs omit DNPs, so a missing row proves nothing about absence.
 
@@ -113,11 +113,14 @@ Weighted MSE on the regular-season `common` cohort (14,073 to 25,353 appearances
 | `ft_pct` | **0.0502** | 0.0552 | 0.0508 | 0.0503 | 0.0506 |
 | `fg3_share` | 0.0248 | 0.0253 | **0.0245** | 0.0246 | 0.0555 |
 
-The league column wins `fg2_pct`, `fg3_pct` and `stl_per_36` and nearly ties `ft_pct`, which shows that unshrunk player-history shooting percentages are noisy at these sample sizes. That is a descriptive result motivating the #32 shrinkage question, not a tuned conclusion. Among player baselines, a decay baseline is best on 10 of 13 statistics and career on `fg2_pct`, `fg3_pct` and `ft_pct`. Last 10 is the worst player baseline on every statistic. Differences between career and decay are small (under about 1.5% on every row). For `fg3_pct`, the league baseline has lower MSE than the player baselines in all three history buckets, including 20 or more covered games (0.0516 against 0.0524 for career), and the gap is largest at 1–4 games (0.0558 against 0.0974). The cold cohort (5,831 regular-season rows with no player history, scored with the league baseline) has weighted MSE 0.0546 for `fg2_pct` and 9.39 for `ast_per_36`.
+The league column wins `fg2_pct`, `fg3_pct` and `stl_per_36` and nearly ties `ft_pct`, which shows that unshrunk player-history shooting percentages are noisy at these sample sizes. That is a descriptive result motivating the #32 shrinkage question, not a tuned conclusion. None of these comparisons has a game-clustered uncertainty interval yet, so "wins" means lower point MSE only. Among player baselines, a decay baseline is best on 10 of 13 statistics and career on `fg2_pct`, `fg3_pct` and `ft_pct`. Last 10 is the worst player baseline on every statistic. Differences between career and decay are small (under about 1.5% on every row). For `fg3_pct`, the league baseline has lower MSE than the player baselines in all three history buckets, including 20 or more covered games (0.0516 against 0.0524 for career), and the gap is largest at 1–4 games (0.0558 against 0.0974). The cold cohort (5,831 regular-season rows with no player history, scored with the league baseline) has weighted MSE 0.0546 for `fg2_pct` and 9.39 for `ast_per_36`.
 
 Playoff `common` rows (17,980) favor the league baseline on 7 of 13 statistics (`blk`, `fg2`, `fg3`, `ft`, `pf`, `stl`, `tov`), with only 1,511 appearances, so treat them as descriptive. Log-loss values are in the private `baseline_scores` table and the manifest. Poisson values are not comparable across statistics.
 
 ## Limitations and follow-ups
+
+- Unscored observed targets: 1,243 regular-season and 1,153 playoff observed targets fall in neither the `common` nor the `cold` set. Most have zero-exposure history, a last-10 window with zero exposure, or are on the first playoff date. The manifest does not yet record exclusion reasons for them, which the evaluation contract asks for. This is tracked for #32.
+- The `strict_rows_with_history` gate must be relaxed once a source with revision evidence exists.
 
 - One season. Career equals season-to-date, and `common` does not yet see season-opening behavior. Append 2023–24 and 2024–25 only as outer validation folds, and never read 2025–26 (confirmatory holdout).
 - Role, pace and expected-minutes context are outside this box baseline, and the retrospective gap is unrecorded.
