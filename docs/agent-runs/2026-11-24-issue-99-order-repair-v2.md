@@ -1,9 +1,9 @@
 # Agent run: safeguarded order repair `order-repair-v2` for 2017–18
 
 - **Date:** 2026-11-24
-- **Status:** Awaiting re-review. The first review found the repair not validated for canonical use.
+- **Status:** Merged as an experimental option in [PR #119](https://github.com/andrewcukierwar/basketball-intelligence-lab/pull/119). Canonical use remains unvalidated.
 - **Related issues:** [#99](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/99), parent [#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53)
-- **Branch / commit / PR:** `claude/issue-99-order-repair-v2`, code `d50e7695`, PR linked from #99. Not merged.
+- **Branch / commit / PR:** `claude/issue-99-order-repair-v2`, first code `d50e7695`, safeguarded build at `76bb03d4`, merge `8eac253`.
 
 ## Objective and authorized scope
 
@@ -38,16 +38,15 @@ Implement the ADR-0023 maintainer conditions as a new versioned repair, rebuild 
 | `ruff check .`, `ruff format --check .`, `mypy src` | Pass |
 | `pilot check` on both v2 builds | 26 of 26 |
 | `season_quality.py --run-checks` | 2017–18 `fails_hard_limit` |
-| Independent review | Not run. Required before canonical use |
+| Independent review | Re-review approved the experimental merge. Canonical use remains unvalidated |
 
 ## Blockers and risks
 
 - `event.parquet` has no per-event flag (schema change). `issue-90-order-repair-v2` is rebuildable only at its old commit.
 
 - Corroboration is the maintainer's open call: relaxing it for same-clock substitutions would recover more games but rely on `ord` alone.
-- Private outputs are under `data/processed/2017-18/issue-99-*` and `data/quality/issue-99-2017-18-v2a`. Nothing under `data/` is committed.
+- Private outputs are under `data/processed/2017-18/issue-99-*` and `data/processed/quality/issue-99-2017-18-v2a` and `data/processed/quality/issue-99-2017-18-v2c`. Nothing under `data/` is committed.
 
 ## Next actions
 
-- Independent review of the diff and a replay of `-a`.
-- Maintainer decision on the tiers. The residual unresolved causes may justify a separate same-clock free-throw and substitution issue.
+- The residual unresolved possessions remain evidence for future work on same-clock free throws and substitutions. Keep the repair experimental under ADR-0029.
