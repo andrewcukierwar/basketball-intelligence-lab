@@ -349,3 +349,9 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Results:** 15 of 172 offered games recovered (first version 27, of which review found 3 of the 5 shifts of 5 s or more wrong). 118 declined uncorroborated, 14 counter inversion, 7 incomplete `ord`, 4 over the ceiling, 14 rejected. Largest applied shift 4 s. Regular coverage 86.7%, unresolved share 0.388%: 2017–18 stays ineligible. The same-clock rule applied to 0 games in this season. [Report](research/order-repair-v2-2017-18.md)
 - **Limitations / interpretation:** Corroboration by V3 or rebound semantics, with V3 and `ord` sharing upstream lineage. An unrepaired comparison is impossible. The tier definitions are proposals.
 - **Next decision:** Independent review. Whether to relax corroboration for same-clock substitutions, which is a maintainer call.
+
+### EXP-0020 — Chronological box-score SPM prior, 2005–08 and 2015–23 development cohorts
+
+- **Registration.** [#120 protocol](research/box-spm-protocol.md), fixed before fitting. [#121 results](research/box-spm-results.md) cover the corrected private `issue-30-v2` run at `b2fd49d`.
+- **Finding.** Full did not meet the side-level K0 criterion. Context plus Full improved realized-lineup possession MSE against context alone. Its delta against fixed-offset context RAPM included zero.
+- **Boundary.** Retrospective capture bounds apply. The final contiguous fit is frozen for a possible downstream comparison. The outer and confirmatory seasons were not opened.
