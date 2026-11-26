@@ -1,6 +1,6 @@
 # Expected impact v1: inner development results
 
-This is the run for [#35](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/35) under the [frozen protocol](expected-impact-protocol.md) (SHA-256 `28869a50…f889d`). The evidence is a **partial-history methodology replication** under retrospective capture bounds. It is development evidence: the same eight regular-season blocks chose the penalties and scored them. Independent validity is the outer-fold question for [#36](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/36). No 2023–24 or later row, and no EPM output, was read. Estimated Skills inputs are unavailable at these cutoffs (ADR-0030, [#125](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/125)).
+This is the run for [#35](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/35) under the [frozen protocol](expected-impact-protocol.md) (SHA-256 `28869a50…4889d`). The evidence is a **partial-history methodology replication** under retrospective capture bounds. It is development evidence: the same eight regular-season blocks chose the penalties and scored them. Independent validity is the outer-fold question for [#36](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/36). No 2023–24 or later row, and no EPM output, was read. Estimated Skills inputs are unavailable at these cutoffs (ADR-0030, [#125](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/125)).
 
 ## Selected configuration
 
@@ -35,7 +35,7 @@ The private `ratings.csv` has 863 players at each of 11 dates: the ten block cut
 ## Eligibility, provenance and runtime
 
 - **Eligibility audit.** At every cutoff, the last window row, last box row and SPM origin are strictly before the cutoff, and no scored game is in its own window. At the final cutoff the window is 2021-07-01 to 2023-06-12, the box data ends 2023-06-12, and the SPM origin is `contiguous@2023-06-13`.
-- **Run.** Clean commit `0b605c7`, 36 s, 1.73 GiB peak memory. All 143 LSQR fits converged (median 33 iterations, maximum condition estimate 124). Private output is `data/processed/expected_impact/issue-35-v1`, manifest SHA-256 `db254b8c450034a0142255c40301e74cd6ddc59d505ab6d7aef983f846fce5d1`.
+- **Run.** Clean commit `0b605c7`, 36 s, 1.69 GiB peak memory. All 143 LSQR fits converged (median 33 iterations, maximum condition estimate 124). Private output is `data/processed/expected_impact/issue-35-v1`, manifest SHA-256 `db254b8c450034a0142255c40301e74cd6ddc59d505ab6d7aef983f846fce5d1`.
 
 ## Limitations
 
