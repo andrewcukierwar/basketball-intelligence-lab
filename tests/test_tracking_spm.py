@@ -126,3 +126,19 @@ def test_full_matches_box_only_fit_and_tracking_falls_back_to_full_defense():
         models["full_tracking"][1].record(CODES + ("a", "b", "c", "d", "e", "f"))["features"][-1]
         == "c"
     )
+
+
+def test_reporting_path_pools_weeks_and_contrasts_players():
+    from bil.models.tracking_spm import COURT_NAMES, court_pool, k0_contrasts
+
+    rng = np.random.default_rng(1)
+    blocks = [np.column_stack((np.full(20, 50.0), rng.uniform(60, 70, (20, len(COURT_NAMES)))))]
+    pooled = court_pool(blocks)
+    assert pooled["possessions"] == 1000 and len(pooled["deltas"]) == 4
+    low, high = pooled["deltas"]["context_full_minus_context"]["interval"]
+    assert low <= pooled["deltas"]["context_full_minus_context"]["delta"] <= high
+    assert court_pool([np.empty((0, 8))]) == {"possessions": 0}
+    errors = {name: rng.normal(size=(50, 3)) for name in MODELS}
+    out = k0_contrasts(errors, np.repeat(np.arange(25), 2))
+    assert out["distinct_players"] == 25 and set(out["minus_full"]) == set(MODELS) - {"full"}
+    assert k0_contrasts(errors, np.array([], dtype=np.int64)) == {"player_seasons": 0}

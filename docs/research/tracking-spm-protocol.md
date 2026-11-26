@@ -27,7 +27,7 @@
 - **Source.** The six SportsDataverse `game_matchups_{end year}.parquet` revisions pinned in the [asset register](nba-tracking-audit-assets.csv). Verify each file's SHA-256 and size before reading. The runner reads the five files for 2018–19 through 2022–23.
 - **Rows.** Directed offensive–defensive pairs. Keep only games with an official regular-season (`002`) or playoff (`004`) ID.
 - **Defender-game totals.** Sum `partial_possessions`, `matchup_turnovers`, `matchup_field_goals_attempted` and `matchup_field_goals_made` over each `(game_id, def_person_id, def_team_id)`.
-- **Linkage.** A defender-game links only if it joins a positive-minute box appearance with the same game, player and team. Its date is that appearance's official date. Unlinked defender-games and rows with nonfinite or negative quantities, or makes above attempts, are dropped and counted.
+- **Linkage.** A defender-game links only if it joins a positive-minute box appearance with the same game, player and team. Its date is that appearance's official date. These are dropped and counted at the defender-game level: unlinked defender-games, and defender-games with a null quantity in any pair row, a negative total or makes above attempts. Pair rows with a null defender or team ID are dropped and counted.
 - **Window features.** For a window, sum the linked totals of a player's games with date `< cutoff`, pooling both season types and all teams. The three defense features are:
 
   | Code | Definition | Null when |
@@ -70,8 +70,8 @@ Score #28's frozen contiguous `evaluation_K0` labels at each season-opening snap
   - The other candidates against `full`.
   - Opening minutes bands (#30 cutoffs).
   - Players with no opening box history, standing in for rookies.
-  - Label-exposure bands.
-  - **Defensive specialists.** Players in the top quintile of the scored players' opening `full` defense prior, a pre-origin quantity.
+  - Label-exposure bands: 250–999 and 1,000 or more.
+  - **Defensive specialists.** Players in the top quintile of the scored players' opening `full` defense prior, a pre-origin quantity. Players without history enter at the intercept fallback.
 
 ## 5. Realized-lineup diagnostic
 
@@ -89,7 +89,7 @@ Reuse #30 §5's dated snapshot rule and canonical rows.
   - Regular season and playoffs.
   - Each season.
   - Possessions where all five defenders have dated tracking against the rest.
-  - Possessions with any defender lacking box history.
+  - Possessions with any of the ten players lacking box history (#30's definition).
   - The defense-only contrast.
 
 ## 6. Coverage, freeze and artifacts

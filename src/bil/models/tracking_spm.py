@@ -179,9 +179,15 @@ def checked_tracking(
             select game_id, def_person_id, def_team_id,
                    sum(partial_possessions), sum(matchup_turnovers),
                    sum(matchup_field_goals_attempted), sum(matchup_field_goals_made),
-                   count(*)
+                   count(*),
+                   count(*) filter (
+                       where partial_possessions is null or matchup_turnovers is null
+                          or matchup_field_goals_attempted is null
+                          or matchup_field_goals_made is null
+                   )
             from read_parquet(?)
             where substr(game_id, 1, 3) in ('002', '004')
+              and def_person_id is not null and def_team_id is not null
             group by all
             order by game_id, def_person_id, def_team_id
             """,
@@ -191,10 +197,21 @@ def checked_tracking(
             "select count(*) from read_parquet(?) where substr(game_id, 1, 3) not in ('002', '004')",
             [str(path)],
         ).fetchone()
+        null_ids = connection.execute(
+            "select count(*) from read_parquet(?) where substr(game_id, 1, 3) in ('002', '004') "
+            "and (def_person_id is null or def_team_id is null)",
+            [str(path)],
+        ).fetchone()
     games, drops = link_tracking(
         (
-            (str(g), int(p), int(t), (number(a), number(b), number(c), number(d)))
-            for g, p, t, a, b, c, d, _ in rows
+            # A null quantity in any pair row makes the whole defender-game invalid.
+            (
+                str(g),
+                int(p),
+                int(t),
+                (number(a), number(b), number(c), number(d)) if not nulls else (float("nan"),) * 4,
+            )
+            for g, p, t, a, b, c, d, _, nulls in rows
         ),
         appearances,
     )
@@ -208,7 +225,8 @@ def checked_tracking(
     return games, {
         "file": name,
         "sha256": digest,
-        "pair_rows": sum(int(row[-1]) for row in rows),
+        "pair_rows": sum(int(row[-2]) for row in rows),
+        "pair_rows_with_null_ids": int(null_ids[0]) if null_ids else 0,
         "other_game_type_rows": int(excluded[0]) if excluded else 0,
         "defender_games": len(rows),
         "dropped": drops,
@@ -448,6 +466,8 @@ def weekly(rows: Rows, values: FloatArray, mask: BoolArray) -> FloatArray:
 
 def court_pool(blocks: Sequence[FloatArray]) -> dict[str, Any]:
     blocks = [block for block in blocks if len(block)]
+    if not blocks:
+        return {"possessions": 0}
     total = np.concatenate(blocks).sum(axis=0)
     mse = total[1:] / total[0]
     index = {name: i for i, name in enumerate(COURT_NAMES)}
