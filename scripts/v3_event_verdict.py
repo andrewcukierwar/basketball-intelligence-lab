@@ -17,10 +17,11 @@ from pathlib import Path
 from typing import Any
 
 # Registered limits (protocol §4).
-MIN_GAMES = {"regular": 15, "playoffs": 3}  # L3: V3 accepted games at least V2 minus this
+MIN_GAMES = {"regular": 15, "playoffs": 3}  # L3: V3 accepted games at least V2 minus this,
+# and at most this many games accepted by V2 alone
 MAX_ROW_MISMATCH = 0.005  # L4
 MAX_POINTS_GAP = 0.005  # L5: summed absolute per-game points gap over V2 points
-CORE_FIELDS = ("EVENTMSGTYPE", "EVENTMSGACTIONTYPE", "PERIOD", "PCTIMESTRING")
+CORE_FIELDS = ("EVENTMSGTYPE", "EVENTMSGACTIONTYPE", "PERIOD", "PCTIMESTRING", "PLAYER1_TEAM_ID")
 MIN_CORE_AGREEMENT = 0.995  # L6a
 MIN_SLOT_EVENTS = 200  # L6b: player slots by V2 type with at least this many events
 MIN_SLOT_AGREEMENT = 0.99  # L6b
@@ -42,6 +43,8 @@ def season_limits(
     season: str, quality: list[dict[str, str]], compare: Any, fields: Any
 ) -> dict[str, dict[str, Any]]:
     [row] = [r for r in quality if r["season"] == season]
+    if row["invariants_failed"] == "":
+        raise SystemExit("season_quality ran without --run-checks; L1 cannot be read")
     results: dict[str, dict[str, Any]] = {
         "L1": {"invariants_failed": int(row["invariants_failed"])},
         "L2": {"hard_failures": row["hard_failures"]},
@@ -49,9 +52,12 @@ def season_limits(
     results["L1"]["pass"] = results["L1"]["invariants_failed"] == 0
     results["L2"]["pass"] = row["hard_failures"] == ""
     games = compare["games"]
-    results["L3"] = {kind: {"v2": games[kind]["v2"], "v3": games[kind]["v3"]} for kind in MIN_GAMES}
+    results["L3"] = {
+        kind: {key: games[kind][key] for key in ("v2", "v3", "v2_only")} for kind in MIN_GAMES
+    }
     results["L3"]["pass"] = all(
-        games[kind]["v3"] >= games[kind]["v2"] - allowed for kind, allowed in MIN_GAMES.items()
+        games[kind]["v3"] >= games[kind]["v2"] - allowed and games[kind]["v2_only"] <= allowed
+        for kind, allowed in MIN_GAMES.items()
     )
     share = compare["row_mismatch_share"]
     results["L4"] = {"row_mismatch_share": share, "pass": share <= MAX_ROW_MISMATCH}

@@ -3,7 +3,7 @@
 **Registration:** [#133](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/133). This protocol is committed before any V3-event build of 2023–24 or 2024–25 is run.
 
 - **Registration commit.** The commit that last changes this file before the first validation build. The validation runs start from that commit with a clean tracked tree. The run log records its hash and this file's SHA-256.
-- **Frozen files.** This file, `src/bil/data/pilot_v3_events.py`, `src/bil/data/pilot.py`, `src/bil/data/pilot_check.py`, `src/bil/data/event_source_comparison.py`, `scripts/v3_event_model_check.py` and `scripts/v3_event_verdict.py`. A change to any of them after the first validation build is a deviation and is reported with the result.
+- **Frozen files.** This file, `src/bil/data/pilot_v3_events.py`, `src/bil/data/pilot.py`, `src/bil/data/pilot_check.py`, `src/bil/data/event_source_comparison.py`, `src/bil/data/season_quality.py`, `src/bil/data/rapm_rows.py`, `scripts/season_quality.py`, `scripts/v3_event_model_check.py` and `scripts/v3_event_verdict.py`. A change to any of them after the first validation build is a deviation and is reported with the result.
 
 **Classification:**
 - **Development validation** of a data-pipeline component (Inferred). It is not model evidence.
@@ -58,7 +58,7 @@
   - No 2023–24 or 2024–25 V3-event build, field comparison or row comparison has been run.
   - The V2-built 2023–24 and 2024–25 builds and row sets were used in #36, and the agent knows the #36 results. L7 compares with those results. It tests whether the V3 rows reproduce them, not whether they hold.
 
-Development results with the frozen code (adapter builds `issue-133-dev-v4`, measures `issue-133-dev-v5`):
+Development results. The builds `issue-133-dev-v4` ran at commit `9939fb1`. The later changes do not alter their events: the `v3_livedata_missing` quarantine fires in no development game, and the flagrant lookup changes only `check`. The measures `issue-133-dev-v5` and the checks were rerun with the frozen code.
 
 | Season | Regular games V2 / V3 | Playoff games V2 / V3 | Rows differing | Per-game points gap | Lowest core field | Lowest player slot by type | Unmatched events |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -96,15 +96,18 @@ All limits must hold in both seasons. `scripts/v3_event_verdict.py` encodes them
 | --- | --- | --- |
 | L1 | Every `check` invariant passes. | `m1_classification.csv`, `invariants_failed` = 0 |
 | L2 | No ADR-0022 hard failure: at least 97% of expected games accepted in each season type, and at most 0.1% unresolved possessions in the season. | `m1_classification.csv`, `hard_failures` empty |
-| L3 | Accepted games, V3 at least V2 minus 15 in the regular season and minus 3 in the playoffs. | rows JSON, `games` |
+| L3 | In the regular season, V3 accepts at least V2's count minus 15, and at most 15 games are accepted by V2 alone. In the playoffs the allowance is 3. | rows JSON, `games` |
 | L4 | Row mismatch share at most 0.5%. It counts possession rows that differ in period, offense team, either lineup or points, in games both builds accept. | rows JSON |
 | L5 | Points gap at most 0.5%: the sum over games both builds accept of the absolute difference in modeled points, divided by the V2 points. | rows JSON |
-| L6a | Agreement at least 99.5% for event type, action type, period and clock, over events both sources hold. | fields JSON |
+| L6a | Agreement at least 99.5% for event type, action type, period, clock and player 1's team, over events both sources hold. | fields JSON |
 | L6b | Agreement at least 99.0% for each player slot of each V2 event type with at least 200 events. It counts only events where either source names a player in that slot. | fields JSON |
 | L6c | V2-only and V3-only events each at most 0.1% of that source's events, in games both hold. | fields JSON |
 | L7 | In the #36 rerun, the pooled regular-season `ei` − `rapm_context` delta moves by at most 0.5 (points per 100)². Both its game and week intervals still exclude 0, and every #36 verdict is unchanged. | model-check JSON |
 
 - **Descriptions** are excluded from L6, because the sources format names differently.
+- **Secondary player teams** come from the box roster and are not limited directly. An error there shows up through L1, L4 or L5.
+- **Sparse slots.** Player slots of event types with fewer than 200 events in a season have no L6b limit.
+- **Chosen after development.** The limits were set after the development values above were seen. The validation seasons were not used.
 - **Baseline.** The model check with the canonical V2 rows in place of the V3 rows gives `delta_change` 0.000 exactly, so L7 measures only the swapped rows.
 
 ## 5. Outcome rules
