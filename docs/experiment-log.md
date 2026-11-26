@@ -367,3 +367,9 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Registration.** [Frozen addendum](research/expected-impact-outer-addendum.md), committed at `88d79a3` before any outer read for this model, with independent pre-run review (no code blockers). The first attempt crashed on load before any result (null neutral-site home flags, ADR-0017). It was fixed at `fe81b0a` and run once. [Results](research/expected-impact-outer.md)
 - **Finding.** `ei_better` against all eight comparators on the regular season. Against context-offset RAPM, the primary: −4.59 (points per 100)² MSE, interval [−5.80, −3.37], with both seasons and all ten blocks lower. Against the zero-prior, context-offset ablation at EI's penalties: −6.41, so the SPM prior adds value. Plain RAPM keeps the lowest regular-season team-game RMSE.
 - **Boundary.** Outer-fold development evidence on seasons M2 had already scored. The 2025–26 holdout is unread. The configuration is frozen as the reference set for #42.
+
+### EXP-0023 — Team margins and win probabilities from frozen EI ratings, 2023–25
+
+- **Registration.** [#39 protocol](research/team-outcomes-protocol.md), committed at `4bcb200` before scoring, with an independent pre-run review (no blockers). [Results](research/team-outcomes.md)
+- **Finding.** EI with no-availability pregame minutes is worse than a daily ridge team rating on regular-season margin RMSE: +0.142 [+0.018, +0.262] (`ei_worse`). Log loss is inconclusive (+0.0052). EI is far better than home court alone (−1.50 RMSE). Oracle minutes narrow the gap but do not close it.
+- **Boundary.** Retrospective rolling-origin, with strict pregame evidence unavailable. The negative result is preserved. Hypotheses (rating refresh cadence, calibration dispersion) are untested.
