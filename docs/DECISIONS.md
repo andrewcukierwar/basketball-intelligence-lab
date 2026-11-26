@@ -480,3 +480,18 @@ V2 remains the event source of record.
   - **Missing link.** The Estimated Skills link is still missing (#125).
   - **Unblocked work.** This unblocks #38, #39 and #41.
 - **Links:** [#35](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/35), [#36](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/36), [ADR-0025](#adr-0025--two-season-unit-weight-window-with-split-penalties-for-the-multi-season-rapm-baseline), [ADR-0030](#adr-0030--close-30-with-mixed-side-level-evidence-and-use-its-frozen-fits-as-a-provisional-spm-prior-for-expected-impact-v1)
+
+## ADR-0032 — Keep Expected impact v1 box-only after the #38 tracking comparison
+
+- **Date:** 2026-11-26
+- **Status:** Proposed (agent decision under ADR-0026, flagged for maintainer review).
+- **Evidence class:** Original BIL design, Experimental evidence ([#38 results](research/tracking-spm.md)).
+- **Decision:** The M5 reference (ADR-0031) keeps the box-only SPM prior. The #38 tracking comparison is frozen as recorded and is not part of the #42 confirmatory reference set.
+- **Evidence:**
+  - **On court.** Tracking-enhanced defense lowers realized-lineup MSE (−0.000247 [−0.000311, −0.000185]).
+  - **K0.** It worsens equal-player K0 defense agreement (+0.089 [+0.047, +0.145]), mainly for low-minute players.
+  - **Coverage.** No pinned matchup tracking exists for 2023–24 or later, so the prior could not be applied to the outer or confirmatory seasons.
+- **Consequences:**
+  - **Reopening.** This needs a registered capture of later-season matchup data, plus an exposure-aware tracking specification registered before any fit.
+  - **#40.** It reads #38 as "tracking unavailable for M7".
+- **Links:** [#38](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/38), [#37](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/37), [ADR-0031](#adr-0031--expected-impact-v1-as-the-m5-integrated-reference)

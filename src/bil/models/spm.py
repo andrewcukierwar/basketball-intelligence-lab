@@ -55,9 +55,9 @@ class LinearPrior:
         result: FloatArray = self.intercept + standardized / self.scale @ self.coefficients
         return result
 
-    def record(self) -> dict[str, object]:
+    def record(self, codes: Sequence[str] = CODES) -> dict[str, object]:
         return {
-            "features": [CODES[i] for i in self.features],
+            "features": [codes[i] for i in self.features],
             "mean": self.mean.tolist(),
             "scale": self.scale.tolist(),
             "coefficients": self.coefficients.tolist(),
@@ -72,7 +72,10 @@ def fit_prior(
     if (
         response.ndim != 1
         or not response.size
-        or values.shape != (response.size, len(CODES))
+        or values.ndim != 2
+        or values.shape[0] != response.size
+        or values.shape[1] < len(CODES)
+        or any(not 0 <= i < values.shape[1] for i in features)
         or weights.shape != response.shape
         or not np.isfinite(response).all()
         or not np.isfinite(weights).all()
