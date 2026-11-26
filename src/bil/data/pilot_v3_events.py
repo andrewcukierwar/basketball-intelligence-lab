@@ -377,6 +377,7 @@ class _Substitutions:
             if person and team and name:
                 names[(team, name)].add(person)
         self.names = {key: next(iter(v)) for key, v in names.items() if len(v) == 1}
+        self.used: set[int] = set()  # liveData ``in`` rows already paired, by line
         self.batch_of: dict[int, int] = {}
         self.pending: dict[tuple[int, int], list[Action]] = defaultdict(list)
         self.by_clock: dict[tuple[str, str, int], list[Action]] = defaultdict(list)
@@ -399,23 +400,20 @@ class _Substitutions:
         team = sub.number("teamId")
         names = SUB_NAMES.fullmatch(sub.fields["description"].strip())
         wanted = names.group(1).strip().casefold() if names is not None else None
-        if wanted is not None and (team, wanted) in self.names:
-            person = self.names[(team, wanted)]
-            for pool in self.pending.values():
-                for candidate in pool:
-                    if (
-                        candidate.number("personId") == person
-                        and candidate.number("teamId") == team
-                    ):
-                        candidate.fields.setdefault("_used", "1")
-                        break
-            return person
         batch = self.batch_of.get(sub.number("actionNumber"))
         if batch is not None and self.pending.get((batch, team)):
             candidates = self.pending[(batch, team)]
         else:
             candidates = self.by_clock.get((sub.fields["period"], sub.fields["clock"], team), [])
-        candidates = [c for c in candidates if not c.fields.get("_used")]
+        candidates = [c for c in candidates if c.line not in self.used]
+        if wanted is not None and (team, wanted) in self.names:
+            person = self.names[(team, wanted)]
+            # Retire this substitution's own liveData row so a fallback cannot take it.
+            for candidate in candidates:
+                if candidate.number("personId") == person:
+                    self.used.add(candidate.line)
+                    break
+            return person
         if not candidates:
             raise GameIssue(
                 "v3_substitution_unpaired",
@@ -427,7 +425,7 @@ class _Substitutions:
             named = [c for c in candidates if _surname(c.fields["playerName"]) == wanted]
             if len(named) == 1:
                 chosen = named[0]
-        chosen.fields["_used"] = "1"
+        self.used.add(chosen.line)
         return chosen.number("personId")
 
 

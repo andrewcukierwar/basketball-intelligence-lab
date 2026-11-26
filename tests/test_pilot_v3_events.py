@@ -1,0 +1,184 @@
+"""V2-schema events rebuilt from V3 actions and liveData (#133), on a synthetic game."""
+
+from __future__ import annotations
+
+import pytest
+
+from bil.data.pilot_inputs import GameIssue
+from bil.data.pilot_v3_events import (
+    ACTION_TYPES,
+    LIVE_FIELDS,
+    V2_HEADERS,
+    V3_FIELDS,
+    Action,
+    derive_home,
+    rebuild_game,
+    v2_clock,
+)
+
+HOME, AWAY = 1610612738, 1610612755
+H1, H2, H3, A1, A2, A3 = 11, 12, 13, 21, 22, 23
+ROSTER = {H1: HOME, H2: HOME, H3: HOME, A1: AWAY, A2: AWAY, A3: AWAY}
+
+
+def v3(
+    action_id: int,
+    number: int,
+    kind: str,
+    sub: str,
+    person: int,
+    team: int,
+    text: str,
+    clock: str = "PT11M00.00S",
+    score: tuple[str, str] = ("", ""),
+    name: str = "",
+) -> Action:
+    fields = dict.fromkeys(V3_FIELDS, "")
+    fields.update(
+        actionId=str(action_id),
+        actionNumber=str(number),
+        actionType=kind,
+        subType=sub,
+        personId=str(person),
+        teamId=str(team),
+        description=text,
+        clock=clock,
+        period="1",
+        scoreHome=score[0],
+        scoreAway=score[1],
+        videoAvailable="1",
+        playerName=name,
+    )
+    return Action(action_id + 1, fields)
+
+
+def live(number: int, kind: str, sub: str = "", **extra: str) -> Action:
+    fields = dict.fromkeys(LIVE_FIELDS, "")
+    fields.update(actionNumber=str(number), actionType=kind, subType=sub, period="1", **extra)
+    return Action(number, fields)
+
+
+GAME = [
+    v3(1, 2, "period", "start", 0, 0, "Start of 1st Period", "PT12M00.00S"),
+    v3(2, 4, "Jump Ball", "", H1, HOME, "Jump Ball A vs. B: Tip to C", "PT12M00.00S"),
+    v3(3, 7, "Missed Shot", "Jump Shot", A1, AWAY, "MISS A1 3PT Jump Shot", name="Aone"),
+    v3(4, 7, "", "", H2, HOME, "H2 BLOCK (1 BLK)", name="Htwo"),
+    v3(5, 9, "Rebound", "Unknown", H1, HOME, "H1 REBOUND", name="Hone"),
+    v3(6, 10, "Turnover", "Bad Pass", H1, HOME, "H1 Bad Pass Turnover"),
+    v3(7, 10, "", "", A2, AWAY, "A2 STEAL (1 STL)", name="Atwo"),
+    v3(8, 12, "Made Shot", "Jump Shot", A2, AWAY, "A2 Jump Shot (2 PTS)", score=("0", "2")),
+    v3(9, 14, "Foul", "Shooting", A1, AWAY, "A1 S.FOUL (P1.T1)"),
+    v3(
+        10,
+        16,
+        "Free Throw",
+        "Free Throw 1 of 2",
+        H1,
+        HOME,
+        "H1 Free Throw 1 of 2",
+        score=("1", "2"),
+    ),
+    v3(11, 17, "Substitution", "", A1, AWAY, "SUB: Athree FOR Aone", "PT11M00.00S"),
+    v3(12, 18, "Free Throw", "Free Throw 2 of 2", H1, HOME, "MISS H1 Free Throw 2 of 2"),
+    v3(13, 20, "Rebound", "Normal Rebound", AWAY, 0, "Team Rebound"),
+    v3(14, 22, "Timeout", "Regular", HOME, 0, "Home Timeout: Regular", "PT00M45.80S"),
+]
+LIVE = [
+    live(
+        4,
+        "jumpball",
+        "recovered",
+        personId=str(H3),
+        teamId=str(HOME),
+        jumpBallWonPersonId=str(H1),
+        jumpBallLostPersonId=str(A1),
+        jumpBallRecoverdPersonId=str(H3),
+    ),
+    live(12, "2pt", assistPersonId=str(A3)),
+    live(14, "foul", "personal", foulDrawnPersonId=str(H1)),
+    live(17, "substitution", "out", personId=str(A1), teamId=str(AWAY), clock="PT10M58.00S"),
+    live(
+        19,
+        "substitution",
+        "in",
+        personId=str(A3),
+        teamId=str(AWAY),
+        clock="PT10M58.00S",
+        playerName="A. Athree",
+    ),
+]
+
+
+def rebuilt(**changes: object) -> dict[int, dict[str, str]]:
+    events = rebuild_game("0022200001", GAME, LIVE, (HOME, AWAY), HOME, ROSTER)
+    return {int(e.fields["EVENTNUM"]): e.fields for e in events}
+
+
+def test_clock_truncates_tenths() -> None:
+    assert v2_clock("PT11M43.00S") == "11:43"
+    assert v2_clock("PT00M47.90S") == "0:47"
+    with pytest.raises(GameIssue):
+        v2_clock("11:43")
+
+
+def test_home_from_running_scores() -> None:
+    assert derive_home(GAME, (HOME, AWAY)) == HOME
+    assert derive_home(GAME, (AWAY, HOME)) == HOME
+    assert derive_home(GAME[:3], (HOME, AWAY)) is None
+
+
+def test_rebuilt_rows_carry_the_v2_fields_the_parser_reads() -> None:
+    rows = rebuilt()
+    assert list(rows) == [2, 4, 7, 9, 10, 12, 14, 16, 17, 18, 20, 22]  # V3 action order
+    assert all(list(row) == list(V2_HEADERS) for row in rows.values())
+    jump = rows[4]
+    assert (jump["EVENTMSGTYPE"], jump["PLAYER1_ID"], jump["PLAYER2_ID"]) == (
+        "10",
+        str(H1),
+        str(A1),
+    )
+    assert (jump["PLAYER3_ID"], jump["PLAYER3_TEAM_ID"]) == (str(H3), str(HOME))
+    miss = rows[7]
+    assert (miss["EVENTMSGTYPE"], miss["EVENTMSGACTIONTYPE"]) == ("2", "1")
+    assert (miss["PLAYER3_ID"], miss["PLAYER3_TEAM_ID"]) == (str(H2), str(HOME))
+    assert miss["VISITORDESCRIPTION"].startswith("MISS") and "BLOCK" in miss["HOMEDESCRIPTION"]
+    assert rows[10]["PLAYER2_ID"] == str(A2)  # steal
+    made = rows[12]
+    assert (made["PLAYER2_ID"], made["SCORE"], made["SCOREMARGIN"]) == (str(A3), "2 - 0", "-2")
+    assert rows[14]["PLAYER2_ID"] == str(H1)  # foul drawn
+    assert rows[16]["SCORE"] == "2 - 1" and rows[18]["SCORE"] == ""
+    sub = rows[17]
+    assert (sub["EVENTMSGTYPE"], sub["PLAYER1_ID"], sub["PLAYER2_ID"]) == ("8", str(A1), str(A3))
+    team = rows[20]
+    assert (team["PLAYER1_ID"], team["PLAYER1_TEAM_ID"]) == (str(AWAY), "")
+    assert team["VISITORDESCRIPTION"] == "Team Rebound"
+    timeout = rows[22]
+    assert (timeout["HOMEDESCRIPTION"], timeout["PCTIMESTRING"]) == (
+        "Home Timeout: Regular",
+        "0:45",
+    )
+    assert rows[2]["NEUTRALDESCRIPTION"] == "Start of 1st Period"
+
+
+def test_undesignated_box_takes_home_from_scores_and_conflict_quarantines() -> None:
+    events = rebuild_game("0022200001", GAME, LIVE, (AWAY, HOME), None, ROSTER)
+    assert next(e for e in events if e.fields["EVENTNUM"] == "12").fields["VISITORDESCRIPTION"]
+    with pytest.raises(GameIssue) as conflict:
+        rebuild_game("0022200001", GAME, LIVE, (HOME, AWAY), AWAY, ROSTER)
+    assert conflict.value.code == "v3_home_conflict"
+
+
+def test_unmapped_action_and_unpaired_substitution_quarantine() -> None:
+    odd = [*GAME, v3(15, 23, "Mystery", "New", H1, HOME, "?")]
+    with pytest.raises(GameIssue) as unmapped:
+        rebuild_game("0022200001", odd, LIVE, (HOME, AWAY), HOME, ROSTER)
+    assert unmapped.value.code == "v3_unmapped_action"
+    with pytest.raises(GameIssue) as unpaired:
+        rebuild_game("0022200001", GAME, LIVE[:3], (HOME, AWAY), HOME, ROSTER)
+    assert unpaired.value.code == "v3_substitution_unpaired"
+
+
+def test_learned_table_is_complete_for_core_types() -> None:
+    assert ACTION_TYPES[("Free Throw", "Free Throw 1 of 2")] == (3, 11)
+    assert ACTION_TYPES[("Rebound", "Unknown")] == (4, 0)
+    assert ACTION_TYPES[("Substitution", "")] == (8, 0)
