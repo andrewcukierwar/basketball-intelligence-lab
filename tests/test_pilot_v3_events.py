@@ -215,6 +215,10 @@ def test_unmapped_action_and_unpaired_substitution_quarantine() -> None:
     with pytest.raises(GameIssue) as unmapped:
         rebuild_game("0022200001", odd, LIVE, (HOME, AWAY), HOME, ROSTER)
     assert unmapped.value.code == "v3_unmapped_action"
+    new_shot = [*GAME, v3(15, 23, "Made Shot", "Brand New Shot", H1, HOME, "H1 shot")]
+    events = rebuild_game("0022200001", new_shot, LIVE, (HOME, AWAY), HOME, ROSTER)
+    shot = next(e.fields for e in events if e.fields["EVENTNUM"] == "23")
+    assert (shot["EVENTMSGTYPE"], shot["EVENTMSGACTIONTYPE"]) == ("1", "0")
     with pytest.raises(GameIssue) as unpaired:
         rebuild_game("0022200001", GAME, LIVE[:3], (HOME, AWAY), HOME, ROSTER)
     assert unpaired.value.code == "v3_substitution_unpaired"

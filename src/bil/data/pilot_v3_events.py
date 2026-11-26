@@ -265,6 +265,7 @@ LIVE_FIELDS = (
     "personId",
     "teamId",
     "playerName",
+    "playerNameI",
     "assistPersonId",
     "foulDrawnPersonId",
     "stealPersonId",
@@ -277,6 +278,7 @@ LIVE_FIELDS = (
 CLOCK = re.compile(r"PT(\d+)M(\d+)(?:\.\d+)?S")
 SUB_NAMES = re.compile(r"SUB: (.+) FOR (.+)")
 MADE_FREE_THROW = 3
+SHOT_TYPES = {"Made Shot": 1, "Missed Shot": 2}
 HOME_VOTE_SHARE = 0.9
 MIN_HOME_VOTES = 5
 DOUBLE_FOULS = {(6, 10), (6, 16)}  # double personal, double technical
@@ -373,13 +375,13 @@ class _Substitutions:
     takes an ``in`` row of the same team from the batch of its ``out`` row, preferring the
     one whose surname matches the incoming name in the V3 description. Without a matching
     ``out`` row it falls back to an ``in`` row of the same team, period and clock. A surname
-    that names exactly one player of the team in the game's own V3 rows is used first.
+    that names exactly one player of the team in the game's own V3 or liveData rows is used first.
     """
 
     def __init__(self, live: Sequence[Action], actions: Sequence[Action]) -> None:
-        # Surname to person per team, from the game's own V3 rows.
+        # Surname to person per team, from the game's own V3 and liveData rows.
         names: dict[tuple[int, str], set[int]] = defaultdict(set)
-        for action in actions:
+        for action in (*actions, *live):
             person, team = action.number("personId"), action.number("teamId")
             for field in ("playerName", "playerNameI"):
                 name = action.fields[field].strip().casefold()
@@ -466,7 +468,15 @@ def rebuild_game(
         if action.fields["actionType"] != "substitution" or action.fields["subType"] != "in":
             live_by_number.setdefault(action.number("actionNumber"), action)
     subs = _Substitutions(live, actions)
-    ordered = sorted(groups.items(), key=lambda kv: min(a.number("actionId") for a in kv[1]))
+
+    def position(item: tuple[int, list[Action]]) -> tuple[int, int, int]:
+        # V3 action order, except that a period's start row leads its period: V3 sometimes
+        # files a stoppage at 12:00 (a delay-of-game violation, say) before it.
+        first = min(item[1], key=lambda a: a.number("actionId"))
+        start = first.fields["actionType"] == "period" and first.fields["subType"] == "start"
+        return first.number("period"), 0 if start else 1, first.number("actionId")
+
+    ordered = sorted(groups.items(), key=position)
     events: list[RawEvent] = []
     for number, group in ordered:
         group.sort(key=lambda a: a.number("actionId"))
@@ -475,9 +485,14 @@ def rebuild_game(
             raise GameIssue("v3_action_without_type", "V3 event has no typed action", number)
         primary = typed[0]
         key = (primary.fields["actionType"].strip(), primary.fields["subType"].strip())
-        if key not in ACTION_TYPES:
+        if key in ACTION_TYPES:
+            event_type, action_type = ACTION_TYPES[key]
+        elif key[0] in SHOT_TYPES:
+            # Shot action codes are read by neither pbpstats nor the build, so a new shot
+            # subtype becomes a plain made or missed field goal. Any other unknown pair is not.
+            event_type, action_type = SHOT_TYPES[key[0]], 0
+        else:
             raise GameIssue("v3_unmapped_action", f"Unmapped V3 action {key}", number)
-        event_type, action_type = ACTION_TYPES[key]
         row = dict.fromkeys(V2_HEADERS, "")
         descriptions: dict[str, list[str]] = defaultdict(list)
         for action in group:
