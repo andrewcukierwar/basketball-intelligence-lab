@@ -82,6 +82,32 @@ GAME = [
     v3(12, 18, "Free Throw", "Free Throw 2 of 2", H1, HOME, "MISS H1 Free Throw 2 of 2"),
     v3(13, 20, "Rebound", "Normal Rebound", AWAY, 0, "Team Rebound"),
     v3(14, 22, "Timeout", "Regular", HOME, 0, "Home Timeout: Regular", "PT00M45.80S"),
+    # Later baskets: enough running-score votes to fix the home team.
+    *(
+        v3(
+            20 + i,
+            30 + i,
+            "Made Shot",
+            "Jump Shot",
+            player,
+            team,
+            "Jump Shot",
+            "PT00M30.00S",
+            score,
+        )
+        for i, (player, team, score) in enumerate(
+            [
+                (H1, HOME, ("3", "2")),
+                (A1, AWAY, ("3", "4")),
+                (H2, HOME, ("5", "4")),
+                (A2, AWAY, ("5", "6")),
+                (H1, HOME, ("7", "6")),
+                (A1, AWAY, ("7", "8")),
+                (H2, HOME, ("9", "8")),
+                (A2, AWAY, ("9", "10")),
+            ]
+        )
+    ),
 ]
 LIVE = [
     live(
@@ -125,11 +151,27 @@ def test_home_from_running_scores() -> None:
     assert derive_home(GAME, (HOME, AWAY)) == HOME
     assert derive_home(GAME, (AWAY, HOME)) == HOME
     assert derive_home(GAME[:3], (HOME, AWAY)) is None
+    # One misattributed basket among many does not block the decision.
+    more = [
+        v3(
+            41 + i,
+            41 + i,
+            "Made Shot",
+            "Jump Shot",
+            A1,
+            AWAY,
+            "Jump Shot",
+            score=("9", str(12 + 2 * i)),
+        )
+        for i in range(5)
+    ]
+    stray = v3(50, 50, "Made Shot", "Jump Shot", A1, AWAY, "Jump Shot", score=("11", "20"))
+    assert derive_home([*GAME, *more, stray], (HOME, AWAY)) == HOME
 
 
 def test_rebuilt_rows_carry_the_v2_fields_the_parser_reads() -> None:
     rows = rebuilt()
-    assert list(rows) == [2, 4, 7, 9, 10, 12, 14, 16, 17, 18, 20, 22]  # V3 action order
+    assert list(rows) == [2, 4, 7, 9, 10, 12, 14, 16, 17, 18, 20, 22, *range(30, 38)]  # V3 order
     assert all(list(row) == list(V2_HEADERS) for row in rows.values())
     jump = rows[4]
     assert (jump["EVENTMSGTYPE"], jump["PLAYER1_ID"], jump["PLAYER2_ID"]) == (

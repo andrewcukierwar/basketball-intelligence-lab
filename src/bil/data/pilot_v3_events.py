@@ -254,6 +254,7 @@ V3_FIELDS = (
     "scoreAway",
     "videoAvailable",
     "playerName",
+    "playerNameI",
 )
 LIVE_FIELDS = (
     "actionNumber",
@@ -276,6 +277,8 @@ LIVE_FIELDS = (
 CLOCK = re.compile(r"PT(\d+)M(\d+)(?:\.\d+)?S")
 SUB_NAMES = re.compile(r"SUB: (.+) FOR (.+)")
 MADE_FREE_THROW = 3
+HOME_VOTE_SHARE = 0.9
+MIN_HOME_VOTES = 5
 DOUBLE_FOULS = {(6, 10), (6, 16)}  # double personal, double technical
 
 
@@ -313,27 +316,32 @@ def v2_clock(value: str) -> str:
 
 
 def derive_home(actions: Sequence[Action], teams: tuple[int, int]) -> int | None:
-    """The home team from V3 running scores: a team's points move scoreHome iff it is home."""
-    votes: dict[int, set[bool]] = defaultdict(set)
+    """The home team from V3 running scores: a team's points move ``scoreHome`` iff it is home.
+
+    Each scoring change by one of the two teams is a vote. A team is home when at least
+    ``HOME_VOTE_SHARE`` of its votes say so and the other team's votes say away by the same
+    share; a few corrected or misattributed baskets therefore do not block the decision.
+    """
+    votes: dict[int, list[int]] = {team: [0, 0] for team in teams}  # [home, away]
     home = away = 0
     for action in sorted(actions, key=lambda a: a.number("actionId")):
         if action.fields["scoreHome"] in ("", "NA") or action.fields["scoreAway"] in ("", "NA"):
             continue
         h, a = action.number("scoreHome"), action.number("scoreAway")
         team = action.number("teamId")
-        if team in teams and (h != home) != (a != away):
-            votes[team].add(h != home)
+        if team in votes and (h != home) != (a != away):
+            votes[team][0 if h != home else 1] += 1
         home, away = h, a
-    if any(len(v) != 1 for v in votes.values()) or not votes:
-        return None
-    homes = {t for t, v in votes.items() if v == {True}}
-    aways = {t for t, v in votes.items() if v == {False}}
-    if len(homes) > 1 or len(aways) > 1 or homes & aways:
-        return None
-    if homes:
-        return homes.pop()
-    (other,) = aways
-    return teams[0] if other == teams[1] else teams[1]
+    for candidate, other in (teams, teams[::-1]):
+        as_home, as_away = votes[candidate], votes[other]
+        if (
+            sum(as_home) >= MIN_HOME_VOTES
+            and sum(as_away) >= MIN_HOME_VOTES
+            and as_home[0] >= HOME_VOTE_SHARE * sum(as_home)
+            and as_away[1] >= HOME_VOTE_SHARE * sum(as_away)
+        ):
+            return candidate
+    return None
 
 
 def _side(action: Action, home: int, away: int) -> str:
@@ -373,9 +381,10 @@ class _Substitutions:
         names: dict[tuple[int, str], set[int]] = defaultdict(set)
         for action in actions:
             person, team = action.number("personId"), action.number("teamId")
-            name = action.fields["playerName"].strip().casefold()
-            if person and team and name:
-                names[(team, name)].add(person)
+            for field in ("playerName", "playerNameI"):
+                name = action.fields[field].strip().casefold()
+                if person and team and name:
+                    names[(team, name)].add(person)
         self.names = {key: next(iter(v)) for key, v in names.items() if len(v) == 1}
         self.used: set[int] = set()  # liveData ``in`` rows already paired, by line
         self.batch_of: dict[int, int] = {}
@@ -422,7 +431,7 @@ class _Substitutions:
             )
         chosen = candidates[0]
         if wanted is not None:
-            named = [c for c in candidates if _surname(c.fields["playerName"]) == wanted]
+            named = [c for c in candidates if _surname(c.fields["playerName"]) == _surname(wanted)]
             if len(named) == 1:
                 chosen = named[0]
         self.used.add(chosen.line)

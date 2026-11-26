@@ -3,17 +3,22 @@
 Both inputs are canonical RAPM row sets (``bil.data.rapm_rows``) built from pilot builds of
 the same source snapshot. The comparison reads only model rows and game reconciliation:
 accepted-game agreement, and in games both accept, possession-row identity on the fields the
-models use (period, offense team, both lineups and points).
+models use (period, offense team, both lineups and points). ``fields`` compares the rebuilt
+event rows themselves with the archived V2 rows of the same snapshot.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import duckdb
+
+from bil.data.pilot_inputs import GameIssue, _v2_field, box_scores, event_games
+from bil.data.pilot_v3_events import rebuilt_games
 
 ROW_KEY = (
     "period, offense_team_id, list_sort(offense_player_ids) AS offense, "
@@ -105,12 +110,97 @@ def compare(v2_rows: Path, v3_rows: Path) -> dict[str, Any]:
     }
 
 
+FIELDS = (
+    "EVENTMSGTYPE",
+    "EVENTMSGACTIONTYPE",
+    "PERIOD",
+    "PCTIMESTRING",
+    "HOMEDESCRIPTION",
+    "VISITORDESCRIPTION",
+    "NEUTRALDESCRIPTION",
+    "PLAYER1_ID",
+    "PLAYER1_TEAM_ID",
+    "PLAYER2_ID",
+    "PLAYER2_TEAM_ID",
+    "PLAYER3_ID",
+    "PLAYER3_TEAM_ID",
+)
+
+
+def _normal(column: str, value: str) -> object:
+    parsed = _v2_field(column, value)
+    if isinstance(parsed, str):
+        parsed = parsed.strip()
+    return None if parsed in (None, 0, "") else parsed
+
+
+def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
+    """Event-level agreement of rebuilt rows with archived V2 rows of the same snapshot."""
+    with duckdb.connect() as connection:
+        games, players = box_scores(connection, snapshot)
+    boxes = {
+        g: (
+            (b.home_id, b.away_id),
+            b.home_id if b.home_designated else None,
+            {p: box.team_id for p, box in players[g].items()},
+        )
+        for g, b in games.items()
+    }
+    issues: Counter[str] = Counter()
+    events = Counter[str]()
+    mismatches: Counter[str] = Counter()
+    for suffix in ("", "_po"):
+        real = dict(event_games(snapshot / f"nbastats{suffix}_{season}.tar.xz"))
+        rebuilt = rebuilt_games(
+            snapshot / f"nbastatsv3{suffix}_{season}.tar.xz",
+            snapshot / f"cdnnba{suffix}_{season}.tar.xz",
+            boxes,
+        )
+        for game_id, out in rebuilt:
+            if game_id not in real:
+                continue
+            events["games"] += 1
+            if isinstance(out, GameIssue):
+                issues[out.code] += 1
+                continue
+            v2: dict[int, dict[str, str]] = {}
+            for event in real[game_id]:
+                v2.setdefault(int(event.fields["EVENTNUM"]), event.fields)
+            v3 = {int(e.fields["EVENTNUM"]): e.fields for e in out}
+            events["v2_only"] += len(v2.keys() - v3.keys())
+            events["v3_only"] += len(v3.keys() - v2.keys())
+            for number in v2.keys() & v3.keys():
+                events["matched"] += 1
+                for column in FIELDS:
+                    left = _normal(column, v2[number][column])
+                    if left != _normal(column, v3[number][column]):
+                        mismatches[column] += 1
+    matched = events["matched"]
+    return {
+        "games": events["games"],
+        "rebuild_issues": dict(issues),
+        "events_matched": matched,
+        "events_v2_only": events["v2_only"],
+        "events_v3_only": events["v3_only"],
+        "field_agreement": {c: 1 - mismatches[c] / matched if matched else None for c in FIELDS},
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("v2_rows", type=Path)
-    parser.add_argument("v3_rows", type=Path)
+    commands = parser.add_subparsers(dest="action", required=True)
+    rows = commands.add_parser("rows", help="compare two canonical row sets")
+    rows.add_argument("v2_rows", type=Path)
+    rows.add_argument("v3_rows", type=Path)
+    fields = commands.add_parser("fields", help="compare rebuilt events with archived V2")
+    fields.add_argument("snapshot", type=Path)
+    fields.add_argument("--season", type=int, required=True)
     args = parser.parse_args()
-    print(json.dumps(compare(args.v2_rows, args.v3_rows), indent=2))
+    if args.action == "rows":
+        result = compare(args.v2_rows, args.v3_rows)
+    else:
+        result = field_agreement(args.snapshot, args.season)
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
