@@ -46,7 +46,7 @@ In the playoffs, which are reported but not adjudicated, EI and the team rating 
 
 ## Calibration
 
-- **Logistic recalibration slopes above 1 in evaluation.** `ei` is 1.23 and `team_rating` 1.17, so both calibrations are under-dispersed out of sample. Development slopes were 1.09 and 1.05.
+- **Logistic recalibration slopes above 1 in evaluation.** `ei` is 1.23 and `team_rating` 1.16, so both calibrations are under-dispersed out of sample. Development slopes were 1.09 and 1.05.
 - **Intercepts** are close to 0: −0.09 and −0.08.
 - The private results hold ten-bin tables.
 
