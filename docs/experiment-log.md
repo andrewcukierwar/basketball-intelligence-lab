@@ -373,3 +373,12 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Registration.** [#39 protocol](research/team-outcomes-protocol.md), committed at `4bcb200` before scoring, with an independent pre-run review (no blockers). [Results](research/team-outcomes.md)
 - **Finding.** EI with no-availability pregame minutes is worse than a daily ridge team rating on regular-season margin RMSE: +0.142 [+0.018, +0.262] (`ei_worse`). Log loss is inconclusive (+0.0052). EI is far better than home court alone (−1.50 RMSE). Oracle minutes narrow the gap but do not close it.
 - **Boundary.** Retrospective rolling-origin, with strict pregame evidence unavailable. The negative result is preserved. Hypotheses (rating refresh cadence, calibration dispersion) are untested.
+
+### EXP-0024 — Defensive matchup tracking against box-only SPM defense, 2019–23
+
+- **Registration.** [#38 protocol](research/tracking-spm-protocol.md), committed before any tracking fit, with an independent pre-run review (no blockers). The run used `38718f9`. [Results](research/tracking-spm.md)
+- **Finding.** Adding three public matchup rates to Full box defense gives a mixed result:
+  - **On court, better.** It lowers realized-lineup possession MSE by −0.000247 [−0.000311, −0.000185], which meets the on-court criterion.
+  - **K0, worse.** It worsens season-opening K0 defense RMSE by +0.089 [+0.047, +0.145]. The deterioration is concentrated in players under 15 minutes per game (+0.38).
+  - **Sensitivity.** Regular-only tracking behaves the same.
+- **Boundary.** Retrospective and capture-bound, with strict eligibility empty. There is no pinned tracking after 2022–23, so no M7 tracking comparison is available. Exposure shrinkage of the rates is untested.
