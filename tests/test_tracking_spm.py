@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -36,7 +37,7 @@ def box(game: str, player: int, team: str, minutes: float, day: date = START) ->
 
 
 def test_pins_cover_the_registered_seasons():
-    pins = tracking_pins()
+    pins = tracking_pins(Path(__file__).parents[1] / "docs/research/nba-tracking-audit-assets.csv")
     for season in range(2018, 2023):
         assert pins[season][0] == f"game_matchups_{season + 1}.parquet"
 
