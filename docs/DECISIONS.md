@@ -437,3 +437,26 @@ V2 remains the event source of record.
 - **Evidence:** [Report](research/order-repair-v2-2017-18.md), [EXP-0019](experiment-log.md). 2017–18 recovers 15 of 172 offered games (v1 recovered 138 in total, 137 of them order-class), with 118 declined for lack of corroboration, 14 for counter inversion, 4 above the ceiling and 7 without a complete `ord`, and 14 rejected. The largest applied shift is 4 s. Repaired games agree with Bentes on 99.978% of lineup seconds, though lineup seconds are not independent of rewritten substitution clocks. 26 of 26 checks pass. Event-local checks find no unresolved possession at a moved event.
 - **Consequences:** 2017–18 stays outside the primary cohort: regular coverage is 86.7% and unresolved possessions 0.388%. Not applying the repair to passing seasons is a procedural rule. In code it only touches games that fail the V2, V3-primary and order-repair attempts. **Retry order when several opt-in flags are set:** v2 runs before the free-throw-miss retry merged from main. A game v2 recovers is therefore never offered that later retry. The 2017–18 results above were built without the free-throw-miss flag. The foul-counter check also matches turnover `(P#.T#)` counters, so some `counter_inversion` declines may be turnover-counter inversions. This can only cause extra declines, never wrong acceptances. The scratch build `issue-90-order-repair-v2` (v1's removed second use) can be rebuilt only at its old commit. The repair cannot reach the hard limits, and most residual unresolved possessions are in accepted games. `unsupported_reorder` and `unresolved_clock_reset` lose discriminating power on repaired games because clocks are monotone by construction. The corroboration tiers are a proposal for the reviewer.
 - **Links:** [Issue #99](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/99), [#53](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/53), [ADR-0022](#adr-0022--revise-the-m1-quality-policy-hard-correctness-dataset-eligibility-and-representativeness), [ADR-0023](#adr-0023--repair-late-entered-event-order-from-datanba-entry-order-opt-in), [ADR-0028](#adr-0028--opt-in-same-clock-rebound-ordering-rule-same-clock-v1)
+
+## ADR-0030 — Close #30 with mixed side-level evidence and use its frozen fits as a provisional SPM prior for Expected impact v1
+
+- **Date:** 2026-11-25
+- **Status:** Proposed (agent decision under ADR-0026's autonomy clause, which allows reversible, bounded experimental decisions). Flagged for maintainer review. It is reversible: v1 artifacts are versioned and #36 tests the prior's contribution.
+- **Evidence class:** Original BIL design on Experimental evidence ([#30 results](research/box-spm-results.md)).
+- **Context:**
+  - #35 lists "frozen, validated offensive and defensive SPM priors" as its #30 dependency.
+  - #30's registered K0 criterion did not pass on either side.
+  - On court, context plus Full SPM beat context alone, interval excluding zero. It tied context-offset RAPM on the contiguous reference and beat it on the extended one (descriptive).
+  - The #32 Estimated Skills fit uses 2022–23 outcomes. The SPM was trained on raw season box rates.
+- **Decision:**
+  - #30 is complete. "Validated" means evaluated under its registered protocol with the evidence reported, not that every criterion passed.
+  - #35 v1 centers walk-forward RAPM on #30's out-of-fold chronological Full fits. Its inputs are #120 §5's dated prior-only box snapshots. The prior is labelled **provisional**.
+  - Estimated Skills as SPM inputs are deferred to a follow-up. The inner folds are marked unavailable for that path.
+  - The [protocol](research/expected-impact-protocol.md) reports the prior's value through SPM-only and zero-prior comparators. It does not presume it.
+- **Alternatives:**
+  - Block #35 until a better SPM exists. Rejected: ADR-0026 accepts negative results, and the on-court evidence is positive against context.
+  - Feed Estimated Skills now. Rejected: leakage at the inner cutoffs, and an untested shift in input distribution.
+- **Consequences:**
+  - The M5 integration is a three-part chain without the skills link.
+  - If #36 finds no outer-fold gain over context-offset RAPM, the prior is a documented negative component, not a silent default.
+- **Links:** [#30](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/30), [#35](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/35), [#36](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/36), [ADR-0025](#adr-0025--two-season-unit-weight-window-with-split-penalties-for-the-multi-season-rapm-baseline), [ADR-0026](#adr-0026--maintainer-decisions-of-2026-11-24-m2-acceptance-informed-rapm-comparators-and-partial-history-spm-targets)
