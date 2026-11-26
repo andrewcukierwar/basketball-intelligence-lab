@@ -78,11 +78,14 @@ def compare(v2_rows: Path, v3_rows: Path) -> dict[str, Any]:
                    (SELECT count(*) FROM diff),
                    (SELECT count(*) FROM a), (SELECT count(*) FROM b),
                    (SELECT count(*) FROM only_a), (SELECT count(*) FROM only_b),
-                   (SELECT sum(model_points) FROM a), (SELECT sum(model_points) FROM b)
+                   (SELECT sum(model_points) FROM a), (SELECT sum(model_points) FROM b),
+                   (SELECT sum(abs(coalesce(pa, 0) - coalesce(pb, 0))) FROM
+                      (SELECT game_id, sum(model_points) AS pa FROM a GROUP BY 1) FULL JOIN
+                      (SELECT game_id, sum(model_points) AS pb FROM b GROUP BY 1) USING (game_id))
             """
         ).fetchone()
         assert per_game is not None
-        common, differing, rows_a, rows_b, only_a, only_b, points_a, points_b = per_game
+        common, differing, rows_a, rows_b, only_a, only_b, points_a, points_b, gap = per_game
         aligned = c.execute(
             """
             SELECT count(*), count(*) FILTER (a.offense = b.offense AND a.defense = b.defense
@@ -105,6 +108,8 @@ def compare(v2_rows: Path, v3_rows: Path) -> dict[str, Any]:
         "row_mismatch_share": (int(only_a) + int(only_b)) / (int(rows_a) + int(rows_b)),
         "points_v2": float(points_a or 0),
         "points_v3": float(points_b or 0),
+        "points_abs_game_gap": float(gap or 0),
+        "points_abs_game_gap_share": float(gap or 0) / float(points_a) if points_a else None,
         "aligned_rows": int(aligned[0]),
         "aligned_rows_identical": int(aligned[1]),
     }
@@ -125,6 +130,8 @@ FIELDS = (
     "PLAYER3_ID",
     "PLAYER3_TEAM_ID",
 )
+
+PLAYER_SLOTS = ("PLAYER1_ID", "PLAYER2_ID", "PLAYER3_ID")
 
 
 def _normal(column: str, value: str) -> object:
@@ -149,6 +156,9 @@ def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
     issues: Counter[str] = Counter()
     events = Counter[str]()
     mismatches: Counter[str] = Counter()
+    # Player slots by V2 event type, over events where either side names a player.
+    slot_events: Counter[tuple[str, str]] = Counter()
+    slot_mismatches: Counter[tuple[str, str]] = Counter()
     for suffix in ("", "_po"):
         real = dict(event_games(snapshot / f"nbastats{suffix}_{season}.tar.xz"))
         rebuilt = rebuilt_games(
@@ -169,20 +179,38 @@ def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
             v3 = {int(e.fields["EVENTNUM"]): e.fields for e in out}
             events["v2_only"] += len(v2.keys() - v3.keys())
             events["v3_only"] += len(v3.keys() - v2.keys())
+            events["v2"] += len(v2)
+            events["v3"] += len(v3)
             for number in v2.keys() & v3.keys():
                 events["matched"] += 1
+                kind = v2[number]["EVENTMSGTYPE"]
                 for column in FIELDS:
                     left = _normal(column, v2[number][column])
-                    if left != _normal(column, v3[number][column]):
+                    right = _normal(column, v3[number][column])
+                    if column in PLAYER_SLOTS and (left is not None or right is not None):
+                        slot_events[kind, column] += 1
+                        slot_mismatches[kind, column] += left != right
+                    if left != right:
                         mismatches[column] += 1
     matched = events["matched"]
+    by_type: dict[str, dict[str, dict[str, float | int]]] = {}
+    for (kind, column), count in sorted(slot_events.items()):
+        by_type.setdefault(kind, {})[column] = {
+            "events": count,
+            "agreement": 1 - slot_mismatches[kind, column] / count,
+        }
     return {
         "games": events["games"],
         "rebuild_issues": dict(issues),
         "events_matched": matched,
         "events_v2_only": events["v2_only"],
         "events_v3_only": events["v3_only"],
+        "events_v2": events["v2"],
+        "events_v3": events["v3"],
+        "events_v2_only_share": events["v2_only"] / events["v2"] if events["v2"] else None,
+        "events_v3_only_share": events["v3_only"] / events["v3"] if events["v3"] else None,
         "field_agreement": {c: 1 - mismatches[c] / matched if matched else None for c in FIELDS},
+        "player_agreement_by_type": by_type,
     }
 
 

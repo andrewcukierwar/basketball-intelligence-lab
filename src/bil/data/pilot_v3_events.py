@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Container, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -309,6 +309,21 @@ def live_actions(path: Path) -> dict[str, list[Action]]:
     return _games(path, "gameId", LIVE_FIELDS)
 
 
+FLAGRANT = {(6, 14), (6, 15)}
+
+
+def flagrant_events(path: Path, games: Container[str]) -> set[tuple[str, str]]:
+    """(game, event number) of the flagrant fouls in a V3 file, as the rebuilt rows code them."""
+    found: set[tuple[str, str]] = set()
+    for row in archive_rows(path):
+        if ACTION_TYPES.get((row["actionType"], row["subType"])) not in FLAGRANT:
+            continue
+        game_id = nba_game_id(row["gameId"])
+        if game_id in games:
+            found.add((game_id, str(int(float(row["actionNumber"])))))
+    return found
+
+
 def v2_clock(value: str) -> str:
     """PT11M43.20S to the V2 form 11:43; V2 truncates tenths."""
     match = CLOCK.fullmatch(value)
@@ -597,10 +612,13 @@ def rebuilt_games(
         if game_id not in boxes:
             continue
         teams, home, roster = boxes[game_id]
+        if game_id not in live:
+            yield game_id, GameIssue("v3_livedata_missing", "The game has no liveData actions")
+            continue
         try:
             yield (
                 game_id,
-                rebuild_game(game_id, actions[game_id], live.get(game_id, []), teams, home, roster),
+                rebuild_game(game_id, actions[game_id], live[game_id], teams, home, roster),
             )
         except GameIssue as issue:
             yield game_id, issue

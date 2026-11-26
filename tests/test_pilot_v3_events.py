@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import tarfile
+from collections.abc import Sequence
+from pathlib import Path
+
 import pytest
 
 from bil.data.pilot_inputs import GameIssue
@@ -12,7 +18,9 @@ from bil.data.pilot_v3_events import (
     V3_FIELDS,
     Action,
     derive_home,
+    flagrant_events,
     rebuild_game,
+    rebuilt_games,
     v2_clock,
 )
 
@@ -228,3 +236,31 @@ def test_learned_table_is_complete_for_core_types() -> None:
     assert ACTION_TYPES[("Free Throw", "Free Throw 1 of 2")] == (3, 11)
     assert ACTION_TYPES[("Rebound", "Unknown")] == (4, 0)
     assert ACTION_TYPES[("Substitution", "")] == (8, 0)
+
+
+def _archive(path: Path, actions: Sequence[Action], game_id: str = "22200001") -> Path:
+    stream = io.StringIO()
+    writer = csv.DictWriter(stream, fieldnames=["gameId", *actions[0].fields])
+    writer.writeheader()
+    for action in actions:
+        writer.writerow({"gameId": game_id, **action.fields})
+    data = stream.getvalue().encode()
+    with tarfile.open(path, "w:xz") as archive:
+        member = tarfile.TarInfo(path.name.replace(".tar.xz", ".csv"))
+        member.size = len(data)
+        archive.addfile(member, io.BytesIO(data))
+    return path
+
+
+def test_flagrant_events_and_games_without_livedata(tmp_path: Path) -> None:
+    flagrant = v3(15, 23, "Foul", "Flagrant Type 1", A1, AWAY, "A1 FLAGRANT.FOUL.TYPE1")
+    v3_path = _archive(tmp_path / "nbastatsv3_2022.tar.xz", [*GAME, flagrant])
+    assert flagrant_events(v3_path, {"0022200001"}) == {("0022200001", "23")}
+    assert flagrant_events(v3_path, {"0022200002"}) == set()
+    boxes = {"0022200001": ((HOME, AWAY), HOME, ROSTER)}
+    live_path = _archive(tmp_path / "cdnnba_2022.tar.xz", LIVE)
+    [(game_id, events)] = rebuilt_games(v3_path, live_path, boxes)
+    assert game_id == "0022200001" and not isinstance(events, GameIssue)
+    other = _archive(tmp_path / "cdnnba_other.tar.xz", LIVE, game_id="22200002")
+    [(_, missing)] = rebuilt_games(v3_path, other, boxes)
+    assert isinstance(missing, GameIssue) and missing.code == "v3_livedata_missing"
