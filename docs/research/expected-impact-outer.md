@@ -65,7 +65,7 @@ The gain is largest where exposure is thin. It is weakest where a player has no 
 
 The stability set is players with at least 1,000 window possessions at both dates.
 
-- **Within a season.** Total ratings correlate 0.94–0.99 between consecutive cutoffs, with an RMS change of 0.16–0.62 points per 100.
+- **Within a season.** Total ratings correlate 0.94–0.996 between consecutive cutoffs, with an RMS change of 0.16–0.62 points per 100.
 - **Year over year.** From 2023-10-01 to 2024-10-01, 434 players: r = 0.75, RMS change 1.28.
 
 ## Ratings and frozen state
