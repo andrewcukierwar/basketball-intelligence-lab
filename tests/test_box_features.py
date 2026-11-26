@@ -345,3 +345,40 @@ def test_seeded_reconciliation_mismatch_fails_and_removes_output(
     with pytest.raises(ValueError, match="Reconciliation failed"):
         box_build.build_box_features(source, out, "0" * 40, snapshot=snapshot, expected=None)
     assert not out.exists()
+
+
+@pytest.mark.parametrize(
+    ("home", "accepted"),
+    [
+        (("NULL", "NULL"), True),
+        (("true", "false"), True),
+        (("NULL", "true"), False),
+        (("true", "true"), False),
+    ],
+)
+def test_unflagged_neutral_site_home_pair(
+    tmp_path: Path, home: tuple[str, str], accepted: bool
+) -> None:
+    duckdb = pytest.importorskip("duckdb")
+    from bil.features.box_build import PLAYER_LOG, TEAM_LOG, load_appearances
+
+    duckdb.sql(
+        "SELECT * FROM (VALUES "
+        f"(2025, '0022400147', '10', '20', DATE '2024-11-02', {home[0]}::BOOLEAN), "
+        f"(2025, '0022400147', '20', '10', DATE '2024-11-02', {home[1]}::BOOLEAN)) "
+        "t(season, game_id, team_id, opp_team_id, game_date, home)"
+    ).write_parquet(str(tmp_path / TEAM_LOG))
+    duckdb.sql(
+        "SELECT * FROM (VALUES (2025, '0022400147', '7', '10', '20', DATE '2024-11-02', 30.0, "
+        "2, 4, 1, 2, 0, 0, 5, 1, 1, 2, 0, 0, 0, 1, 2)) t(season, game_id, player_id, team_id, "
+        "opp_team_id, game_date, min, fgm, fga, fg3m, fg3a, ftm, fta, pts, oreb, dreb, reb, ast, "
+        "tov, stl, blk, pf)"
+    ).write_parquet(str(tmp_path / PLAYER_LOG))
+    with duckdb.connect() as connection:
+        if accepted:
+            rows, profile = load_appearances(connection, tmp_path, season_start_year=2024)
+            assert len(rows) == 1
+            assert profile.get("unflagged_home_appearances", 0) == (home[0] == "NULL")
+        else:
+            with pytest.raises(ValueError, match="team_join"):
+                load_appearances(connection, tmp_path, season_start_year=2024)
