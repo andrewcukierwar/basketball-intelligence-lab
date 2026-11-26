@@ -1,8 +1,8 @@
-# Agent run: #35 Expected impact v1 and the #30 closeout
+# Agent run: #35 and #36 Expected impact v1, the #30 closeout and outer validation
 
 - **Date:** 2026-11-25
-- **Status:** Awaiting review and merge of the #35 PR
-- **Related issues:** #30 (closed), #121 (closed), #35, #36, #125 (new follow-up)
+- **Status:** #35 merged (PR #126). #36 PR open
+- **Related issues:** #30, #121 and #35 (closed), #36, #125 (new follow-up)
 - **Branch / commit / PR:** `claude/issue-35-expected-impact`. The run used `0b605c7`. PR linked from #35.
 
 ## Work completed
@@ -27,12 +27,19 @@
 | Real build | Exit 0 at clean `0b605c7` in 36 s. Manifest `db254b8c…e5d1` |
 | Pre-fit independent review | No blockers. Non-blocking notes folded into the results doc |
 
+## #36 outer validation
+
+- **Addendum.** Frozen at `88d79a3`. Independent pre-run review (Sonnet) found no code blockers.
+- **Crash and fix.** The first attempt crashed on load before any result: the 2024–25 neutral-site games have null home flags. The loader was fixed at `fe81b0a` and the run repeated once. [Results](../research/expected-impact-outer.md)
+- **Verdict.** `ei_better` against every comparator on the regular season. Against context-offset RAPM, the primary: −4.59 [−5.80, −3.37].
+- **ADR-0031.** Proposes EI v1 as the M5 reference.
+
 ## Next actions
 
-1. **Merge.** Final review of the results PR, then merge. #35 then moves to done.
-2. **#36 outer addendum.**
-   - Register an outer-validation addendum before reading any 2023–24 or 2024–25 row or box log. It covers the frozen configuration above and the locked pre-window SPM `final_contiguous_fit.json`.
-   - The runner refuses to start without the committed addendum, as in M2's `outer_main`.
-   - It compares EI with all four ADR-0026 comparators plus SPM-only and part ablations.
-   - Box logs for both outer seasons exist in `data/raw/2023-24/issue-52-v1` and `data/raw/2024-25/issue-52-v1`, but #30's `LOG_PINS` does not pin them yet. Their `snapshot.json` digests must be pinned in the addendum.
-3. **Maintainer review.** ADR-0030 is an agent decision flagged for review.
+1. **Merge.** Merge the #36 PR after the number check and CI.
+2. **Unblocked work.**
+   - #39: team outcomes with frozen lineups and pregame minutes. Note the team-level tension: plain RAPM has the best regular-season team-game RMSE.
+   - #41: a retrospective Actual impact analogue.
+   - #38: defensive tracking.
+3. **#42.** Register the R1 confirmatory protocol for 2025–26 from the frozen reference set before any holdout access.
+4. **Maintainer review.** ADR-0030 and ADR-0031 are agent decisions flagged for review.

@@ -460,3 +460,23 @@ V2 remains the event source of record.
   - The M5 integration is a three-part chain without the skills link.
   - If #36 finds no outer-fold gain over context-offset RAPM, the prior is a documented negative component, not a silent default.
 - **Links:** [#30](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/30), [#35](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/35), [#36](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/36), [ADR-0025](#adr-0025--two-season-unit-weight-window-with-split-penalties-for-the-multi-season-rapm-baseline), [ADR-0026](#adr-0026--maintainer-decisions-of-2026-11-24-m2-acceptance-informed-rapm-comparators-and-partial-history-spm-targets)
+
+## ADR-0031 — Expected impact v1 as the M5 integrated reference
+
+- **Date:** 2026-11-26
+- **Status:** Proposed (agent decision under ADR-0026, flagged for maintainer review). It is the frozen reference set for the #42 R1 confirmatory protocol.
+- **Evidence class:** Original BIL design, Experimental evidence ([inner](research/expected-impact-v1.md), [outer](research/expected-impact-outer.md)).
+- **Decision:** The M5 integrated model is #35 v1:
+  - ADR-0025 `W2` walk-forward refits with the context offset;
+  - a residual ridge centered on #30's dated SPM prior, λ_O = λ_D = 8,000;
+  - the locked pre-window SPM `final_contiguous_fit.json` for seasons after 2022–23.
+  Rating = prior + on-court deviation, in points per 100, with positive defense preventing points.
+- **Evidence:**
+  - **Outer folds, regular season.** EI beats all four ADR-0026 comparators and the ablations, with intervals excluding 0 in both seasons. Against context-offset RAPM it is −4.59 MSE. Against the zero prior at equal penalties it is −6.41.
+  - **Stability.** Ratings are stable within a season (r ≥ 0.94).
+- **Consequences:**
+  - **Team-level ranking.** Plain RAPM keeps the best regular-season team-game RMSE, so team-level ranking remains open for #39.
+  - **Not confirmatory.** The outer seasons were already seen by M2.
+  - **Missing link.** The Estimated Skills link is still missing (#125).
+  - **Unblocked work.** This unblocks #38, #39 and #41.
+- **Links:** [#35](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/35), [#36](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/36), [ADR-0025](#adr-0025--two-season-unit-weight-window-with-split-penalties-for-the-multi-season-rapm-baseline), [ADR-0030](#adr-0030--close-30-with-mixed-side-level-evidence-and-use-its-frozen-fits-as-a-provisional-spm-prior-for-expected-impact-v1)
