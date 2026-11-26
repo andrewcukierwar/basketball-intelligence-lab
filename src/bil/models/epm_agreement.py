@@ -10,6 +10,7 @@ import csv
 import json
 import platform
 import re
+import shutil
 import time
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -460,6 +461,8 @@ def run(raw: Path, processed: Path, output: Path, protocol_sha256: str) -> None:
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     stage = output.with_name(output.name + ".partial")
+    if stage.exists():  # leftovers of a crashed run that wrote no results
+        shutil.rmtree(stage)
     stage.mkdir()
     with (stage / "matched.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)

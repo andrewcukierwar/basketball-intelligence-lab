@@ -33,7 +33,7 @@ Units are points per 100 possessions. Bias is EI minus EPM. The bracketed figure
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | Offense | 0.862 [0.840, 0.880] | 0.821 | 1.07 | 1.33 | +0.56 | 0.840 | +0.022 [+0.007, +0.038] |
 | Defense | 0.699 [0.671, 0.727] | 0.695 | 0.73 | 0.93 | +0.19 | 0.481 | +0.218 [+0.172, +0.265] |
-| Total | 0.825 [0.799, 0.846] | 0.798 | 1.41 | 1.77 | +0.75 | 0.762 | +0.064 [+0.042, +0.087] |
+| Total | 0.825 [0.799, 0.846] | 0.798 | 1.41 | 1.77 | +0.75 | 0.762 | +0.063 [+0.042, +0.087] |
 
 - **Overall.** EI and EPM agree strongly on offense and total and moderately on defense. The defense sign conventions agree.
 - **On-court update.** It brings EI much closer to EPM on defense, where the box-only prior is weakest.
@@ -51,6 +51,13 @@ Units are points per 100 possessions. Bias is EI minus EPM. The bracketed figure
 - **Top-N overlap** is the share of EPM's top N by total that is also in EI's top N.
 - **Exposure.** Agreement rises with exposure. In the 3,000+ window-possession slice, total r is 0.79–0.88. In the 1,000–2,999 slice it is 0.68–0.81.
 - **No cold-start players.** No matched player was on the SPM intercept fallback.
+
+## Deviations and review notes
+
+- **Alignment gaps.** The protocol asks for the gap between each EPM capture and its EI snapshot, but the runner did not write it. Computed from the pinned dates, the capture minus EI `as_of` is −90, +4, −92 and +17 days. The 2024–25 data date (2025-06-22) is 9 days before its EI snapshot. The season captures carry no data date. The page describes them as covering the regular season, and for the 2021–22 JSON form that cannot be checked from the records.
+- **Private artifacts.** The protocol lists a separate parsed EPM table with its digest, but the run wrote only the matched table (`matched.csv`). That table contains every parsed player except the 8 unmatched in 2024–25, so the analysis is unaffected.
+- **Total.** EPM `tot` was not read. A post-run check found it equal to `off + def` within 0.0001 in every capture.
+- **Rerun recovery.** The runner's `.partial` stage directory had to be removed by hand after a crash. This is fixed after the run, and it changes no result.
 
 ## What this does and does not show
 
