@@ -382,3 +382,9 @@ Do not overwrite negative or unexpected results. New experiments should be appen
   - **K0, worse.** It worsens season-opening K0 defense RMSE by +0.089 [+0.047, +0.145]. The deterioration is concentrated in players under 15 minutes per game (+0.38).
   - **Sensitivity.** Regular-only tracking behaves the same.
 - **Boundary.** Retrospective and capture-bound, with strict eligibility empty. There is no pinned tracking after 2022–23, so no M7 tracking comparison is available. Exposure shrinkage of the rates is untested.
+
+### EXP-0025 — External agreement of frozen EI v1 with archived public EPM, 2021–25
+
+- **Registration.** [#40 protocol](research/epm-agreement-protocol.md), committed at `12a225d` before any EPM value was read. EPM comes from four pinned Internet Archive captures of the free dunksandthrees.com page and is used with written permission, non-commercial only. [Results](research/epm-agreement.md)
+- **Finding.** Across 1,867 player-seasons, pooled Pearson r is 0.862 on offense, 0.699 on defense and 0.825 on total. EI agrees with EPM more than its SPM prior alone does on every side; the defense gain is +0.218 r [+0.172, +0.265]. EI totals sit +0.75 above EPM on average.
+- **Boundary.** This is a diagnostic only: agreement is not predictive validity, and nothing was tuned or selected. Season scope differs except in 2024–25, where both are expected ratings.
