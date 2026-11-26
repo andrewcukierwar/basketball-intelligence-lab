@@ -49,7 +49,7 @@ The paired cohort is 1,545 player-seasons with opening tracking, out of 1,829 sc
 
 `full` defense RMSE on the paired cohort is 0.969.
 
-**Registered K0 criterion: not met.** Tracking makes season-opening K0 defense agreement **worse**. The four seasons give +0.045, +0.179, +0.100 and +0.025.
+**Registered K0 criterion: not met.** Tracking makes season-opening K0 defense agreement **worse**. The four seasons give +0.045, +0.179, +0.099 and +0.025.
 
 **The deterioration is concentrated in thin exposure** (full cohort, defense delta):
 
@@ -77,7 +77,7 @@ The pool has 842,466 possessions in 2019–20 through 2022–23. Deltas are in p
 
 **Registered on-court criterion: met.**
 - Tracking-enhanced defense lowers realized-lineup MSE, which is about a fifth more improvement over context than box-only Full provides.
-- The delta is negative in every season: −0.000401, −0.000091, −0.000190 and −0.000310. The 2020–21 interval includes 0.
+- The delta is negative in every season: −0.000401, −0.000091, −0.000189 and −0.000310. The 2020–21 interval includes 0.
 - The regular season gives −0.000235 and the playoffs −0.000412.
 - On the 7,972 possessions with an untracked defender, the delta is −0.000197, with an interval that includes 0.
 
