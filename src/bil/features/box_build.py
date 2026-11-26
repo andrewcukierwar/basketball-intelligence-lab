@@ -160,6 +160,7 @@ def load_appearances(
     rows: list[Appearance] = []
     seen: set[tuple[str, str]] = set()
     problems: Counter[str] = Counter()
+    unflagged = 0
     for values in cursor.fetchall():
         raw = dict(zip(names, values, strict=True))
         game_id = nba_game_id(raw["game_id"])
@@ -178,9 +179,11 @@ def load_appearances(
             or other[0] != raw["game_date"]
             or own[1] != raw["opp_team_id"]
             or other[1] != raw["team_id"]
-            or own[2] == other[2]
+            or not _home_pair(own[2], other[2])
         ):
             problems["team_join"] += 1
+        elif own[2] is None:
+            unflagged += 1
         minutes = raw["min"]
         if minutes is None or not math.isfinite(minutes) or minutes < 0:
             problems["minutes"] += 1
@@ -192,7 +195,17 @@ def load_appearances(
         rows.append(Appearance.from_record({**raw, "game_id": game_id, "min": minutes}))
     if problems:
         raise ValueError(f"Box-score appearances violate the feature contract: {dict(problems)}")
-    return rows, {"source_rows": len(seen)}
+    profile = {"source_rows": len(seen)}
+    if unflagged:
+        profile["unflagged_home_appearances"] = unflagged
+    return rows, profile
+
+
+def _home_pair(own: bool | None, other: bool | None) -> bool:
+    """Opposite flags, or both null for an unflagged game (ADR-0017). Home is not a feature."""
+    if own is None or other is None:
+        return own is None and other is None
+    return own != other
 
 
 def _identities(raw: dict[str, Any], problems: Counter[str]) -> None:

@@ -361,3 +361,9 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Registration.** [#35 protocol](research/expected-impact-protocol.md), committed at `0b605c7` before any real-data fit, with independent pre-fit review (no blockers). [Results](research/expected-impact-v1.md) cover the private `issue-35-v1` run.
 - **Finding.** λ_O = λ_D = 8,000 selected (a near-tie). On the regular-season selection blocks, EI was lower than context-offset RAPM by 2.33 (points per 100)² MSE, with intervals excluding zero and every block lower. It was lower than SPM-only by 8.73 and context by 19.51. In the playoffs EI tied context-offset RAPM.
 - **Boundary.** Development evidence on the selection folds. #36 runs the outer folds under a frozen addendum, and the 2025–26 holdout stays reserved.
+
+### EXP-0022 — Expected impact v1 outer validation, 2023–24 and 2024–25
+
+- **Registration.** [Frozen addendum](research/expected-impact-outer-addendum.md), committed at `88d79a3` before any outer read for this model, with independent pre-run review (no code blockers). The first attempt crashed on load before any result (null neutral-site home flags, ADR-0017). It was fixed at `fe81b0a` and run once. [Results](research/expected-impact-outer.md)
+- **Finding.** `ei_better` against all eight comparators on the regular season. Against context-offset RAPM, the primary: −4.59 (points per 100)² MSE, interval [−5.80, −3.37], with both seasons and all ten blocks lower. Against the zero-prior, context-offset ablation at EI's penalties: −6.41, so the SPM prior adds value. Plain RAPM keeps the lowest regular-season team-game RMSE.
+- **Boundary.** Outer-fold development evidence on seasons M2 had already scored. The 2025–26 holdout is unread. The configuration is frozen as the reference set for #42.
