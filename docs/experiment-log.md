@@ -355,3 +355,9 @@ Do not overwrite negative or unexpected results. New experiments should be appen
 - **Registration.** [#120 protocol](research/box-spm-protocol.md), fixed before fitting. [#121 results](research/box-spm-results.md) cover the corrected private `issue-30-v2` run at `b2fd49d`.
 - **Finding.** Full did not meet the side-level K0 criterion. Context plus Full improved realized-lineup possession MSE against context alone. Its delta against fixed-offset context RAPM included zero.
 - **Boundary.** Retrospective capture bounds apply. The final contiguous fit is frozen for a possible downstream comparison. The outer and confirmatory seasons were not opened.
+
+### EXP-0021 — Expected impact v1: SPM-centered walk-forward RAPM on 2021–23 inner folds
+
+- **Registration.** [#35 protocol](research/expected-impact-protocol.md), committed at `0b605c7` before any real-data fit, with independent pre-fit review (no blockers). [Results](research/expected-impact-v1.md) cover the private `issue-35-v1` run.
+- **Finding.** λ_O = λ_D = 8,000 selected (a near-tie). On the regular-season selection blocks, EI was lower than context-offset RAPM by 2.33 (points per 100)² MSE, with intervals excluding zero and every block lower. It was lower than SPM-only by 8.73 and context by 19.51. In the playoffs EI tied context-offset RAPM.
+- **Boundary.** Development evidence on the selection folds. #36 runs the outer folds under a frozen addendum, and the 2025–26 holdout stays reserved.
