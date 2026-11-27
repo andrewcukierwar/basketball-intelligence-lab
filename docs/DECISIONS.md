@@ -650,7 +650,7 @@ V2 remains the event source of record.
 - **Status:** Accepted (#145, part of #43).
 - **Evidence class:** Original engineering. See the [refresh runbook](refresh.md#failure-outcomes-drills-and-recovery-runbook-145).
 - **Decision:**
-  - **Outcomes.** Every requested origin gets one record in `ROOT/_outcomes.jsonl`: published, unchanged, refused or retired. A refusal carries its stage, reason and inputs, and one refused origin never stops the others.
+  - **Outcomes.** The audit log records publications, unchanged artifacts, refusals, unconfirmed publications, skipped origins after an interrupt, and retirements. A refusal records its stage, reason and inputs. A post-rename sync failure or revision-log failure records the artifact ID for recovery.
   - **Pre-fit checks.** Parents are checked before fitting. An optional #136 calibration is re-checked by `load_calibration` and becomes a parent.
   - **Rollback.** Rollback moves an artifact to `ROOT/_retired/` with a record. Nothing is deleted.
   - **Fail closed.** `current()` refuses when an inconsistent or unrecorded artifact is present, and interrupts are recorded before the run stops.
@@ -664,3 +664,12 @@ V2 remains the event source of record.
   - rollback.
 - **Consequences:** #44 consumes `current()` and the manifests. Live capture, finality and the prospective season remain #44 work, under its own registration.
 - **Links:** [#145](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/145), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), [#44](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/44), ADR-0039, ADR-0040, ADR-0041
+
+## ADR-0043 — Retain raw-box EI after retraining the SPM on Estimated Skills
+
+- **Date:** 2026-11-27
+- **Status:** Accepted for the #148 retrospective comparison.
+- **Decision:** Keep the raw-box prior as the EI baseline. Archive the chronological Skills-trained fits and adopt the retraining method only within this experiment.
+- **Evidence:** The registered 2023–25 regular-season comparison against raw-box EI yielded −0.561 MSE [−1.520, +0.331] across 418,479 possessions. The interval crossed zero. The descriptive comparison against applied Skills yielded −0.939 [−1.362, −0.505]. The offense K0 diagnostic passed the registered comparison to Zero and One-stat. The defense diagnostic did not meet that rule.
+- **Scope:** The experiment uses already examined seasons with retrospective source captures. The Skills-trained fit remains a research artifact. Production or prospective model changes require their own registration.
+- **Links:** [Results](research/skills-spm-retraining.md), [Protocol](research/skills-spm-retraining-protocol.md), [#148](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/148), ADR-0037
