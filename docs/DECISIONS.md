@@ -643,3 +643,23 @@ V2 remains the event source of record.
   - The late-revision drill was refused and recorded.
 - **Consequences:** The #44 shadow test can run a daily refresh. Only compute freshness is measured, so #44 must measure live capture latency.
 - **Links:** [#144](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/144), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), ADR-0038, ADR-0039, ADR-0040
+
+## ADR-0042 — Every refresh records an auditable outcome; refusals are staged, rollback retires
+
+- **Date:** 2026-11-27
+- **Status:** Accepted (#145, part of #43).
+- **Evidence class:** Original engineering. See the [refresh runbook](refresh.md#failure-outcomes-drills-and-recovery-runbook-145).
+- **Decision:**
+  - **Outcomes.** Every requested origin gets one record in `ROOT/_outcomes.jsonl`: published, unchanged, refused or retired. A refusal carries its stage, reason and inputs, and one refused origin never stops the others.
+  - **Pre-fit checks.** Parents are checked before fitting. An optional #136 calibration is re-checked by `load_calibration` and becomes a parent.
+  - **Rollback.** Rollback moves an artifact to `ROOT/_retired/` with a record. Nothing is deleted.
+- **Evidence:** In `refresh-drills-issue-145-v2`, seven failure and recovery drills plus the cold rebuild and the baseline all pass on the pinned inputs:
+  - mismatched pin;
+  - missing pin;
+  - late parent;
+  - row-set check;
+  - ineligible calibration;
+  - interrupted publish with resume;
+  - rollback.
+- **Consequences:** #44 consumes `current()` and the manifests. Live capture, finality and the prospective season remain #44 work, under its own registration.
+- **Links:** [#145](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/145), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), [#44](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/44), ADR-0039, ADR-0040, ADR-0041
