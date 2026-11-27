@@ -573,3 +573,22 @@ V2 remains the event source of record.
 - **Evidence:** The #36 block snapshots rebuild with zero rating gap.
 - **Consequences:** #143 to #145 extend this artifact rather than replace it: per-origin revisions, checkpoints and failure drills.
 - **Links:** [#142](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/142), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), ADR-0035
+
+## ADR-0040 — Per-origin source revisions: strict for live captures, official-date rule for retrospective pins
+
+- **Date:** 2026-11-27
+- **Status:** Accepted (#143, part of #43).
+- **Evidence class:** Original engineering. See [refresh guide](refresh.md#source-revisions-per-origin-143).
+- **Decision:**
+  - **Resolution.** Every refresh records one revision per game, in `sources.json`, and the resolution digest is part of the artifact identity.
+  - **Live captures** use `strict_rolling`:
+    - a revision counts only if its capture was retrieved strictly before midnight Eastern of the origin;
+    - the finish time is bounded by the first capture that showed the game's content;
+    - a missing or ambiguous time or date refuses the game.
+  - **Pinned 2023–25 replay snapshots** use `retrospective` resolution: one capture per source, and official date before the origin.
+- **Evidence:** All 10 #36 block snapshots rebuild with zero gap under the resolution.
+- **Consequences:**
+  - Retrospective pins cannot exclude corrections published before their post-season capture. This limit applies to all replay results.
+  - Confirmatory refresh claims need strictly resolved live captures.
+  - Multi-capture input assembly arrives with live capture.
+- **Links:** [#143](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/143), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), ADR-0039

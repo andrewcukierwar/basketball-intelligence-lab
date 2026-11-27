@@ -29,7 +29,7 @@ import math
 import os
 import shutil
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 from tempfile import mkdtemp
@@ -38,7 +38,8 @@ from typing import Any
 import numpy as np
 
 from bil.data.pilot_sources import sha256_file
-from bil.features.box import Appearance
+from bil.features.box import Appearance, snapshot_instant
+from bil.features.box_build import PLAYER_LOG, TEAM_LOG
 from bil.models.expected_impact import (
     SPM_MANIFEST,
     SPM_RUN,
@@ -58,6 +59,7 @@ from bil.models.expected_impact_outer import (
     parse_config,
 )
 from bil.models.rapm.multiseason import (
+    SEASON_PINS,
     TEMPORAL_BY_NAME,
     Analysis,
     Scenario,
@@ -66,10 +68,19 @@ from bil.models.rapm.multiseason import (
     season_blocks,
 )
 from bil.models.spm_build import checked_file, read_json
+from bil.refresh_sources import (
+    Capture,
+    Mode,
+    Resolution,
+    box_capture,
+    possession_captures,
+    resolve,
+)
 
-VERSION = "origin-refresh-issue-142-v1"
+VERSION = "origin-refresh-issue-143-v2"
 MANIFEST = "manifest.json"
 RATINGS = "ratings.csv"
+SOURCES = "sources.json"
 FROZEN_TOLERANCE = 1e-6
 
 
@@ -88,6 +99,8 @@ class Inputs:
     input_ids: Mapping[str, Any]  # digests of row sets, box logs, SPM fit, configuration source
     parents: Mapping[str, str]  # parent fit and selection IDs
     seasons: tuple[int, ...] = OUTER_SEASONS  # replay scope
+    captures: tuple[Capture, ...] = ()  # per-game source captures; derived from the inputs if empty
+    mode: Mode = "retrospective"  # pinned replay snapshots carry only post-season capture times
 
 
 @dataclass(frozen=True)
@@ -202,10 +215,40 @@ def _fsync_dir(directory: Path) -> None:
         os.close(descriptor)
 
 
+def replay_captures(
+    inputs: Inputs, retrieved: Mapping[str, Any] | None = None
+) -> tuple[Capture, ...]:
+    """One capture per pinned box-log snapshot and per pinned possession row-set season."""
+    retrieved = retrieved or {}
+    boxes = [
+        box_capture(
+            f"box_logs/{season}",
+            inputs.input_ids["box_logs"].get(str(season), "unpinned"),
+            retrieved.get(str(season)),
+            logs,
+        )
+        for season, logs in sorted(inputs.logs.items())
+    ]
+    rows = possession_captures(inputs.analysis.rows, inputs.input_ids["rows"])
+    return (*boxes, *rows)
+
+
+def resolution_for(origin: date, inputs: Inputs) -> Resolution:
+    """The per-game source revisions this origin reads (#143)."""
+    if inputs.mode != "retrospective":
+        raise RefreshError(
+            "the replay refresh reads one pinned capture per source; strict resolution needs the "
+            "live captures that the rest of #43 adds"
+        )
+    return resolve(inputs.captures or replay_captures(inputs), origin, inputs.mode)
+
+
 def refresh_origin(root: Path, origin: date, inputs: Inputs) -> Published:
     """Build and publish the snapshot for ``origin``; a no-op when it already exists."""
     season = check_origin(origin, inputs.seasons)
-    aid = artifact_id(origin, inputs.input_ids, inputs.parents, inputs.config)
+    resolution = resolution_for(origin, inputs)
+    input_ids = {**inputs.input_ids, "source_resolution": resolution.digest()}
+    aid = artifact_id(origin, input_ids, inputs.parents, inputs.config)
     if existing(root, origin, aid) is not None:
         return Published(root / origin.isoformat() / aid, aid, False)
 
@@ -223,9 +266,13 @@ def refresh_origin(root: Path, origin: date, inputs: Inputs) -> Published:
             {**inputs.config, "cutoff": origin, "spm": inputs.spm.fit_id},
         )
         write_ratings(stage / RATINGS, [snap])
+        (stage / SOURCES).write_text(
+            json.dumps(resolution.record(), sort_keys=True) + "\n", encoding="utf-8"
+        )
         head, clean = _git_head()
         return {
-            "inputs": inputs.input_ids,
+            "inputs": input_ids,
+            "source_resolution": resolution.summary(),
             "parents": inputs.parents,
             "config": inputs.config,
             "snapshot_id": snap.snapshot_id,
@@ -250,10 +297,17 @@ def load_inputs(raw: Path, processed: Path, scratch: Path) -> Inputs:
     spm_dir = processed / "spm" / SPM_RUN
     checked_file(spm_dir / "manifest.json", SPM_MANIFEST)
     spm = spm_fit(read_json(checked_file(spm_dir / config["spm_fit"], config["spm_fit_sha256"])))
-    logs, log_ids = {}, {}
+    logs, log_ids, retrieved = {}, {}, {}
     for key, pin in config["box_logs"].items():
         logs[int(key)], _ = outer_logs(raw, int(key), pin)
         log_ids[key] = pin["sha256"]
+        snapshot = raw / SEASON_PINS[int(key)].label / pin["snapshot"] / "snapshot.json"
+        assets = read_json(checked_file(snapshot, pin["sha256"]))["artifacts"]
+        retrieved[key] = max(
+            snapshot_instant(a["retrieved_at"])
+            for a in assets
+            if a["name"] in (PLAYER_LOG, TEAM_LOG)
+        )
     _, rows, design, row_inputs = _prepare(processed, ROW_SEASONS, ROW_SEASONS, scratch)
     analysis = Analysis(rows, design, Scenario("primary", np.ones(len(rows), dtype=bool)), [], [])
     row_ids = {
@@ -261,7 +315,7 @@ def load_inputs(raw: Path, processed: Path, scratch: Path) -> Inputs:
         for label, entry in row_inputs.items()
         if not label.startswith("_")
     }
-    return Inputs(
+    inputs = Inputs(
         analysis,
         spm,
         logs,
@@ -278,6 +332,7 @@ def load_inputs(raw: Path, processed: Path, scratch: Path) -> Inputs:
         },
         {"spm": spm.fit_id, "penalty_selection": "issue-35-v1 W2 8000/8000"},
     )
+    return replace(inputs, captures=replay_captures(inputs, retrieved))
 
 
 Pair = tuple[float, float]
