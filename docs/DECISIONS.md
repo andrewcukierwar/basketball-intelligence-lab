@@ -628,7 +628,7 @@ V2 remains the event source of record.
   - Multi-capture input assembly arrives with live capture.
 - **Links:** [#143](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/143), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), ADR-0039
 
-## ADR-0041 — Exact checkpoints and refuse-and-record for late revisions; daily refresh is supported
+## ADR-0041 — Exact checkpoints and refuse-and-record for late revisions; daily refresh compute is supported
 
 - **Date:** 2026-11-27
 - **Status:** Accepted (#144, part of #43).
@@ -636,10 +636,10 @@ V2 remains the event source of record.
 - **Decision:**
   - **Checkpoints.** Each origin's refresh checkpoints its exact fitted state, keyed by the full artifact identity and reused only on an exact match. Retention covers 14 origins.
   - **Incremental updates.** Approximate incremental solver updates are not used, because they could not give warm/cold-identical artifacts.
-  - **Late revisions.** A different artifact for an already-published origin is recorded in `revisions.jsonl` and refused unless explicitly accepted. Nothing is overwritten.
+  - **Late revisions.** A different artifact for an already-published origin is recorded in `revisions.jsonl` and refused unless explicitly accepted. Nothing is overwritten. An accepted revision is logged only after it is published, and an inconsistent existing artifact is recorded and refused.
 - **Evidence:**
   - Warm and cold builds agree on all 65 origins of the registered workload (January 2025 daily, plus the 2024–25 weekly plan).
-  - A cold daily job takes 3.8 s at 1.9 GiB, and checkpoints use 9.8 MB at retention.
+  - In the `-v2` run, a cold daily job takes 3.9 s at 1.8 GiB, and checkpoints use 9.9 MB at retention 14.
   - The late-revision drill was refused and recorded.
-- **Consequences:** The #44 shadow test can run a daily refresh. Replay leaves capture latency unmeasured.
+- **Consequences:** The #44 shadow test can run a daily refresh. Only compute freshness is measured, so #44 must measure live capture latency.
 - **Links:** [#144](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/144), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), ADR-0038, ADR-0039, ADR-0040

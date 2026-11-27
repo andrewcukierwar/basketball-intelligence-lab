@@ -149,9 +149,9 @@ It also runs one **cold daily job**: a fresh process running `bil.refresh build`
 
 **Supported cadence.** Daily if every row passes. The weekly cadence is reported for comparison. Replay measures only compute freshness. Live freshness adds the wait for source captures after the last game, which replay cannot measure.
 
-### Capacity results (`refresh-capacity-issue-144-v1`, 2026-11-27)
+### Capacity results (`refresh-capacity-issue-144-v2`, 2026-11-27)
 
-Run once from a clean tree at `3d645b8`, after the budget above was committed. The total was 45 s wall. Outputs are under `data/interim/refresh-capacity-issue-144-v1`.
+This run was made once, from a clean tree at `9494ce7`, after the review fixes. The first run (`-v1`, at `3d645b8`) passed the same checks with near-identical numbers. It was superseded because the runner did not yet assert warm reuse, and it extrapolated the retained store size instead of measuring it. Outputs are under `data/interim/refresh-capacity-issue-144-v2`.
 
 **Workload.** 65 distinct origins:
 
@@ -162,21 +162,22 @@ Run once from a clean tree at `3d645b8`, after the budget above was committed. T
 | Check | Budget | Measured | Pass |
 | --- | --- | --- | --- |
 | Warm/cold equality | All origins identical | 65 of 65 with the same artifact ID and byte-identical ratings | yes |
-| Peak resident memory | ≤ 4 GiB | 1.98 GiB (capacity process); 1.88 GiB (daily job) | yes |
-| Per-origin refresh, maximum | ≤ 5 s | 0.56 s | yes |
-| Cold daily job, wall clock | ≤ 120 s | 3.8 s | yes |
-| Checkpoint store at retention 14 | ≤ 500 MB | 9.8 MB (0.70 MB per checkpoint) | yes |
+| Warm reused, cold computed | Every origin | Every warm origin reused its checkpoint, and every cold origin computed | yes |
+| Peak resident memory | ≤ 4 GiB | 2.08 GiB (capacity process); 1.76 GiB (daily job) | yes |
+| Per-origin refresh, maximum | ≤ 5 s | 0.58 s | yes |
+| Cold daily job, wall clock (compute freshness) | ≤ 120 s | 3.9 s | yes |
+| Checkpoint store at retention 14 | ≤ 500 MB | 9.9 MB, measured over the latest 14 origins (0.70 MB per checkpoint) | yes |
 | Late-revision drill | Refused and recorded | Refused. Recorded one changed game (`box_logs/2024:0022400001`, input `source_resolution`). The original artifact was untouched | yes |
 
-**Supported cadence: daily.**
+**Supported compute cadence: daily.**
 
 **Per-origin cost.**
 
 | Pass | Mean | Maximum | Includes |
 | --- | --- | --- | --- |
-| Cold | 0.52 s | 0.56 s | Prepare, fit and checkpoint save |
-| Warm | 0.06 s | 0.07 s | Checkpoint load and publish |
+| Cold | 0.52 s | 0.58 s | Prepare, fit and checkpoint save |
+| Warm | 0.06 s | 0.08 s | Checkpoint load and publish |
 
-The daily job (3.8 s) is about 70% input loading (2.7 s). A weekly cadence costs the same per refresh with 7 times fewer refreshes. Neither is near the budget.
+The daily job (3.9 s) is about 70% input loading (2.7 s). A weekly cadence costs the same per refresh with 7 times fewer refreshes. Neither is near the budget.
 
-**Freshness.** Replay measures compute freshness only: seconds from job start to publish. Live freshness adds the wait for final captures after the night's last game, which replay cannot measure.
+**Freshness.** Replay measures compute freshness only: seconds from job start to publish. Live freshness adds the wait for final captures after the night's last game, which replay cannot measure. Daily is therefore supported for **compute**; live capture latency is for #44 to measure.

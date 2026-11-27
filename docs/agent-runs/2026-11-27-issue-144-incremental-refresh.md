@@ -3,7 +3,7 @@
 - **Date:** 2026-11-27
 - **Status:** Awaiting review
 - **Related issues:** #144 (part of #43), #142, #143, #129
-- **Branch / commit / PR:** `claude/issue-144-incremental-refresh`. The run was at `3d645b8`.
+- **Branch / commit / PR:** `claude/issue-144-incremental-refresh`, PR #151. The final run was at `9494ce7`.
 
 ## Objective and authorized scope
 
@@ -33,7 +33,23 @@ Make the refresh incremental, with warm and cold builds that agree. Measure capa
 | Check | Actual result |
 | --- | --- |
 | Full `pytest`, `ruff`, `ruff format`, `mypy src` | See PR |
-| Registered capacity run, clean tree at `3d645b8` | All 6 checks pass. 65 of 65 origins identical warm and cold. Peak 1.98 GiB. Per-origin maximum 0.56 s. Cold daily job 3.8 s. Checkpoints 9.8 MB at retention. Drill refused and recorded. 45 s total |
+| Registered capacity run `-v2`, clean tree at `9494ce7` | All 7 checks pass. 65 of 65 origins identical warm and cold, with every warm origin reusing its checkpoint. Peak 2.08 GiB. Per-origin maximum 0.58 s. Cold daily job 3.9 s. Checkpoints 9.9 MB measured at retention 14. Drill refused and recorded |
+| Full `pytest` | 508 passed, 3 skipped |
+
+## Review
+
+An independent Haiku review found one blocker: an accepted revision was logged as "published" before publication, so a failed publish left a false record. It is now logged only after publication succeeds, with a test.
+
+Optional findings, all fixed:
+
+- the record now includes config, parent and version changes;
+- an inconsistent sibling is recorded and refused;
+- pruning never removes the checkpoint just written, and drops orphans and superseded identities;
+- a stray `allow_pickle` array is gone;
+- the runner asserts warm reuse and measures the retained store;
+- the ADR wording is qualified as compute-only.
+
+The capacity run was repeated as `-v2` after the fixes.
 
 ## Blockers and remaining risks
 
