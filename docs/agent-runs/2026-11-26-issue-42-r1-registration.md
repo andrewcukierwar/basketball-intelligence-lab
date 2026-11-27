@@ -60,3 +60,10 @@
 3. **Implement §4.0:** parametrized runners, verdict rule and the code-constant guard. Reproduce #36's and #39's 2024–25 predictions exactly. Independent code review.
 4. **Freeze commit (stage B).**
 5. **Capture, gate, fit and freeze, score, D1, report,** each logged.
+
+## Status after freeze (2026-11-26)
+
+- **Freeze.** `470df09`, after CI passed on `fd9352a`. The protocol SHA-256 is `2159cc24344ffe30344fe04992cdfd8d52bbc5097abeb5c64839653422ddd045`. The guard lifts on a clean tree. Locally, `.claude/` is listed in `.git/info/exclude`, so agent worktrees do not count as untracked files.
+- **Capture.** One run at 2026-11-27T01:35:44Z, pinned at `7814213` (`docs/research/r1-holdout-pins.json`, snapshot `af41b22a…2d1b`). The access log was started at the same commit. Raw bytes only; nothing parsed.
+- **Blocked at the gate, before any parse.** `bil.features.box_build` is hard-wired to 2022–23: the season check defaults to 2022, `EXPECTED` holds 2022–23 counts, and the window IDs end `-2022-23`. The "unchanged #29 build" of §4.2 and §4.3 therefore cannot complete on 2025–26. Options A, B and C are in the #42 issue comment. Do not run the box build or `predict` until the user chooses.
+- **#133.** PR #134 merged as `1cc1ea4`. ADR-0033: the V3 path is not adopted, and #133 stays blocked.
