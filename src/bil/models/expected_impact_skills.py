@@ -24,7 +24,13 @@ from numpy.typing import NDArray
 
 from bil.data.pilot_sources import sha256_file
 from bil.features.box import Appearance
-from bil.features.skill_bundle import SkillBundle, bundle_values, check_bundle, fit_bundle
+from bil.features.skill_bundle import (
+    HISTORY_SEASONS,
+    SkillBundle,
+    bundle_values,
+    check_bundle,
+    fit_bundle,
+)
 from bil.models.expected_impact import ROW_SEASONS as DEV_ROW_SEASONS
 from bil.models.expected_impact import SCORED_SEASONS as DEV_SEASONS
 from bil.models.expected_impact import (
@@ -90,10 +96,11 @@ def skill_prepared(
     rows: Sequence[Appearance],
     bundle: SkillBundle,
     season: int,
+    lookback: int = HISTORY_SEASONS,
 ) -> tuple[Prepared, dict[str, Any]]:
     """The v1 preparation with the SPM applied to as-of skill estimates instead of raw rates."""
     check_bundle(bundle, prepared.cutoff, season)
-    skills = bundle_values(rows, bundle, prepared.cutoff, prepared.player_ids.tolist())
+    skills = bundle_values(rows, bundle, prepared.cutoff, prepared.player_ids.tolist(), lookback)
     priors = np.column_stack([model.predict(skills.values) for model in prepared.spm.pair])
     m = analysis.design.size
     offset = np.asarray(analysis.design.players @ np.concatenate([priors[:m, 0], priors[:m, 1]]))
@@ -132,6 +139,7 @@ def block_predictions(
     block: Block,
     raw: Prepared,
     skilled: Prepared,
+    recent: Prepared,
     comparators: Mapping[str, Any],
 ) -> tuple[dict[str, FloatArray], dict[str, FloatArray]]:
     rows = analysis.rows
@@ -143,6 +151,8 @@ def block_predictions(
     fit_r = fit_informed(analysis, raw, *PENALTIES, f"{block.label}:raw")
     out = predict_informed(analysis, skilled, fit_s, scored)
     out["ei_raw"] = predict_informed(analysis, raw, fit_r, scored)["ei"]
+    fit_recent = fit_informed(analysis, recent, *PENALTIES, f"{block.label}:skills_recent")
+    out["ei_skills_recent"] = predict_informed(analysis, recent, fit_recent, scored)["ei"]
     out["spm_only"] = spm_only(analysis, skilled, scored)
     out["spm_only_raw"] = spm_only(analysis, raw, scored)
     out["ei_zero_prior"] = analysis.rapm_context(block, WINDOW, *ZERO_PRIOR)
@@ -237,9 +247,15 @@ def evaluate_fold(
     audits: dict[str, Any] = {}
     for b in blocks:
         raw = prepare(analysis, b.cutoff, spm[b.season], logs[b.season - 1], logs[b.season])
-        skilled, audits[b.label] = skill_prepared(raw, analysis, every, bundles[b.season], b.season)
+        bundle = bundles[b.season]
+        skilled, audits[b.label] = skill_prepared(raw, analysis, every, bundle, b.season)
+        recent, recent_audit = skill_prepared(raw, analysis, every, bundle, b.season, 1)
+        audits[b.label]["recent_history_ablation"] = {
+            key: recent_audit[key]
+            for key in ("skill_seasons", "skill_players", "skill_cold_players", "prior_sd")
+        }
         frozen[b.label], coverage[b.label] = block_predictions(
-            analysis, b, raw, skilled, comparators
+            analysis, b, raw, skilled, recent, comparators
         )
     # Every prediction is fixed above; reproduction and scoring follow.
     labels = np.concatenate([np.full(analysis.scored(b).size, b.label) for b in blocks])
@@ -313,7 +329,16 @@ def run(raw: Path, processed: Path, output: Path, protocol_sha256: str) -> dict[
                 raise ValueError(f"box log pins for {season} disagree")
     every = [row for s in LOG_SEASONS for row in logs[s]]
     fit_started = time.perf_counter()
-    bundles = {season: fit_bundle(every, season) for season in SCORING_SEASONS}
+    bundles = {
+        season: fit_bundle(
+            every,
+            season,
+            source_pins={
+                str(s): log_inputs[str(s)]["snapshot_sha256"] for s in range(season - 3, season)
+            },
+        )
+        for season in SCORING_SEASONS
+    }
     fit_seconds = time.perf_counter() - fit_started
     with TemporaryDirectory(prefix=".ei-skills-", dir=output.parent) as sandbox:
         stage = Path(sandbox) / "results"

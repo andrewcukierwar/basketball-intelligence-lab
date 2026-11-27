@@ -1,7 +1,7 @@
 # As-of Estimated Skills as the SPM prior input: registered protocol (#125)
 
 - **Issue:** [#125](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/125), with Astra audit finding A3.
-- **Status:** Registered before any scored run of `bil.models.expected_impact_skills`. The registration is the commit that adds this file.
+- **Status:** Registered before any scored run of `bil.models.expected_impact_skills`. The registration is the last commit that changes this file before the run. Pre-run independent review changes are folded in.
   - **Pre-registration check.** One plumbing check ran on block `2021-R1`, using reduced Differential Evolution settings. It confirmed that the v1 raw-prior refit reproduces the published #35 EI predictions (maximum gap 0.0), and it counted prior coverage.
   - **Nothing scored.** No error, delta or interval was computed.
 - **Evidence class:** **Original**, covering the chronological Skills bundle, the consumer checks and the matched design. Results are **Experimental** development evidence.
@@ -35,7 +35,11 @@ This protocol asks one question. With everything else in v1 held fixed, does app
 
 **Final fit.** Refit the chosen clock on regular-season targets of `S-2` and `S-1`.
 
-**Seeds.** `125000 + 1000 × (S mod 100) + 100 × stat_index + 10 × clock_index + stage`. Stage 0 is the inner fit and stage 1 is the final fit.
+**Seeds.** `125000 + 10000 × (S mod 100) + 100 × stat_index + 10 × clock_index + stage`. Stage 0 is the inner fit and stage 1 is the final fit. The seeds are unique across bundles.
+
+**Support and solver diagnostics.**
+- **Unavailable bundle.** A statistic with fewer than 1,000 scorable target rows in either the inner or the validation season makes the bundle unavailable, and its season's blocks are reported unavailable.
+- **Bound hits and solver failures.** These are recorded and reported. They do not trigger a refit or a different choice.
 
 **Lineage.** Each bundle records the following:
 
@@ -44,9 +48,10 @@ This protocol asks one question. With everything else in v1 held fixed, does app
 - `outcomes_through`, the last appearance date in the fit stream;
 - `fit_cutoff`, the day after `outcomes_through`;
 - the order-independent digest of the fit stream (`source_view`);
+- the box-log snapshot pins of the three fit seasons;
 - per-statistic parameters and clock-selection losses;
 - every fit's seed, objective, evaluations and bound hits;
-- a `fit_id` that hashes the version, season, source view, outcomes date and parameters.
+- a `fit_id` that hashes every other recorded field.
 
 Every bundle's `fit_cutoff` falls in July of `S`. The first EI cutoff of `S` is 1 October, and the 2020–21 playoffs ended in July 2021. Label maturity therefore holds by dates.
 
@@ -54,14 +59,15 @@ Every bundle's `fit_cutoff` falls in July of `S`. The first EI cutoff of `S` is 
 
 - the bundle has another version;
 - it serves another scoring season;
+- its history seasons are not `S-3` to `S-1`, with `S-1` as the validation season;
 - its fit cutoff does not follow its outcomes;
 - its fit cutoff follows the origin;
 - its `fit_id` does not reproduce its recorded contents.
 
-`bundle_values` and the SPM consumer `skill_prepared` both call it. `bundle_values` builds the as-of snapshot as follows:
+`bundle_values` and the SPM consumer `skill_prepared` both call it. `bundle_values` also refuses box rows whose fit-season digest differs from the bundle's `source_view`. It builds the as-of snapshot as follows:
 
 - **Input rows.** It uses the #33 `skill_snapshot` function on appearances from seasons `S-3` to `S` dated strictly before the cutoff, so a later game cannot move an earlier feature.
-- **Players without history.** A player with no such appearance gets NaN inputs. The SPM maps NaN inputs to its intercepts, which is the v1 cold prior.
+- **Players without history.** A player with no positive-minute appearance in that span gets NaN inputs. The SPM maps NaN inputs to its intercepts, which is the v1 cold prior and the v1 cold definition.
 
 Tests cover the following:
 
@@ -69,6 +75,9 @@ Tests cover the following:
 - the bundle is unchanged when scoring-season games are dropped;
 - a snapshot is unchanged when later games are added;
 - tampered, misdated and wrong-season bundles are refused;
+- rows that differ from the source view, and bundles with shifted history seasons, are refused;
+- a player with only zero-minute appearances stays cold;
+- `skill_prepared` replaces only the priors, offset and history flag of the v1 preparation.
 - the skill estimate with no decay and no shrinkage equals the v1 raw rate, so the SPM receives inputs in its own units.
 
 **Context.** The #33 context model is not used. Skills enter only as game-agnostic snapshots, so the stacked-context acceptance criterion does not apply.
@@ -107,6 +116,7 @@ Each block also predicts the following:
 
 | Prediction | Role |
 | --- | --- |
+| `ei_skills_recent` | Ablation. Skills EI whose snapshot reads only seasons `S-1` and `S`, the v1 span, with the same bundle. `ei − ei_skills_recent` separates the longer history from decay and shrinkage |
 | `ei_offense_only`, `ei_defense_only` | Skills EI with one side's deviation zeroed |
 | `spm_only`, `spm_only_raw` | Context plus each prior with the window mean residual, no on-court update |
 | `ei_zero_prior` | `rapm_context` at 8,000/8,000. This is the matched zero-prior comparator |
@@ -127,7 +137,7 @@ Each block also predicts the following:
 - **`skills_worse`.** The mirror case.
 - **`inconclusive`.** Anything else.
 
-The same rule labels every other comparator. Development-fold verdicts are descriptive, because the penalties were chosen there with the raw prior.
+The same rule labels every other comparator. Those labels and all slices are exploratory and are not corrected for multiplicity. Development-fold verdicts are descriptive, because the penalties were chosen there with the raw prior.
 
 **Decision.**
 
@@ -148,6 +158,7 @@ The run happens once, from a clean tree at a committed revision.
 
 ## 7. Limits
 
+- **History length.** The Skills snapshot spans `S-3` to `S` and the v1 prior spans `S-1` to `S`, so the primary contrast mixes longer history with decay and shrinkage. The `ei_skills_recent` ablation is the registered check on this.
 - **Inputs and SPM.** The SPM was trained on full-season raw rates. It is applied unchanged to shrunk as-of estimates, with no recalibration.
 - **League references.** They differ between fit and snapshot (§2).
 - **Penalties.** The penalties favor the raw prior on the development folds.

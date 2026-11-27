@@ -47,7 +47,7 @@ def seasons(first: int = 2018, last: int = 2021, seed: int = 3) -> list[Appearan
 
 @pytest.fixture(scope="module")
 def bundle() -> SkillBundle:
-    return fit_bundle(seasons(), 2021, FAST)
+    return fit_bundle(seasons(), 2021, FAST, min_rows=100)
 
 
 def test_bundle_reads_only_earlier_seasons_and_records_its_lineage(bundle: SkillBundle) -> None:
@@ -61,10 +61,12 @@ def test_bundle_reads_only_earlier_seasons_and_records_its_lineage(bundle: Skill
             chosen["validation_loss"].values()
         )
     # Scoring-season games cannot move the fit: the bundle is identical without them.
-    again = fit_bundle([r for r in seasons() if r.game_id[3:5] != "21"], 2021, FAST)
+    again = fit_bundle([r for r in seasons() if r.game_id[3:5] != "21"], 2021, FAST, min_rows=100)
     assert again.record() == bundle.record()
     with pytest.raises(SkillLineageError, match="covers"):
-        fit_bundle([r for r in seasons() if r.game_id[3:5] != "18"], 2021, FAST)
+        fit_bundle([r for r in seasons() if r.game_id[3:5] != "18"], 2021, FAST, min_rows=100)
+    with pytest.raises(SkillLineageError, match="unavailable"):
+        fit_bundle(seasons(), 2021, FAST)  # synthetic seasons are below the registered minimum
 
 
 def test_late_fitted_parent_is_refused_with_identical_pre_origin_rows(bundle: SkillBundle) -> None:
@@ -126,3 +128,61 @@ def test_skill_estimates_share_the_spm_feature_units() -> None:
         assert row.estimate == pytest.approx(expected, rel=1e-9)
         compared += 1
     assert compared > 100
+
+
+def test_source_view_history_and_cold_rules(bundle: SkillBundle) -> None:
+    rows = seasons()
+    origin = date(2021, 12, 1)
+    with pytest.raises(SkillLineageError, match="source view"):
+        bundle_values([r for r in rows if r.key != rows[5].key], bundle, origin, [10])
+    shifted = replace(bundle, history_seasons=(2017, 2018, 2019))
+    with pytest.raises(SkillLineageError, match="history seasons"):
+        check_bundle(shifted, origin, 2021)
+    # A scoring-season appearance with no minutes leaves the player cold, as in v1.
+    dnp = replace(rows[-1], player_id="99", minutes_ms=0, game_date=date(2021, 11, 1))
+    full = bundle_values([*rows, dnp], bundle, origin, [10, 99])
+    assert full.has_history.tolist() == [True, False] and np.isnan(full.values[1]).all()
+    recent = bundle_values(rows, bundle, origin, [10, 32], lookback=1)
+    assert recent.audit["skill_seasons"] == [2020, 2021] and recent.has_history.all()
+    assert not np.allclose(recent.values, bundle_values(rows, bundle, origin, [10, 32]).values)
+
+
+def test_skill_prepared_replaces_only_the_prior_inputs(bundle: SkillBundle) -> None:
+    from types import SimpleNamespace
+
+    from bil.models.expected_impact import Prepared, SpmFit
+    from bil.models.expected_impact_skills import skill_prepared
+    from bil.models.spm import DEFENSE, OFFENSE, LinearPrior
+
+    def prior(features: tuple[int, ...], intercept: float) -> LinearPrior:
+        n = len(features)
+        return LinearPrior(features, np.zeros(n), np.ones(n), np.linspace(0.5, 1.5, n), intercept)
+
+    spm = SpmFit((prior(OFFENSE, 1.0), prior(DEFENSE, -0.5)), "fit", "origin")
+    ids = np.asarray([10, 32, 99, 11], dtype=np.int64)  # three design players, then box-only 11
+    players = np.zeros((4, 6))
+    players[:, :3] = [[1, 1, 0], [0, 1, 1], [1, 0, 1], [1, 1, 1]]
+    players[:, 3:] = -players[:, :3]
+    origin = date(2021, 12, 1)
+    v1 = Prepared(
+        origin,
+        np.arange(4),
+        np.ones(4),
+        0.0,
+        np.zeros(2),
+        ids,
+        np.ones((4, 2)),
+        np.asarray([True, True, False, True]),
+        np.zeros(4),
+        spm,
+        {"cutoff": origin.isoformat()},
+    )
+    analysis = SimpleNamespace(design=SimpleNamespace(size=3, players=players))
+    out, audit = skill_prepared(v1, analysis, seasons(), bundle, 2021)  # type: ignore[arg-type]
+    np.testing.assert_allclose(out.offset, players @ np.r_[out.priors[:3, 0], out.priors[:3, 1]])
+    assert out.box_history.tolist() == [True, True, False, True]
+    assert out.priors[2].tolist() == [1.0, -0.5]  # no history: the SPM intercepts
+    assert (out.index == v1.index).all() and out.gamma is v1.gamma and out.spm is spm
+    assert audit["skill_bundle"] == bundle.fit_id and audit["cutoff"] == origin.isoformat()
+    with pytest.raises(SkillLineageError, match="scoring season"):
+        skill_prepared(v1, analysis, seasons(), bundle, 2022)  # type: ignore[arg-type]
