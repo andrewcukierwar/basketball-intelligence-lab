@@ -582,9 +582,9 @@ V2 remains the event source of record.
 - **Decision:**
   - **Resolution.** Every refresh records one revision per game, in `sources.json`, and the resolution digest is part of the artifact identity.
   - **Live captures** use `strict_rolling`:
-    - a revision counts only if its capture was retrieved strictly before midnight Eastern of the origin;
+    - a revision counts only if the source marks its content final and its capture was retrieved strictly before midnight Eastern of the origin;
     - the finish time is bounded by the first capture that showed the game's content;
-    - a missing or ambiguous time or date refuses the game.
+    - a missing or ambiguous time, date or finality refuses the game.
   - **Pinned 2023–25 replay snapshots** use `retrospective` resolution: one capture per source, and official date before the origin.
 - **Evidence:** All 10 #36 block snapshots rebuild with zero gap under the resolution.
 - **Consequences:**

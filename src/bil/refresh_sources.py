@@ -12,13 +12,16 @@ is midnight Eastern at the start of ``D``.
   cutoff. The game's latest visible revision is used, and it must have been played on an earlier
   official date and finished before the cutoff. A correction that becomes available after the
   cutoff therefore never enters that origin, but does enter later ones.
-- **Finish time.** Neither pinned source records when a game finished. The conservative rule
-  takes the finish as no later than the capture that first showed the content, so
+- **Finality.** A capture can show a game in progress. Strict resolution admits only content the
+  source marks final (``GameRecord.final``). Non-final content is never a revision, and a game
+  with any capture of unknown finality is refused.
+- **Finish time.** Neither pinned source records when a game finished. For content marked final,
+  the conservative rule takes the finish as no later than the capture that first showed it, so
   ``finalized_at`` is the capture instant unless a source records an earlier one. A game played
   late on its official date ``D-1`` is unavailable at origin ``D`` until a capture made after it
   finished.
-- **Refusals.** A game with an unknown or non-UTC time, an unknown official date, or official
-  dates that disagree across captures is refused and counted. It is never guessed.
+- **Refusals.** A game with an unknown or non-UTC time, unknown finality, an unknown official
+  date, or official dates that disagree across captures is refused and counted. It is never guessed.
 - **``retrospective``.** Pinned replay snapshots (2023–25) were captured after their seasons, so
   their only time is a capture bound later than every in-season origin. Strict resolution would
   select nothing. Retrospective resolution requires exactly one capture per source and selects
@@ -58,6 +61,9 @@ class GameRecord:
     game_date: date | None  # official Eastern game date
     content_sha256: str
     finalized_at: datetime | None = None  # recorded finish instant (UTC), if the source has one
+    final: bool | None = (
+        None  # whether the source marks this content final; None if it does not say
+    )
 
 
 @dataclass(frozen=True)
@@ -134,6 +140,8 @@ def _game_revisions(
                 continue
             rows: list[Revision] = []
             for capture, record in seen:
+                if not record.final:  # in-progress content is never a revision
+                    continue
                 if rows and rows[-1].content_sha256 == record.content_sha256:
                     continue
                 assert capture.retrieved_at is not None and record.game_date is not None
@@ -152,7 +160,10 @@ def _game_revisions(
                         finalized_at=record.finalized_at or capture.retrieved_at,
                     )
                 )
-            revisions[f"{source}:{game}"] = rows
+            if rows:
+                revisions[f"{source}:{game}"] = rows
+            else:
+                refused["never_final"] += 1
     return revisions, refused
 
 
@@ -160,6 +171,8 @@ def _refusal(seen: Sequence[tuple[Capture, GameRecord]]) -> str | None:
     """Why a game's captures cannot be resolved without guessing, if they cannot."""
     if any(c.retrieved_at is None for c, _ in seen):
         return "availability_unknown"
+    if any(r.final is None for _, r in seen):
+        return "finality_unknown"
     if any(not _utc(c.retrieved_at) or not _utc(r.finalized_at) for c, r in seen):
         return "time_ambiguous"
     for capture, record in seen:
@@ -224,9 +237,18 @@ def _retrospective(captures: Sequence[Capture], origin: date) -> Resolution:
 
 
 def box_capture(
-    source: str, capture_id: str, retrieved_at: datetime | None, logs: Iterable[Appearance]
+    source: str,
+    capture_id: str,
+    retrieved_at: datetime | None,
+    logs: Iterable[Appearance],
+    final: bool | None = None,
 ) -> Capture:
-    """Per game: its official date and a hash of its player appearances' content."""
+    """Per game: its official date and a hash of its player appearances' content.
+
+    The pinned box-log snapshots carry no per-game finality flag, so ``final`` defaults to
+    unknown, which strict resolution refuses. A live capture that verifies completion passes
+    ``final=True``.
+    """
     by_game: dict[str, list[Appearance]] = defaultdict(list)
     for row in logs:
         by_game[row.game_id].append(row)
@@ -235,7 +257,9 @@ def box_capture(
         dates = {r.game_date for r in rows}
         content = "\n".join(sorted(r.content_sha256() for r in rows))
         games[game] = GameRecord(
-            dates.pop() if len(dates) == 1 else None, hashlib.sha256(content.encode()).hexdigest()
+            dates.pop() if len(dates) == 1 else None,
+            hashlib.sha256(content.encode()).hexdigest(),
+            final=final,
         )
     return Capture(source, capture_id, retrieved_at, games)
 
@@ -243,9 +267,12 @@ def box_capture(
 def possession_captures(rows: Rows, row_ids: Mapping[str, str]) -> list[Capture]:
     """One capture per pinned row-set season. A game's content is its possession rows.
 
-    The loaded rows keep no stream availability time, so ``retrieved_at`` is None. Only
-    retrospective resolution can use these captures.
+    The loaded rows keep neither the pilot stream's availability time nor its completeness flag,
+    so ``retrieved_at`` and ``final`` are unknown. Only retrospective resolution can use these
+    captures.
     """
+    if not len(rows):
+        return []
     order = np.argsort(rows.game, kind="stable")
     games = rows.game[order]
     starts = np.flatnonzero(np.r_[True, games[1:] != games[:-1]])
