@@ -14,3 +14,9 @@ Recorded and committed before any 2025–26 row is parsed. Only the capture byte
 - **Decision (user, option A).** The gate's "box-feature build completes" is the unchanged #29 contract validation, `load_appearances(season_start_year=2025)`, reached through the guarded `box_logs`. It refuses exactly the violations §4.3 lists: duplicate or invalid keys, unreciprocated team rows, disagreeing dates or home flags, and count-identity violations. The #36 runner already applied it to 2023–24 and 2024–25. The 2022–23-only view builder is not run. Coverage, the 97% limit and the warnings are unchanged.
 - **Code.** `scripts/r1_gate.py` uses only unchanged library functions. Checked before the holdout on 2024–25 (`issue-52-v1`): 1,230 of 1,230 regular-season games covered, 4 minutes warnings and 5 games with no single home team. Reviewed by a fresh-context subagent before running; its three findings (self-paired rows, a score-column dependency through `team_games`, uncaught build errors) were fixed and the 2024–25 check rerun with the same result.
 - **Labelling.** The R1 report states this as a pre-parse deviation from the literal §4.2 text and keeps the label *retrospective confirmatory*.
+
+## Gate and later entries
+
+| UTC time | Commit | Command | What was read | Output digest |
+| --- | --- | --- | --- | --- |
+| 2026-11-27T03:34:39Z | `5a82b9e` | `python scripts/r1_gate.py data/raw data/processed/r1/holdout-gate` | Rows of both pinned 2025–26 logs for contract validation and coverage. The team log's points were read only by `team_games` for its warning counts. No margin was printed or used. **Gate passed:** the contract validation completed (28,572 appearances), 1,230 of 1,230 regular-season games covered (100%, limit 97%) and 85 playoff games present. Warnings: 0 minutes mismatches, 5 games with no single home team. | gate.json `a3592ff2308288d69f7b1511035c18e9e2d07d6ff774efbf0938059aa9af3469` |
