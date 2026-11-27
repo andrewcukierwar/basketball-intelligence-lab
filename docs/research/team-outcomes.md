@@ -73,3 +73,5 @@ In the playoffs, which are reported but not adjudicated, EI and the team rating 
 ## Frozen for M7
 
 The minutes rule, pace, calibrations, team baseline `(60, 4)` and metrics are frozen for the joint #42 registration. The negative team-level result is preserved. The private `predictions.csv` holds every game's frozen inputs and predictions.
+
+**Calibration lineage (#136).** The calibration above was fit on 2021–23 games scored with snapshots whose penalties were selected on those seasons. It is therefore not chronologically eligible. A registered post-freeze calibration fit on 2023–24 changes the 2024–25 scores by −0.014 EI RMSE and leaves the conclusions unchanged. See [calibration lineage](calibration-lineage.md).

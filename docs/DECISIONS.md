@@ -544,3 +544,19 @@ V2 remains the event source of record.
   - **Synthetic regression.** Later identities change the v1 roster, digest and inferred cold total. They change nothing in v2.
   - **Frozen artifacts.** In the frozen artifacts every non-eligible exported player carries the inferred cold total. Published margins are therefore unaffected, and only coverage reporting is.
 - **Links:** [#135](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/135), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), [ADR-0031](#adr-0031--expected-impact-v1-as-the-m5-integrated-reference)
+
+## ADR-0036 — Post-freeze margin calibration with checked lineage
+
+- **Date:** 2026-11-27
+- **Status:** Accepted (registered construction of #136).
+- **Evidence class:** Original (construction), development evidence (comparison). [Protocol](research/calibration-lineage-protocol.md), [results](research/calibration-lineage.md).
+- **Decision:**
+  - **Eligible examples.** A margin calibration claiming strict chronological lineage uses only examples whose parent fit and selection read outcomes strictly before the example's snapshot. The game must also be final before the calibration's fit cutoff.
+  - **Loading.** Consumers load calibrations through `load_calibration`, which re-checks parents, examples, digest and coefficients against the forecast origin.
+- **Evidence:**
+  - **#39 calibration.** None of the #39 calibration's examples are eligible.
+  - **First eligible calibration.** The first eligible calibration (2023–24, cutoff 2024-07-01) changes 2024–25 EI scores by −0.014 RMSE and −0.0010 log loss, with intervals spanning zero. The EI-minus-team conclusion is unchanged.
+- **Consequences:**
+  - **Frozen results.** #39 and #42 results stand as recorded. Their calibration is not chronologically eligible.
+  - **Earlier origins.** Origins before 2024-07-01 have no eligible calibration under this construction.
+- **Links:** [#136](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/136), [#129](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/129), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43)
