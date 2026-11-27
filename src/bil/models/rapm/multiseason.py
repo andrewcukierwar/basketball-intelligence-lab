@@ -1637,11 +1637,15 @@ def _solver_summary(log: Sequence[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _prepare(
-    processed: Path, seasons: Sequence[int], allowed: Iterable[int], output_dir: Path
+    processed: Path,
+    seasons: Sequence[int],
+    allowed: Iterable[int],
+    output_dir: Path,
+    pins: Mapping[int, SeasonPin] = SEASON_PINS,
 ) -> tuple[list[SeasonLoad], Rows, Design, dict[str, Any]]:
     temp = output_dir / "duckdb_tmp"
     temp.mkdir()
-    loads = [load_season(processed, s, allowed, temp) for s in seasons]
+    loads = [load_season(processed, s, allowed, temp, pins) for s in seasons]
     shutil.rmtree(temp)
     started = time.perf_counter()
     rows = assemble(loads)

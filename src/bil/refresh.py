@@ -22,6 +22,7 @@ as-of rating artifact. The refresh is replay-only on pinned 2023–25 inputs: no
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import hashlib
 import json
@@ -40,6 +41,7 @@ import numpy as np
 from bil.data.pilot_sources import sha256_file
 from bil.features.box import Appearance, snapshot_instant
 from bil.features.box_build import PLAYER_LOG, TEAM_LOG
+from bil.models.calibration_lineage import load_calibration
 from bil.models.expected_impact import (
     SPM_MANIFEST,
     SPM_RUN,
@@ -65,6 +67,7 @@ from bil.models.rapm.multiseason import (
     Analysis,
     PlayerFit,
     Scenario,
+    SeasonPin,
     _git_head,
     _prepare,
     season_blocks,
@@ -79,12 +82,14 @@ from bil.refresh_sources import (
     resolve,
 )
 
-VERSION = "origin-refresh-issue-144-v3"
+VERSION = "origin-refresh-issue-145-v4"
 MANIFEST = "manifest.json"
 RATINGS = "ratings.csv"
 SOURCES = "sources.json"
 REVISIONS = "revisions.jsonl"
 CHECKPOINTS = "_checkpoints"
+OUTCOMES = "_outcomes.jsonl"
+RETIRED = "_retired"
 CHECKPOINT_RETENTION = 14  # origins whose fitted state is kept
 FROZEN_TOLERANCE = 1e-6
 
@@ -106,6 +111,7 @@ class Inputs:
     seasons: tuple[int, ...] = OUTER_SEASONS  # replay scope
     captures: tuple[Capture, ...] = ()  # per-game source captures; derived from the inputs if empty
     mode: Mode = "retrospective"  # pinned replay snapshots carry only post-season capture times
+    calibration: Path | None = None  # a #136 post-freeze calibration directory, checked per origin
 
 
 @dataclass(frozen=True)
@@ -464,6 +470,32 @@ def resolution_for(origin: date, inputs: Inputs) -> Resolution:
     return resolve(inputs.captures or replay_captures(inputs), origin, inputs.mode)
 
 
+def stage_of(error: BaseException) -> str:
+    """The refresh phase in which ``error`` was raised (``unknown`` outside a refresh)."""
+    return str(getattr(error, "refresh_stage", "unknown"))
+
+
+def check_parents(origin: date, inputs: Inputs) -> None:
+    """Every fitted parent must be dated strictly before the origin."""
+    if inputs.spm.origin_cutoff >= origin:
+        raise RefreshError(
+            f"late parent: SPM fit {inputs.spm.fit_id} has origin {inputs.spm.origin_cutoff}, "
+            f"not strictly before {origin}"
+        )
+
+
+def calibration_for(origin: date, inputs: Inputs) -> dict[str, Any] | None:
+    """Re-check the calibration's lineage at ``origin`` (#136) and identify it."""
+    if inputs.calibration is None:
+        return None
+    artifact = load_calibration(inputs.calibration, origin)
+    return {
+        "calibration_id": sha256_file(inputs.calibration / "calibration.json"),
+        "fit_cutoff": artifact["fit_cutoff"],
+        "construction": artifact.get("construction"),
+    }
+
+
 def refresh_origin(
     root: Path,
     origin: date,
@@ -476,6 +508,33 @@ def refresh_origin(
 ) -> Published:
     """Build and publish the snapshot for ``origin``; a no-op when it already exists.
 
+    Any failure carries the phase it happened in (:func:`stage_of`): ``origin``, ``parent``,
+    ``calibration``, ``sources``, ``revision`` or ``publish``. See ``_refresh_origin``.
+    """
+    stage = ["origin"]
+    try:
+        return _refresh_origin(
+            root, origin, inputs, stage, checkpoints, reuse, accept_revision, retention
+        )
+    except Exception as error:
+        if not hasattr(error, "refresh_stage"):
+            with contextlib.suppress(AttributeError):
+                error.refresh_stage = stage[0]  # type: ignore[attr-defined]
+        raise
+
+
+def _refresh_origin(
+    root: Path,
+    origin: date,
+    inputs: Inputs,
+    stage: list[str],
+    checkpoints: Path | None,
+    reuse: bool,
+    accept_revision: bool,
+    retention: int,
+) -> Published:
+    """Build and publish the snapshot for ``origin``; a no-op when it already exists.
+
     - **Checkpoints.** With a ``checkpoints`` store, the fitted state of the origin is reused
       when its full identity matches (``reuse``), and saved otherwise.
     - **Late revisions.** If the origin already holds a different artifact, what changed is
@@ -483,11 +542,21 @@ def refresh_origin(
       unless ``accept_revision`` publishes the new artifact beside the old one (also recorded).
     """
     season = check_origin(origin, inputs.seasons)
+    stage[0] = "parent"
+    check_parents(origin, inputs)
+    stage[0] = "calibration"
+    calibration = calibration_for(origin, inputs)
+    if calibration is not None:
+        inputs = replace(
+            inputs, parents={**inputs.parents, "calibration": calibration["calibration_id"]}
+        )
+    stage[0] = "sources"
     resolution = resolution_for(origin, inputs)
     input_ids = {**inputs.input_ids, "source_resolution": resolution.digest()}
     aid = artifact_id(origin, input_ids, inputs.parents, inputs.config)
     if existing(root, origin, aid) is not None:
         return Published(root / origin.isoformat() / aid, aid, False)
+    stage[0] = "revision"
     others, broken = [], []
     for name in _others(root, origin, aid):
         try:
@@ -558,6 +627,7 @@ def refresh_origin(
         return {
             "inputs": input_ids,
             "source_resolution": resolution.summary(),
+            "calibration": calibration,
             "checkpoint": state["checkpoint"],
             "parents": inputs.parents,
             "config": inputs.config,
@@ -568,18 +638,128 @@ def refresh_origin(
             "working_tree_clean": clean,
         }
 
+    stage[0] = "publish"
     done = publish(root, origin, aid, write)
     if revision is not None:  # recorded only once the accepted revision is actually published
         _append(log, {**revision, "action": "published"})
     return replace(done, checkpoint=state["checkpoint"])
 
 
+# --- outcomes, current artifact and rollback (#145) ----------------------------------------
+
+
+def record_outcome(root: Path, record: Mapping[str, Any]) -> dict[str, Any]:
+    """Append one auditable outcome to ``ROOT/_outcomes.jsonl`` and return it."""
+    root.mkdir(parents=True, exist_ok=True)
+    full = {"at": datetime.now(UTC).isoformat(), **record}
+    _append(root / OUTCOMES, full)
+    return full
+
+
+def _failure(origin: date | None, stage: str, error: BaseException, ids: Any) -> dict[str, Any]:
+    return {
+        "origin": origin.isoformat() if origin else None,
+        "outcome": "refused",
+        "stage": stage,
+        "error": type(error).__name__,
+        "reason": str(error),
+        "inputs": ids,
+    }
+
+
+def build(
+    root: Path, origins: Sequence[date], load: Callable[[], Inputs], **options: Any
+) -> tuple[list[dict[str, Any]], int]:
+    """Load once and refresh each origin, recording one outcome per origin; returns
+    (outcomes, failures). A failure at one origin never stops the others."""
+    try:
+        inputs = load()
+    except Exception as error:
+        records = [record_outcome(root, _failure(o, "load", error, None)) for o in origins]
+        return records, len(records)
+    outcomes, failures = [], 0
+    for origin in origins:
+        try:
+            done = refresh_origin(root, origin, inputs, **options)
+        except Exception as error:
+            failures += 1
+            failed = _failure(origin, stage_of(error), error, inputs.input_ids)
+            outcomes.append(record_outcome(root, failed))
+            continue
+        outcomes.append(
+            record_outcome(
+                root,
+                {
+                    "origin": origin.isoformat(),
+                    "outcome": "published" if done.created else "unchanged",
+                    "artifact_id": done.artifact_id,
+                    "checkpoint": done.checkpoint,
+                    "path": str(done.path),
+                },
+            )
+        )
+    return outcomes, failures
+
+
+def current(root: Path, origin: date) -> Path | None:
+    """The artifact consumers should read for ``origin``.
+
+    It is the single valid artifact. If an accepted revision left several, it is the latest
+    one ``revisions.jsonl`` records as published. Retired artifacts are not candidates.
+    """
+    valid = []
+    for name in _others(root, origin, ""):
+        with contextlib.suppress(RefreshError):
+            valid.append(existing(root, origin, name))
+    found = [p for p in valid if p is not None]
+    if len(found) <= 1:
+        return found[0] if found else None
+    log = root / origin.isoformat() / REVISIONS
+    names = {p.name: p for p in found}
+    if log.is_file():
+        for line in reversed(log.read_text(encoding="utf-8").splitlines()):
+            entry = json.loads(line)
+            if entry.get("action") == "published" and entry.get("new_artifact_id") in names:
+                return names[entry["new_artifact_id"]]
+    raise RefreshError(f"{origin} holds {sorted(names)} and no record says which is current")
+
+
+def retire(root: Path, origin: date, aid: str, reason: str) -> Path:
+    """Roll back by moving an artifact to ``ROOT/_retired/<origin>/``; recorded, never deleted."""
+    source = root / origin.isoformat() / aid
+    if existing(root, origin, aid) is None:
+        raise RefreshError(f"{source} is not a published artifact")
+    target = root / RETIRED / origin.isoformat() / aid
+    target.parent.mkdir(parents=True, exist_ok=True)
+    os.rename(source, target)
+    _fsync_dir(source.parent)
+    entry = {"origin": origin.isoformat(), "artifact_id": aid, "reason": reason}
+    _append(
+        root / origin.isoformat() / REVISIONS,
+        {"detected_at": datetime.now(UTC).isoformat(), **entry, "action": "retired"},
+    )
+    record_outcome(root, {**entry, "outcome": "retired", "path": str(target)})
+    return target
+
+
 # --- pinned replay inputs --------------------------------------------------------------
 
 
-def load_inputs(raw: Path, processed: Path, scratch: Path) -> Inputs:
-    """The #36 configuration, locked SPM fit, outer row sets and pinned box logs."""
-    config = parse_config(ADDENDUM.read_text(encoding="utf-8"))
+def load_inputs(
+    raw: Path,
+    processed: Path,
+    scratch: Path,
+    *,
+    addendum: Path = ADDENDUM,
+    pins: Mapping[int, SeasonPin] = SEASON_PINS,
+    calibration: Path | None = None,
+) -> Inputs:
+    """The #36 configuration, locked SPM fit, outer row sets and pinned box logs.
+
+    ``addendum`` and ``pins`` default to the registered ones; the #145 drills pass altered
+    copies to show that a wrong digest refuses before anything is fitted.
+    """
+    config = parse_config(addendum.read_text(encoding="utf-8"))
     ei = config["models"]["ei"]
     if ei["window"] != "W2" or TEMPORAL_BY_NAME[ei["window"]].name != "W2":
         raise RefreshError("the #36 EI window is not W2")
@@ -597,7 +777,7 @@ def load_inputs(raw: Path, processed: Path, scratch: Path) -> Inputs:
             for a in assets
             if a["name"] in (PLAYER_LOG, TEAM_LOG)
         )
-    _, rows, design, row_inputs = _prepare(processed, ROW_SEASONS, ROW_SEASONS, scratch)
+    _, rows, design, row_inputs = _prepare(processed, ROW_SEASONS, ROW_SEASONS, scratch, pins)
     analysis = Analysis(rows, design, Scenario("primary", np.ones(len(rows), dtype=bool)), [], [])
     row_ids = {
         label: entry["row_manifest_sha256"]
@@ -617,11 +797,11 @@ def load_inputs(raw: Path, processed: Path, scratch: Path) -> Inputs:
             "rows": row_ids,
             "box_logs": log_ids,
             "spm_fit_sha256": config["spm_fit_sha256"],
-            "addendum_sha256": sha256_file(ADDENDUM),
+            "addendum_sha256": sha256_file(addendum),
         },
         {"spm": spm.fit_id, "penalty_selection": "issue-35-v1 W2 8000/8000"},
     )
-    return replace(inputs, captures=replay_captures(inputs, retrieved))
+    return replace(inputs, captures=replay_captures(inputs, retrieved), calibration=calibration)
 
 
 Pair = tuple[float, float]
@@ -699,6 +879,11 @@ def verify_frozen(root: Path, processed: Path, inputs: Inputs) -> dict[str, Any]
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    retiring = sub.add_parser("retire", help="roll back one artifact of one origin")
+    retiring.add_argument("root", type=Path)
+    retiring.add_argument("--origin", type=date.fromisoformat, required=True)
+    retiring.add_argument("--artifact", required=True)
+    retiring.add_argument("--reason", required=True)
     for name in ("build", "verify-frozen"):
         p = sub.add_parser(name)
         p.add_argument("raw", type=Path)
@@ -708,34 +893,36 @@ def main() -> None:
             p.add_argument("--origin", type=date.fromisoformat, required=True, action="append")
             p.add_argument("--no-checkpoints", action="store_true", help="neither read nor save")
             p.add_argument("--accept-revision", action="store_true")
+            p.add_argument("--calibration", type=Path, help="a #136 calibration directory")
     args = parser.parse_args()
+    if args.command == "retire":
+        print(retire(args.root, args.origin, args.artifact, args.reason))
+        return
     args.root.mkdir(parents=True, exist_ok=True)
-    scratch = Path(mkdtemp(prefix=".inputs-", dir=args.root))
-    try:
-        inputs = load_inputs(args.raw, args.processed, scratch)
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
+
+    def load() -> Inputs:
+        scratch = Path(mkdtemp(prefix=".inputs-", dir=args.root))
+        try:
+            return load_inputs(
+                args.raw, args.processed, scratch, calibration=getattr(args, "calibration", None)
+            )
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+
     if args.command == "build":
-        for origin in args.origin:
-            done = refresh_origin(
-                args.root,
-                origin,
-                inputs,
-                checkpoints=None if args.no_checkpoints else args.root / CHECKPOINTS,
-                accept_revision=args.accept_revision,
-            )
-            print(
-                json.dumps(
-                    {
-                        "origin": origin.isoformat(),
-                        "artifact_id": done.artifact_id,
-                        "created": done.created,
-                        "checkpoint": done.checkpoint,
-                        "path": str(done.path),
-                    }
-                )
-            )
+        outcomes, failures = build(
+            args.root,
+            args.origin,
+            load,
+            checkpoints=None if args.no_checkpoints else args.root / CHECKPOINTS,
+            accept_revision=args.accept_revision,
+        )
+        for outcome in outcomes:
+            print(json.dumps(outcome, default=str))
+        if failures:
+            raise SystemExit(f"{failures} origin(s) refused; see {args.root / OUTCOMES}")
     else:
+        inputs = load()
         report = verify_frozen(args.root, args.processed, inputs)
         print(json.dumps(report, indent=2))
         failed = sorted(cutoff for cutoff, entry in report.items() if not entry["reproduced"])
