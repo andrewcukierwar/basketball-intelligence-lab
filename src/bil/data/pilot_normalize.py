@@ -40,6 +40,11 @@ EVENT_KINDS = {
 }
 # Shots, free throws and turnovers: events a feed's offense team describes directly.
 LIVE_BALL_TYPES = (1, 2, 3, 5)
+# Field-goal attempts (types 1 and 2) and turnovers (5) are evidence of which team controls the
+# ball (#138). Free throws, rebounds, fouls, violations and jump balls are not used. See
+# docs/data-pilot.md for the ambiguity rules.
+# Recorded in a pilot manifest built with the rule, so downstream row builds can enforce it.
+CONTROL_OWNERSHIP_RULE = "control-ownership-issue-138-v1"
 END_REASONS = {
     1: "made_shot",
     3: "final_free_throw",
@@ -400,10 +405,36 @@ def score_and_events(
     by_stint: dict[int, int],
     by_possession: dict[int, tuple[int, int, str]],
     artifact_id: str,
+    control_ownership: bool = False,
+    control_conflicts: set[int] | None = None,
+    score_conflicts: set[int] | None = None,
 ) -> tuple[list[Row], list[Row], list[Row], Counter[int], set[int], list[CreditChoice]]:
     teams = game.home_id, game.away_id
+    if control_conflicts is None:
+        control_conflicts = set()
+    if score_conflicts is None:
+        score_conflicts = set()
     conflicts: set[int] = set()
     choices: list[CreditChoice] = []
+    free_throw_clocks = {
+        (item.source.period, item.elapsed_ms, getattr(item.source, "team_id", None))
+        for item in events
+        if item.source.event_type == 3
+    }
+
+    def controls(item: TimedEvent, team: int) -> bool:
+        """Whether this event is decisive evidence that ``team`` controls the ball.
+
+        A turnover recorded at a clock where the opponent shoots free throws is part of a
+        dead-ball cluster, such as an and-one, and is treated as ambiguous.
+        """
+        if item.source.event_type in (1, 2):
+            return True
+        opponent = teams[1 - teams.index(team)]
+        return item.source.event_type == 5 and (
+            (item.source.period, item.elapsed_ms, opponent) not in free_throw_clocks
+        )
+
     points = [0, 0]
     canonical: list[Row] = []
     actors: list[Row] = []
@@ -424,6 +455,14 @@ def score_and_events(
                 "Shot or free-throw shooter is unresolved or not on court",
                 event.event_num,
             )
+        if control_ownership and team in teams and controls(item, team):
+            # A field-goal attempt or turnover is made by the team in control (#138). An
+            # accepted possession that the parser gave to the other team stays unresolved,
+            # as a contradicting score does below.
+            held = by_possession.get(item.seq)
+            if held is not None and held[2] == "accepted" and held[1] != team:
+                conflicts.add(held[0])
+                control_conflicts.add(held[0])
         totals = [event.score.get(side, 0) for side in teams]
         deltas = [totals[i] - points[i] for i in range(2)]
         points = totals
@@ -498,6 +537,7 @@ def score_and_events(
                 # The parser gave this possession to the other team. Leave its offense
                 # unresolved rather than credit points against the recorded control.
                 conflicts.add(poss[0])
+                score_conflicts.add(poss[0])
             credit = item
             if event.event_type == 3:
                 trigger = getattr(event, "event_for_efficiency_stats", event)
@@ -655,12 +695,22 @@ def normalize_game(
     unresolved_possessions: frozenset[int] = frozenset(),
     offense_evidence: dict[int, int] | None = None,
     report: dict[str, int] | None = None,
+    control_ownership: bool = False,
 ) -> Rows:
+    """Normalize one game's parsed stream into the canonical pilot tables.
+
+    With ``control_ownership`` (#138), an accepted possession that contains a decisive
+    field-goal attempt or turnover by the other team is left unresolved, as one that a score
+    contradicts is. ``report`` then counts as ``control_conflicts`` the possessions left
+    unresolved by control evidence alone, not those a score also contradicts.
+    """
     scope: Row = {"game_id": game.game_id, "stream_revision": 1}
     teams = game.home_id, game.away_id
     events = timed_events(parsed_events, raw, game, roster)
     lineups, stints, by_stint, minutes = build_stints(events, scope, teams)
     unresolved, keep = set(unresolved_possessions), set[int]()
+    control_conflicts: set[int] = set()
+    score_conflicts: set[int] = set()
     for _ in range(4):
         possessions, by_poss, relabeled = build_possessions(
             parsed_possessions,
@@ -672,7 +722,17 @@ def normalize_game(
             frozenset(keep),
         )
         canonical, actors, allocations, pm, conflicts, choices = score_and_events(
-            events, raw, scope, game, roster, by_stint, by_poss, artifact_id
+            events,
+            raw,
+            scope,
+            game,
+            roster,
+            by_stint,
+            by_poss,
+            artifact_id,
+            control_ownership,
+            control_conflicts,
+            score_conflicts,
         )
         if not conflicts:
             break
@@ -685,6 +745,11 @@ def normalize_game(
         raise GameIssue("unresolved_score_allocation", "Possession conflicts persist")
     if report is not None:
         report["relabeled_possessions"] = len(relabeled)
+        if control_ownership:
+            report["control_conflicts"] = sum(
+                possessions[seq - 1]["status"] == "unresolved"
+                for seq in control_conflicts - score_conflicts
+            )
     reconcile_minutes(minutes, roster, truncated_boundaries(events, raw))
     for choice, option in choose_box_credits(pm, roster, choices):
         allocation = allocations[choice.allocation]
