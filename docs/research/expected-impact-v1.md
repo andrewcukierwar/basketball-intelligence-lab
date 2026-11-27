@@ -32,6 +32,18 @@ The private `ratings.csv` has 863 players at each of 11 dates: the ten block cut
 - **Prior vs rating.** Offensive prior and rating correlate at 0.84–0.89.
 - **Fallbacks.** 151 of the 863 design players had no box history at the final cutoff and received the SPM intercepts. This count is design-wide and includes players absent from the window. Box-only players would have exposure and deviation 0. None occurred at the final cutoff.
 
+## As-of rating artifact (#135)
+
+The v1 export, `ei-ratings-v1`, lists every player in the global multi-season design. Its roster, digest and inferred cold total therefore depend on players who first appear after the cutoff. Ratings are unaffected. Astra audit A1 reproduced the dependency on `1d29416`. `as_of_ratings()` writes `ei-ratings-as-of-v2` and changes three things:
+
+- **Roster.** A player is on the roster if they have completed box history before the cutoff or exposure in the fit window.
+- **Cold priors.** Each row carries `artifact_version` and the explicit per-side `cold_offense` and `cold_defense` priors, the SPM intercepts. `team_outcomes.load_ratings` uses them for any player absent from the roster.
+- **Digest.** `snapshot_id` covers the values at the exported 6-decimal precision. A design that also indexes later players solves a larger system and moves the fit by about 1e-15.
+
+Possession-level predictions still use the full design, so realized-lineup scoring is unchanged. A regression test appends a later on-court identity and a later box-only identity. It checks that the roster, ratings, coverage, cold priors, digest, unknown-player team score and keyed earlier predictions do not change. It also checks a snapshot with no no-history roster members.
+
+The frozen #35/#36/#39/#42 runners still write and read v1, so their artifacts reproduce. In the frozen `issue-35-v1` and `issue-36-v1` files, every snapshot exports 96 to 265 players who are not eligible at its cutoff. All of them have exactly the inferred cold total, which is one value per snapshot. Their team margins therefore equal what v2 would give to 1e-6 (**Inferred** from the artifacts, not rerun). The difference is in reported coverage. The #39 note that no projected minutes fell on the cold rating counts those players as rated. Under v2 their minutes would be cold minutes. New consumers (#43, #129) should write and read v2.
+
 ## Eligibility, provenance and runtime
 
 - **Eligibility audit.** At every cutoff, the last window row, last box row and SPM origin are strictly before the cutoff, and no scored game is in its own window. At the final cutoff the window is 2021-07-01 to 2023-06-12, the box data ends 2023-06-12, and the SPM origin is `contiguous@2023-06-13`.
