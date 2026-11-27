@@ -238,6 +238,15 @@ METRICS = (
     *(f"score_{name}_points" for name in (*DESTINATIONS, "modeled", "not_modeled")),
 )
 
+# #138: a field-goal attempt, or a turnover outside an opponent free-throw clock, is decisive
+# evidence of the team in control. Shared with bil.data.pilot_check, which reads the same tables.
+DECISIVE_CONTROL = """(e.kind = 'shot' or (e.kind = 'turnover' and not exists (
+          select 1 from event f where f.game_id = e.game_id
+            and f.stream_revision = e.stream_revision and f.period = e.period
+            and f.elapsed_ms = e.elapsed_ms and f.kind = 'free_throw'
+            and f.team_id <> e.team_id)))"""
+CONTROL_CHECK = "eligible_control_events_match_offense"
+
 # Each check counts violations against the pilot ledgers and the written outputs.
 CHECKS = {
     "one_game_per_review": """
@@ -318,6 +327,13 @@ CHECKS = {
                 where destination not in ('possession', 'unassigned_dead_ball', 'unresolved')
                    or (destination = 'possession') <> (possession_seq is not null)
                    or (destination = 'possession') <> (disposition is not null))""",
+    CONTROL_CHECK: f"""
+        select count(distinct (d.game_id, d.stream_revision, d.possession_seq))
+        from possession_disposition d
+        join event e on e.game_id = d.game_id and e.stream_revision = d.stream_revision
+          and e.seq >= d.start_seq and e.seq < d.end_seq
+        where d.reason = 'eligible' and {DECISIVE_CONTROL}
+          and e.team_id is not null and e.team_id <> d.offense_team_id""",
     "control_points_scored_by_offense": """
         select count(*) from score_reconciliation s
         join possession_disposition d using (game_id, stream_revision, possession_seq)
@@ -518,7 +534,14 @@ def build_rows(
             ):
                 connection.execute(sql)
             counts = _violations(connection, variant, season)
-            failed = {name: count for name, count in counts.items() if count}
+            # A pilot built without the #138 rule predates it: its conflicts are recorded in the
+            # manifest so frozen row sets still rebuild, and enforced only for rule builds.
+            enforced = pilot.get("control_ownership_rule") is not None
+            failed = {
+                name: count
+                for name, count in counts.items()
+                if count and (enforced or name != CONTROL_CHECK)
+            }
             if failed:
                 raise ValueError(f"Row-set identities failed against the pilot ledgers: {failed}")
             summary = _tally(connection)
@@ -590,6 +613,11 @@ def build_rows(
                 "historical game dates is unavailable for this snapshot."
             ),
             "identity_violations": counts,
+            "control_ownership": {
+                "pilot_rule": pilot.get("control_ownership_rule"),
+                "enforced": enforced,
+                "eligible_conflicts": counts[CONTROL_CHECK],
+            },
             "reconciliation": summary,
             "attribution": ATTRIBUTION,
             "terms": NBA_TERMS,

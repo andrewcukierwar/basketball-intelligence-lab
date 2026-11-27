@@ -40,6 +40,16 @@ PERIOD_START = (
 )
 PERIOD_END = "case when period <= 4 then period * 720000 else 2880000 + (period - 4) * 300000 end"
 
+# Exported event kinds that only the team in control can make: field-goal attempts ("shot") and
+# turnovers (#138). Free throws, rebounds, fouls, violations and jump balls are ambiguous.
+CONTROL_KINDS = "('shot', 'turnover')"
+# A turnover at a clock where the other team shoots free throws belongs to a dead-ball cluster
+# (an and-one, for example) and is not decisive. The same rule is in bil.data.rapm_rows.
+DECISIVE_CONTROL = """(e.kind = 'shot' or (e.kind = 'turnover' and not exists (
+      select 1 from event f where f.game_id = e.game_id and f.stream_revision = e.stream_revision
+        and f.period = e.period and f.elapsed_ms = e.elapsed_ms and f.kind = 'free_throw'
+        and f.team_id <> e.team_id)))"""
+
 SIDES = """
     select s.game_id, s.stint_seq, s.start_seq, s.end_seq,
            s.end_elapsed_ms - s.start_elapsed_ms as duration,
@@ -91,6 +101,11 @@ CHECKS = {
            or p.offense_team_id not in (g.home_team_id, g.away_team_id)
            or p.defense_team_id not in (g.home_team_id, g.away_team_id)
            or p.status not in ('accepted', 'excluded', 'unresolved')""",
+    "control_events_match_possession_offense": f"""
+        select count(distinct (p.game_id, p.possession_seq)) from possession p
+        join event e on e.game_id = p.game_id and e.seq >= p.start_seq and e.seq < p.end_seq
+        where p.status = 'accepted' and {DECISIVE_CONTROL}
+          and e.team_id is not null and e.team_id <> p.offense_team_id""",
     "event_scores_equal_finals": """
         select count(*) from game g join (
           select game_id, sum(home_delta) as home, sum(away_delta) as away from event group by 1
@@ -265,6 +280,61 @@ def _same_offense_violations(
         not any((game_id, event_id) in flagrant_fouls for event_id in events)
         for game_id, events in pairs
     )
+
+
+OWNERSHIP_EVENTS = f"""
+    select e.kind as family, p.status,
+           count(*) filter ({DECISIVE_CONTROL} and e.team_id = p.offense_team_id) as agree,
+           count(*) filter ({DECISIVE_CONTROL} and e.team_id <> p.offense_team_id) as disagree,
+           count(*) filter (not {DECISIVE_CONTROL} and e.team_id is not null) as ambiguous,
+           count(*) filter (e.team_id is null) as no_team
+    from possession p
+    join event e on e.game_id = p.game_id and e.stream_revision = p.stream_revision
+      and e.seq >= p.start_seq and e.seq < p.end_seq
+    where e.kind in {CONTROL_KINDS}
+    group by all order by all
+"""
+OWNERSHIP_POSSESSIONS = f"""
+    with p as (
+      select p.status,
+             exists (select 1 from score_allocation a where a.game_id = p.game_id
+                       and a.stream_revision = p.stream_revision
+                       and a.possession_seq = p.possession_seq) as scored,
+             count(e.seq) filter ({DECISIVE_CONTROL} and e.team_id is not null) as evidence
+      from possession p
+      left join event e on e.game_id = p.game_id and e.stream_revision = p.stream_revision
+        and e.seq >= p.start_seq and e.seq < p.end_seq
+      group by p.game_id, p.stream_revision, p.possession_seq, p.status)
+    select status, scored, count(*) as possessions,
+           count(*) filter (evidence > 0) as with_control_evidence
+    from p group by all order by all
+"""
+
+
+def ownership_coverage(output: Path) -> dict[str, list[dict[str, object]]]:
+    """Report how far control events cover possession offense in an exported build (#138).
+
+    ``events`` counts field-goal attempts and turnovers inside possessions by event family and
+    possession status: decisive events that agree or disagree with the possession offense,
+    ambiguous turnovers at an opponent free-throw clock, and events with no recorded team. Their
+    evidence source is the parser's event team. ``possessions`` counts
+    possessions by status and by whether a score allocation lands on them, with the number that
+    contain at least one control event. Possessions without one rely on parser control alone.
+    """
+    with duckdb.connect() as connection:
+        for name in ("event", "possession", "score_allocation"):
+            connection.execute(
+                f"create view {name} as select * from read_parquet({_literal(output / name)}"
+                " || '.parquet')"
+            )
+        report: dict[str, list[dict[str, object]]] = {}
+        for key, sql in (("events", OWNERSHIP_EVENTS), ("possessions", OWNERSHIP_POSSESSIONS)):
+            cursor = connection.execute(sql)
+            columns = [column[0] for column in cursor.description]
+            report[key] = [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+    for row in report["events"]:
+        row["evidence_source"] = "parser_event_team"
+    return report
 
 
 def check_build(output: Path, snapshot: Path) -> dict[str, int]:
