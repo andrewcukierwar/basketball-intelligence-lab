@@ -28,6 +28,13 @@ The four chronological openings scored 1,829 player-seasons from 681 distinct pl
 | Full − Zero RMSE, paired player interval | −0.120 [−0.161, −0.075] | −0.003 [−0.022, +0.015] | −0.158 [−0.205, −0.109] |
 | Full − One-stat RMSE, paired player interval | −0.037 [−0.068, −0.004] | +0.005 [−0.010, +0.020] | −0.065 [−0.104, −0.025] |
 
+| Fit | Offense MAE / bias | Defense MAE / bias | Total MAE / bias |
+| --- | ---: | ---: | ---: |
+| Full | 1.203 / +0.218 | 0.740 / +0.015 | 1.443 / +0.234 |
+| Mean | 1.274 / +0.146 | 0.740 / +0.006 | 1.527 / +0.152 |
+| Zero | 1.322 / +0.404 | 0.743 / +0.061 | 1.578 / +0.465 |
+| One-stat | 1.238 / +0.147 | 0.737 / +0.011 | 1.504 / +0.157 |
+
 ## Fit and run evidence
 
 The five SPM origins close the 2018–19 through 2022–23 seasons on the #28 calendar. The final fit uses 2,276 joined player-seasons, with 447, 436, 459, 478 and 456 by target season. Each fit records its frozen target hashes, box pins, per-season feature cutoff and Skills parent ID. The old 2017–18 box snapshot supplies Skills history only. The K0 scorer uses the registered frozen contiguous labels, and the possession scorer pairs directly against both archived #125 prediction arrays.
