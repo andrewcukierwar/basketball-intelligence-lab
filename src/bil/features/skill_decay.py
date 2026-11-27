@@ -467,6 +467,24 @@ def fit(
     rows = rows_in(appearances, table, fit_blocks(fit_index))
     if rows.size == 0:
         raise ValueError(f"No tuning rows for {table.feature.code} F{fit_index}")
+    stat_index = next(i for i, f in enumerate(FEATURES) if f.code == table.feature.code)
+    seed = seed_for(stat_index, clock, fit_index)
+    return fit_rows(panel, table, appearances, clock, rows, seed, fit_index, settings)
+
+
+def fit_rows(
+    panel: Panel,
+    table: StatTable,
+    appearances: Appearances,
+    clock: str,
+    rows: IntArray,
+    seed: int,
+    fit_index: int,
+    settings: DESettings = DESettings(),
+) -> FitResult:
+    """The #32 Differential Evolution fit on explicit target rows with an explicit seed."""
+    if rows.size == 0:
+        raise ValueError(f"No tuning rows for {table.feature.code}")
     bounds = [LOG10_HALF_LIFE_BOUNDS[clock], LOG10_K_BOUNDS]
 
     def objective(theta: FloatArray) -> FloatArray | float:
@@ -476,8 +494,6 @@ def fit(
         values = mean_loss(table, rows, pred)
         return float(values[0]) if single else values
 
-    stat_index = next(i for i, f in enumerate(FEATURES) if f.code == table.feature.code)
-    seed = seed_for(stat_index, clock, fit_index)
     result = differential_evolution(
         objective,
         bounds,

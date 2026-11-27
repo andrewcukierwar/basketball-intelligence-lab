@@ -560,3 +560,22 @@ V2 remains the event source of record.
   - **Frozen results.** #39 and #42 results stand as recorded. Their calibration is not chronologically eligible.
   - **Earlier origins.** Origins before 2024-07-01 have no eligible calibration under this construction.
 - **Links:** [#136](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/136), [#129](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/129), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43)
+
+## ADR-0037 — Keep the raw-box SPM input; chronological Skills prior is inconclusive
+
+- **Date:** 2026-11-27
+- **Status:** Accepted (registered outcome of #125).
+- **Evidence class:**
+  - **Original:** the chronological Skills bundle and its consumer checks.
+  - **Experimental:** the development evidence. See the [protocol](research/skill-prior-protocol.md) and [results](research/skill-prior.md).
+- **Decision:**
+  - **Bundle.** Estimated Skills for scoring season `S` come from a versioned bundle (`skills-bundle-issue-125-v1`). It is fit on seasons `S-3` to `S-1`, with inner clock choice, and refused at both the snapshot and SPM consumers when it is late, misdated, for another season, or inconsistent with its source rows.
+  - **EI v1 prior input.** The raw dated box snapshot is kept. Applying the #30 SPM unchanged to as-of Skills is not adopted.
+- **Evidence:**
+  - **Primary contrast.** Skills-prior minus raw-prior EI on the outer pooled regular season is +0.38 [−0.52, +1.23] possession MSE, which is inconclusive. The sign favors the raw prior in both seasons.
+  - **Mechanism.** The applied Skills prior has about half the spread of the raw prior. The registered recent-history ablation puts the loss on shrunk inputs to an SPM trained on raw rates, not on history length.
+- **Consequences:**
+  - **R1.** The R1 Skills link exists and is chronological.
+  - **Retraining.** An SPM retrained on as-of Skills inputs is the open follow-up and needs its own registration.
+  - **Frozen results.** #35, #36, #39 and #42 results stand.
+- **Links:** [#125](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/125), ADR-0018, ADR-0030
