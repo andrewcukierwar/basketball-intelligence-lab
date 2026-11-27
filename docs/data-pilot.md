@@ -821,6 +821,10 @@ Pins for 2008–09, 2009–10 and 2011–12 were added from the #51 register and
 
 Use `build --free-throw-miss-rule` to enable the versioned retry after earlier configured attempts fail. The retry requires an adjacent team rebound at the same clock, exact shooter free-throw box totals and corroborating scoring evidence. It annotates only the parser's input copy and preserves every hard check. Eight rebuilds passed all checks, with 66 games recovered and no changes to earlier accepted game rows apart from ingestion timestamps. [Research report](research/missing-free-throw-miss.md) · [ADR-0030](decisions/0030-free-throw-miss-evidence.md)
 
+## Possession ownership from control events (issue #138)
+
+`pilot check` includes `control_events_match_possession_offense`. It counts accepted possessions that contain a field-goal attempt, or a turnover outside an opponent free-throw clock, by the team without the ball. `build --control-ownership` is the opt-in rule `control-ownership-issue-138-v1`. It leaves those possessions unresolved, records `control_ownership_rule` in the manifest, and warns per game with `control_ownership_conflicts`. The RAPM row builder enforces zero conflicts for rule builds and records the count for older builds. `pilot ownership BUILD` prints coverage and disagreement by event family. The frozen 2018–25 builds have 0 to 23 flagged possessions per season, so they fail this one check, and all other checks still pass. [Report](research/possession-ownership.md) · [ADR-0034](DECISIONS.md#adr-0034--opt-in-control-ownership-rule-and-independent-ownership-checks)
+
 ## Season eligibility matrix (ADR-0022)
 
 Maintainer decisions of 2026-11-23 ([#89](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/89)), applied to the revised M1 classification. "Primary training" is the retrospective cohort 2018–19 through 2022–23. "Outer validation" seasons receive data-quality diagnostics here and no model results until their planned evaluation. The 2025–26 and later seasons are the holdout and were not read.

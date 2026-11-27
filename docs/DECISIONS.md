@@ -512,3 +512,22 @@ V2 remains the event source of record.
   - **Reuse.** Any revised adapter would be developed with 2023–25 exposed, so it could not be validated independently on V2-paired seasons.
 - **Links:** [#133](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/133), [#42](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/42), [ADR-0022](#adr-0022--revise-the-m1-quality-policy-hard-correctness-dataset-eligibility-and-representativeness)
 
+
+## ADR-0034 — Opt-in control-ownership rule and independent ownership checks
+
+- **Date:** 2026-11-27
+- **Status:** Accepted for checks. Normalizer rule is opt-in.
+- **Evidence class:** Original (rule), Inferred (development-build assessment). [Report](research/possession-ownership.md).
+- **Decision:**
+  - **Evidence.** A field-goal attempt, or a turnover outside a clock at which the other team shoots free throws, is decisive evidence of the team in control.
+  - **Checks.** `pilot check` counts accepted possessions that such an event contradicts. The RAPM row builder counts eligible ones.
+  - **Rule.** `pilot build --control-ownership` (`control-ownership-issue-138-v1`) leaves those possessions unresolved. Row builds from a rule pilot must have zero conflicts.
+- **Why opt-in:**
+  - **Precedent.** The same-clock and free-throw-miss rules are opt-in (ADR-0028, ADR-0030).
+  - **Frozen pilots.** Frozen pilot builds must still rebuild their published row sets.
+  - **Recording.** For those builds the row builder records conflicts in its manifest instead of failing.
+- **Evidence:** Flagged possessions in the canonical 2018–25 builds range from 0 to 23 per season, under 0.01% of accepted possessions. Every reviewed flag was a genuine merge (12 of 12). Each pre-exemption false positive found was a dead-ball turnover in an and-one cluster.
+- **Consequences:**
+  - **Possession builds.** New possession-source builds, including any future registered #133 validation, should use the rule.
+  - **Frozen results.** Published results stay as recorded. Re-estimating them without the flagged possessions would be a new registered comparison.
+- **Links:** [#138](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/138), [#133](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/133), [ADR-0033](#adr-0033--do-not-adopt-the-v3-event-path-after-its-registered-validations-failed)
