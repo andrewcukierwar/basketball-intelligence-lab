@@ -441,7 +441,7 @@ V2 remains the event source of record.
 ## ADR-0030 — Close #30 with mixed side-level evidence and use its frozen fits as a provisional SPM prior for Expected impact v1
 
 - **Date:** 2026-11-25
-- **Status:** Proposed (agent decision under ADR-0026's autonomy clause, which allows reversible, bounded experimental decisions). Flagged for maintainer review. It is reversible: v1 artifacts are versioned and #36 tests the prior's contribution.
+- **Status:** Accepted (maintainer approval, 2026-11-26). It was first proposed as an agent decision under ADR-0026's autonomy clause. It is reversible: v1 artifacts are versioned and #36 tests the prior's contribution.
 - **Evidence class:** Original BIL design on Experimental evidence ([#30 results](research/box-spm-results.md)).
 - **Context:**
   - #35 lists "frozen, validated offensive and defensive SPM priors" as its #30 dependency.
@@ -464,7 +464,7 @@ V2 remains the event source of record.
 ## ADR-0031 — Expected impact v1 as the M5 integrated reference
 
 - **Date:** 2026-11-26
-- **Status:** Proposed (agent decision under ADR-0026, flagged for maintainer review). It is the frozen reference set for the #42 R1 confirmatory protocol.
+- **Status:** Accepted (maintainer approval, 2026-11-26). It is the frozen reference set for the #42 R1 confirmatory protocol.
 - **Evidence class:** Original BIL design, Experimental evidence ([inner](research/expected-impact-v1.md), [outer](research/expected-impact-outer.md)).
 - **Decision:** The M5 integrated model is #35 v1:
   - ADR-0025 `W2` walk-forward refits with the context offset;
@@ -484,7 +484,7 @@ V2 remains the event source of record.
 ## ADR-0032 — Keep Expected impact v1 box-only after the #38 tracking comparison
 
 - **Date:** 2026-11-26
-- **Status:** Proposed (agent decision under ADR-0026, flagged for maintainer review).
+- **Status:** Accepted (maintainer approval, 2026-11-26).
 - **Evidence class:** Original BIL design, Experimental evidence ([#38 results](research/tracking-spm.md)).
 - **Decision:** The M5 reference (ADR-0031) keeps the box-only SPM prior. The #38 tracking comparison is frozen as recorded and is not part of the #42 confirmatory reference set.
 - **Evidence:**

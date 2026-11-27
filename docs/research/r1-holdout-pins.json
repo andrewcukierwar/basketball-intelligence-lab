@@ -1,0 +1,33 @@
+{
+  "issue": 42,
+  "protocol_sha256": "2159cc24344ffe30344fe04992cdfd8d52bbc5097abeb5c64839653422ddd045",
+  "box_logs": {
+    "2025": {
+      "snapshot": "r1-v1",
+      "sha256": "af41b22a07c83674dd56e26f2a3a26d4bc8acb4e1fb97c12e700416bf9a52d1b"
+    }
+  },
+  "artifacts": {
+    "team_game_logs.parquet": {
+      "sha256": "78cb539ad03d9facac58837f0d1938e734fcd62b35d6e5f86206a570c645b2e3",
+      "size_bytes": 161353,
+      "retrieved_at": "2026-11-27T01:35:45.318286+00:00"
+    },
+    "player_game_logs.parquet": {
+      "sha256": "df9cd24ad752c306a08ef2dbd7bd9160335db507b96efa9ce1650d951392f801",
+      "size_bytes": 1673418,
+      "retrieved_at": "2026-11-27T01:35:45.599070+00:00"
+    }
+  },
+  "attribution": "NBA.com (NBA game statistics), captured via basketball-data.billmill.org",
+  "epm_capture_d1": {
+    "capture": "20260702010514",
+    "uri": "https://web.archive.org/web/20260702010514id_/https://dunksandthrees.com/epm",
+    "sha256": "cb94230a5f6d154532fee05b59eb845279e8e72e2a8722fc5733f67174d4e3a0",
+    "form": "expected",
+    "season": 2026,
+    "data_date": "2026-06-13",
+    "selection": "rule 3: no json or columnar capture in 2026-06-15..2026-09-30; first expected-form capture with season 2026 and data date from 2026-06-01",
+    "attribution": "EPM data: dunksandthrees.com (archived public page), used with written permission; non-commercial"
+  }
+}
