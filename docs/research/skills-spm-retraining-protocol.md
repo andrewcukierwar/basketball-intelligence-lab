@@ -11,7 +11,7 @@ This development experiment addresses [#148](https://github.com/andrewcukierwar/
 
 ## K0 diagnostic
 
-Use #120 §4's contiguous K0 scoring labels, season-opening cutoffs, minimum exposure, player-cluster intervals and slices. The features at each opening use the #125 history window and its cold fallback, consistent with the retrained features. Compare Full with Zero and One-stat on the four 2019–23 openings and report RMSE, MAE and bias by side and total. Keep the K0 scorer behind the fit freeze. K0 measures agreement with the registered surrogate target. It is a separate diagnostic from lineup outcome prediction.
+Use #120 §4's contiguous K0 scoring labels, season-opening cutoffs, minimum exposure, player-cluster intervals and slices. The features at each opening use the #125 history window and its cold fallback, consistent with the retrained features. Minutes and shot-volume slices use observed box history from that same window, including raw `fga_per_36` for shot volume. Record each opening cutoff and its SPM and Skills fit IDs. Compare Full with Zero and One-stat on the four 2019–23 openings and report RMSE, MAE and bias by side and total. Keep the K0 scorer behind the fit freeze. K0 measures agreement with the registered surrogate target. It is a separate diagnostic from lineup outcome prediction.
 
 ## Matched Expected Impact comparison
 

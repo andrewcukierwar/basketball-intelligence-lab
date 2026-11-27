@@ -186,13 +186,13 @@ def skills_opening(
     players = sorted(box)
     check_bundle(bundle, cutoff, season)
     snapshot = bundle_values(history, bundle, cutoff, players)
-    _, minutes = feature_matrix(box, players)
+    observed, minutes = feature_matrix(box, players)
     return Opening(
         season,
         cutoff,
         np.asarray(players, dtype=np.int64),
         minutes,
-        snapshot.values[:, VOLUME],
+        observed[:, VOLUME],
         {name: predict_pair(pair, snapshot.values) for name, pair in models.items()},
         {name: np.array([model.intercept for model in pair]) for name, pair in models.items()},
         {name: pair_fallback(pair, snapshot.values) for name, pair in models.items()},
@@ -323,6 +323,11 @@ def run(raw: Path, processed: Path, output: Path, protocol_sha256: str) -> dict[
         for season, opening in openings.items():
             k0[str(season)], players, errors = label_scores(
                 opening, evaluation[fit_keys[-1]], ages.get(season, {})
+            )
+            k0[str(season)].update(
+                opening_cutoff=opening.day.isoformat(),
+                spm_fit_id=fits[season_fit_keys[season]]["fit_id"],
+                skill_bundle_id=bundles[season].fit_id,
             )
             pooled.append((players, errors))
         _write_json(stage / "k0.json", {"folds": k0, "pooled": summarize_label_pool(pooled)})
