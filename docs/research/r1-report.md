@@ -12,7 +12,7 @@ On the 2025–26 regular season (1,225 games), Expected impact (EI) predicts gam
 - **C1:** margin RMSE 15.258 against 14.544, Δ +0.714 [+0.494, +0.943] game, [+0.432, +0.982] week.
 - **C2:** win log loss 0.6352 against 0.5948, Δ +0.0404 [+0.0276, +0.0541] game, [+0.0262, +0.0541] week.
 
-EI clearly beats home court alone and its own preseason snapshot, so its in-season box-score updates carry signal. The gap to the team rating is about five times the 2024–25 gap in #39 (+0.136). D1 agreement with Dunks & Threes' Expected EPM is strong but lower than in #40: total r 0.779 against 0.874. In 2025–26, EI's on-court component no longer improves on its box-score prior.
+EI clearly beats home court alone and its own preseason snapshot. **Inferred:** its in-season box-score updates carry some signal. The gap to the team rating is about five times the 2024–25 gap in #39 (+0.136). D1 agreement with Dunks & Threes' Expected EPM is strong but lower than in #40: total r 0.779 against 0.874. In 2025–26, EI's year-old on-court component still improves on its box-score prior on defense. On offense it is worse, and on total the two cannot be distinguished.
 
 ## 2. Implementation correctness
 
@@ -54,7 +54,7 @@ EI clearly beats home court alone and its own preseason snapshot, so its in-seas
 ### 3.2 Reported slices
 
 - **Early season (R1 and R2 blocks).** EI is worse than the team rating even before December: RMSE Δ +0.348 [+0.051, +0.636] / [+0.078, +0.642], log loss Δ +0.0339 [+0.0162, +0.0513] / [+0.0140, +0.0557]. Against the preseason snapshot it is within noise (RMSE Δ −0.029 [−0.082, +0.021]). A player-based prior was expected to help most early, when team margins are few, so this is a **negative result**.
-- **Oracle minutes.** Knowing who played and for how long recovers 0.22 RMSE of the 0.71 gap. That is not enough to overtake the team rating, the same pattern as #39.
+- **Oracle minutes.** Knowing who played and for how long recovers 0.22 RMSE of the 0.71 gap. That is not enough to overtake the team rating. In #39's 2023–25 folds, oracle minutes recovered 0.09 of a 0.14 gap ([team-outcomes.md](team-outcomes.md)).
 - **Playoffs** (85 games, not adjudicated). RMSE: team rating 15.65, home court 17.43, EI 17.89. Log loss: 0.638, 0.688 and 0.710.
 - **Cold minute share by block.** It is the share of predicted minutes given the fixed cold rating (−0.375704): R1 0.071, R2 0.0035, R3 0.0076, R4 0.0033, P 0.0.
 
@@ -97,7 +97,7 @@ All were recorded in the access log at the time.
 - **Top overlap, total:** top 25, EI 60% against prior 64%; top 50, 52% against 56%.
 - **Comparison with #40's 2024–25 expected row:** total r 0.874, prior 0.806.
 - **Experimental reading.** A year-old on-court deviation still moves EI toward EPM on defense. On offense and total it no longer beats the updated box prior, consistent with the staleness discussed in §3.3.
-- The intercept-fallback slice has only 3 players, so its correlations are undefined.
+- The intercept-fallback slice has only 3 players, so its correlations are undefined. They are written as `NaN` in `d1-results.json`, which the #40 writer also does, so strict JSON parsers need `allow_nan`.
 
 ## 6. Methodology fidelity and unresolved gaps
 

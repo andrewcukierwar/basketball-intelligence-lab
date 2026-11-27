@@ -38,7 +38,10 @@ MINUTES_TOLERANCE = 1.0
 
 
 def gate(raw: Path, season: int = HOLDOUT_SEASON) -> dict[str, Any]:
-    """The holdout gate; an earlier season only checks this script on non-holdout logs."""
+    """The holdout gate. An earlier season checks this script on non-holdout logs.
+
+    Only the holdout season needs the guard: earlier seasons are pre-registration data.
+    """
     pin = season_pins(season)[season]
     if season == HOLDOUT_SEASON:
         guard()  # a locked guard is a refusal, not a gate result
