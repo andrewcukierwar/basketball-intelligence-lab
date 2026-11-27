@@ -48,8 +48,21 @@ All intervals are game-cluster bootstraps. Week-cluster intervals are in `result
 
 ## Interpretation
 
-The chronological construction removes the calibration leak without changing the team-level conclusion on 2024–25. EI still trails the daily team rating by about 0.13 margin RMSE and 0.005 log loss, and both intervals include zero. The post-freeze EI slope is larger (1.10 vs 0.95). The frozen calibration also left the 2024–25 recalibration slope at 1.15, so the 2021–23 fit understated EI's scale on later seasons. The upstream EI and team-rating parents for 2021–23 origins remain non-chronological. This work does not address them (protocol §6).
+The chronological construction removes the calibration leak without changing the team-level conclusion on 2024–25. EI still trails the daily team rating by about 0.13 margin RMSE and 0.005 log loss, and both intervals include zero. The post-freeze EI slope is larger (1.10 vs 0.95). Under the frozen calibration the 2024–25 recalibration slope was 1.15 for EI and 1.16 for the team rating, so the 2021–23 fit understated both scales on later seasons. The post-freeze fit brings the EI slope to 1.05, while the team-rating slope stays at about 1.15. The upstream EI and team-rating parents for 2021–23 origins remain non-chronological. This work does not address them (protocol §6).
 
 ## Use
 
 New calibrated forecasts (#129, #43) should build examples with `Example`, fit them with `fit_post_freeze` and load them with `load_calibration` at each origin. A calibration for 2025–26 origins could use 2023–25 examples with cutoff 2025-07-01. Any such use needs its own registration.
+
+## Notes after review
+
+- **Scored margins.** Protocol §4 names the 2023–24 team log as the source of realized margins. The 2024–25 margins scored in §5 come from the pinned 2024–25 team log of the same addendum. The registered protocol text is left unchanged.
+- **Frozen #39 examples.** "0 eligible" follows from dates: every #35 snapshot precedes the 2023-06-30 parent freeze. The run checks one representative probe; it does not scan each #39 example.
+- **Loader hardening.** After the run, `load_calibration` gained four checks, none of which changes the fit or the published numbers:
+  - examples on or after the fit cutoff are refused;
+  - an example's parent must belong to its source;
+  - the recorded parents must equal the parents its examples cite;
+  - coefficients are compared with a 1e-9 tolerance rather than exactly.
+
+  The `issue-136-v1` artifact loads unchanged under them.
+

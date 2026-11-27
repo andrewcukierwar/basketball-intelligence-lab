@@ -35,6 +35,7 @@ Register a chronological construction for margin-calibration examples, record an
 | `uv run pytest -q` | 474 passed, 3 skipped |
 | `ruff`, `mypy src` | Pass |
 | Development run from a clean detached worktree at `a461ddc` | `working_tree_clean_at_end: true`. Outputs listed in the report |
+| Independent review (Sonnet subagent, fresh context) | No blocker. All numbers and hashes match the private outputs. The non-blocking findings were fixed after the run: test coverage of a forged parents block, tolerance on the coefficient refit, refusal of post-cutoff rows and of parent/source mismatches, staging cleanup, and doc clarifications. None of the fixes changes the fit. `issue-136-v1` loads unchanged |
 
 The main checkout's untracked audit handoff made `verify_protocol` refuse a dirty tree, so the run used a clean detached worktree of the same commit.
 

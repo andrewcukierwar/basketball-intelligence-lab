@@ -17,6 +17,8 @@ import argparse
 import csv
 import hashlib
 import json
+import math
+import shutil
 import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -120,6 +122,8 @@ def check_example(example: Example, parents: Mapping[str, Parent], fit_cutoff: d
     where = f"{example.source} {example.game_id}"
     if parent is None:
         raise LineageError(f"{where}: parent {example.parent_id} is not registered")
+    if not example.parent_id.startswith(f"{example.source}:"):
+        raise LineageError(f"{where}: parent {example.parent_id} is not a {example.source} parent")
     if not parent.outcomes_through < example.snapshot_as_of:
         raise LineageError(
             f"{where}: parent {parent.parent_id} read outcomes through "
@@ -234,12 +238,28 @@ def load_calibration(
         ):
             raise LineageError(f"parent {pid} differs from its registration")
     examples = read_examples(directory / "examples.csv")
+    late = [e for e in examples if e.game_day >= cutoff]
+    if late:
+        raise LineageError(f"{len(late)} examples are not final by the fit cutoff {cutoff}")
     refit = fit_post_freeze(examples, parents, cutoff)
     if refit["examples_sha256"] != artifact["examples_sha256"]:
         raise LineageError("examples differ from the recorded digest")
-    if refit["sources"] != artifact["sources"]:
+    if refit["parents"] != artifact["parents"]:
+        raise LineageError("recorded parents differ from the parents its examples cite")
+    if not _same(refit["sources"], artifact["sources"]):
         raise LineageError("examples do not reproduce the recorded coefficients")
     return artifact
+
+
+def _same(left: Any, right: Any, tol: float = 1e-9) -> bool:
+    """Structural equality with a relative tolerance on floats (refits differ in the last bit)."""
+    if isinstance(left, dict) and isinstance(right, dict):
+        return bool(left.keys() == right.keys()) and all(_same(left[k], right[k], tol) for k in left)
+    if isinstance(left, float) or isinstance(right, float):
+        if not isinstance(left, int | float) or not isinstance(right, int | float):
+            return False
+        return math.isclose(left, right, rel_tol=tol, abs_tol=tol)
+    return bool(left == right)
 
 
 # --- development comparison runner (protocol §5) ---------------------------------------
@@ -380,6 +400,8 @@ def run(raw: Path, processed: Path, output: Path, protocol_sha256: str) -> dict[
         refused.append(str(exc))
     fit_cutoff = date(2024, 7, 1)
     staged = output.parent / f".{output.name}.staging"
+    if staged.exists():  # left by an interrupted run; the output itself is never overwritten
+        shutil.rmtree(staged)
     staged.mkdir(parents=True)
     eligible = [e for e in examples if e.game_day < fit_cutoff]
     write_examples(staged / "examples.csv", eligible)

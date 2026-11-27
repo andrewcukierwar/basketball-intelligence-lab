@@ -1,5 +1,6 @@
 """Chronological lineage of margin-calibration examples (#136)."""
 
+import json
 from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -96,6 +97,27 @@ def test_normal_loading_path_rejects_late_parents_and_tampering(tmp_path: Path) 
         load_calibration(directory, date(2024, 10, 1), late)
     with pytest.raises(LineageError, match="not before its snapshot"):
         load_calibration(_artifact(tmp_path / "late", late), date(2024, 10, 1), late)
+    # An honest artifact whose parents block was rewritten to match the late registry is
+    # refused by the loader itself, through the example re-check.
+    forged = json.loads((directory / "calibration.json").read_text(encoding="utf-8"))
+    forged["parents"]["ei:x"]["outcomes_through"] = "2024-06-30"
+    tampered = tmp_path / "forged"
+    tampered.mkdir()
+    (tampered / "examples.csv").write_bytes((directory / "examples.csv").read_bytes())
+    _write_json(tampered / "calibration.json", forged)
+    with pytest.raises(LineageError, match="not before its snapshot"):
+        load_calibration(tampered, date(2024, 10, 1), late)
+    # A dropped parents block, or a post-cutoff row added to the examples, is refused too.
+    del forged["parents"]["ei:x"]
+    _write_json(tampered / "calibration.json", forged)
+    with pytest.raises(LineageError, match="recorded parents differ"):
+        load_calibration(tampered, date(2024, 10, 1), REGISTRY)
+    rows = (directory / "examples.csv").read_text(encoding="utf-8").splitlines()
+    extra = rows[1].split(",")
+    extra[2] = CUTOFF.isoformat()
+    (tampered / "examples.csv").write_text("\n".join([*rows, ",".join(extra)]) + "\n")
+    with pytest.raises(LineageError, match="not final by the fit cutoff"):
+        load_calibration(tampered, date(2024, 10, 1), REGISTRY)
 
     text = (directory / "examples.csv").read_text(encoding="utf-8").splitlines()
     first = text[1].split(",")
