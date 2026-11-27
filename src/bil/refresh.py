@@ -667,15 +667,38 @@ def _failure(origin: date | None, stage: str, error: BaseException, ids: Any) ->
     }
 
 
+def requested_inputs(
+    raw: Path,
+    processed: Path,
+    addendum: Path = ADDENDUM,
+    pins: Mapping[int, SeasonPin] = SEASON_PINS,
+    calibration: Path | None = None,
+) -> dict[str, Any]:
+    """What a load was asked to read, recorded when the load itself is refused."""
+    return {
+        "raw": str(raw),
+        "processed": str(processed),
+        "addendum": str(addendum),
+        "addendum_sha256": sha256_file(addendum) if addendum.is_file() else None,
+        "row_pins": {pins[s].label: pins[s].row_manifest_sha256 for s in ROW_SEASONS if s in pins},
+        "calibration": str(calibration) if calibration else None,
+    }
+
+
 def build(
-    root: Path, origins: Sequence[date], load: Callable[[], Inputs], **options: Any
+    root: Path,
+    origins: Sequence[date],
+    load: Callable[[], Inputs],
+    requested: Mapping[str, Any] | None = None,
+    **options: Any,
 ) -> tuple[list[dict[str, Any]], int]:
     """Load once and refresh each origin, recording one outcome per origin; returns
-    (outcomes, failures). A failure at one origin never stops the others."""
+    (outcomes, failures). A failure at one origin never stops the others. ``requested``
+    describes the inputs for the record of a refused load."""
     try:
         inputs = load()
     except Exception as error:
-        records = [record_outcome(root, _failure(o, "load", error, None)) for o in origins]
+        records = [record_outcome(root, _failure(o, "load", error, requested)) for o in origins]
         return records, len(records)
     outcomes, failures = [], 0
     for origin in origins:
@@ -914,6 +937,7 @@ def main() -> None:
             args.root,
             args.origin,
             load,
+            requested_inputs(args.raw, args.processed, calibration=args.calibration),
             checkpoints=None if args.no_checkpoints else args.root / CHECKPOINTS,
             accept_revision=args.accept_revision,
         )

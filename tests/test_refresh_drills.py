@@ -39,9 +39,10 @@ def test_a_load_failure_refuses_every_requested_origin(tmp_path: Path) -> None:
     def load() -> Inputs:
         raise ValueError("box log snapshot size mismatch")
 
-    records, failures = build(tmp_path, [CUTOFF, date(2021, 12, 1)], load)
+    records, failures = build(tmp_path, [CUTOFF, date(2021, 12, 1)], load, {"addendum": "x"})
     assert failures == 2 and [r["stage"] for r in outcomes(tmp_path)] == ["load", "load"]
     assert records[0]["reason"] == "box log snapshot size mismatch"
+    assert records[0]["inputs"] == {"addendum": "x"}
     assert artifacts(tmp_path) == []
 
 

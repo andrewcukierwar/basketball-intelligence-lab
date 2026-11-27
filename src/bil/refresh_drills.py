@@ -46,6 +46,7 @@ from bil.refresh import (
     current,
     load_inputs,
     refresh_origin,
+    requested_inputs,
     retire,
 )
 
@@ -105,6 +106,7 @@ def _refusal(root: Path, stage: str, expect: str) -> dict[str, Any]:
         and record.get("stage") == stage
         and expect in str(record.get("reason", ""))
         and bool(record.get("origin"))
+        and bool(record.get("inputs"))
         and not left,
     }
 
@@ -127,7 +129,12 @@ def run(raw: Path, processed: Path, out: Path) -> dict[str, Any]:
 
     root = out / "pin_digest_mismatch"
     bad = _addendum(out, flip)
-    build(root, [ORIGIN], _loader(raw, processed, root, addendum=bad))
+    build(
+        root,
+        [ORIGIN],
+        _loader(raw, processed, root, addendum=bad),
+        requested_inputs(raw, processed, bad),
+    )
     results["pin_digest_mismatch"] = _refusal(root, "load", "")
 
     # 2. A missing pinned snapshot refuses at load.
@@ -135,7 +142,13 @@ def run(raw: Path, processed: Path, out: Path) -> dict[str, Any]:
         config["box_logs"]["2024"]["snapshot"] = "snapshot-that-does-not-exist"
 
     root = out / "pin_missing"
-    build(root, [ORIGIN], _loader(raw, processed, root, addendum=_addendum(out, missing)))
+    gone = _addendum(out, missing)
+    build(
+        root,
+        [ORIGIN],
+        _loader(raw, processed, root, addendum=gone),
+        requested_inputs(raw, processed, gone),
+    )
     results["pin_missing"] = _refusal(root, "load", "snapshot-that-does-not-exist")
 
     # 3. A parent fit dated at the origin refuses before fitting.
@@ -150,7 +163,12 @@ def run(raw: Path, processed: Path, out: Path) -> dict[str, Any]:
         **SEASON_PINS,
         2024: replace(SEASON_PINS[2024], row_manifest_sha256="0" * 64),
     }
-    build(root, [ORIGIN], _loader(raw, processed, root, pins=pins))
+    build(
+        root,
+        [ORIGIN],
+        _loader(raw, processed, root, pins=pins),
+        requested_inputs(raw, processed, pins=pins),
+    )
     results["row_set_check"] = _refusal(root, "load", "")
 
     # 5. The #136 calibration is ineligible before its fit cutoff; load_calibration refuses.
