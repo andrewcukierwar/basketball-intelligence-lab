@@ -27,6 +27,7 @@ from numpy.typing import NDArray
 from bil.data.pilot_sources import sha256_file
 from bil.features.box import Appearance
 from bil.features.box_build import TEAM_LOG
+from bil.models.expected_impact import AS_OF_ARTIFACT
 from bil.models.expected_impact_outer import ADDENDUM, outer_logs, parse_config
 from bil.models.rapm.baseline import _peak_memory_mib
 from bil.models.rapm.multiseason import REPO_ROOT, SEASON_PINS, _git_head, _versions, _write_json
@@ -111,16 +112,32 @@ class Snapshot:
 
 
 def load_ratings(path: Path) -> list[Snapshot]:
+    """Load rating snapshots and the total each assigns to a player absent from its roster.
+
+    An as-of artifact (#135) states its per-side cold priors, which must agree within each
+    snapshot. A legacy artifact has none: its cold total is inferred from an exported row with
+    neither box history nor window possessions, or 0 when no such row exists. That inference
+    depends on which future players the global design held, so it is kept only to reproduce
+    the frozen #35/#36/#39/#42 artifacts.
+    """
     by_day: dict[str, dict[int, float]] = defaultdict(dict)
     cold: dict[str, float] = {}
     ids: dict[str, str] = {}
     with path.open(newline="", encoding="utf-8") as handle:
-        for row in csv.DictReader(handle):
+        reader = csv.DictReader(handle)
+        as_of = "artifact_version" in (reader.fieldnames or [])
+        for row in reader:
             key = row["as_of"]
             total = float(row["rating_total"])
             by_day[key][int(row["player_id"])] = total
             ids[key] = row["snapshot_id"]
-            if row["box_history"] == "False" and float(row["window_possessions"]) == 0:
+            if as_of:
+                if row["artifact_version"] != AS_OF_ARTIFACT:
+                    raise ValueError(f"unknown rating artifact {row['artifact_version']}")
+                stated = float(row["cold_offense"]) + float(row["cold_defense"])
+                if cold.setdefault(key, stated) != stated:
+                    raise ValueError(f"cold priors differ within the {key} snapshot")
+            elif row["box_history"] == "False" and float(row["window_possessions"]) == 0:
                 cold[key] = total
     return [Snapshot(date.fromisoformat(k), v, cold.get(k, 0.0), ids[k]) for k, v in by_day.items()]
 

@@ -531,3 +531,16 @@ V2 remains the event source of record.
   - **Possession builds.** New possession-source builds, including any future registered #133 validation, should use the rule.
   - **Frozen results.** Published results stay as recorded. Re-estimating them without the flagged possessions would be a new registered comparison.
 - **Links:** [#138](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/138), [#133](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/133), [ADR-0033](#adr-0033--do-not-adopt-the-v3-event-path-after-its-registered-validations-failed)
+
+## ADR-0035 — Versioned as-of Expected Impact rating artifact with explicit cold priors
+
+- **Date:** 2026-11-27
+- **Status:** Accepted.
+- **Evidence class:** Original (artifact contract), Inferred (frozen-artifact check). [Note](research/expected-impact-v1.md#as-of-rating-artifact-135).
+- **Decision:**
+  - **Contract.** New Expected Impact rating consumers use `ei-ratings-as-of-v2`. Its roster is the players eligible at the cutoff, those with completed box history or fit-window exposure. It also states per-side cold priors that the normal loader and team scorer use.
+  - **Frozen runners.** The frozen #35/#36/#39/#42 runners keep `ei-ratings-v1` and its inferred cold total, so their artifacts reproduce.
+- **Evidence:**
+  - **Synthetic regression.** Later identities change the v1 roster, digest and inferred cold total. They change nothing in v2.
+  - **Frozen artifacts.** In the frozen artifacts every non-eligible exported player carries the inferred cold total. Published margins are therefore unaffected, and only coverage reporting is.
+- **Links:** [#135](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/135), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), [ADR-0031](#adr-0031--expected-impact-v1-as-the-m5-integrated-reference)

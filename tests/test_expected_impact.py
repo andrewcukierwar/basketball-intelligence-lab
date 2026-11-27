@@ -6,16 +6,21 @@ import pytest
 
 from bil.features.box import Appearance
 from bil.models.expected_impact import (
+    AS_OF_ARTIFACT,
     SpmFit,
+    as_of_ratings,
     fit_informed,
+    predict_informed,
     prepare,
     ratings,
     spm_fit,
     spm_only,
+    write_ratings,
 )
 from bil.models.rapm.multiseason import Analysis, Rows, Scenario, build_matrix
 from bil.models.rapm.reference import Possession, fit_prior_rapm
 from bil.models.spm import CODES, LinearPrior
+from bil.models.team_outcomes import load_ratings, team_net
 
 FGA, STL = CODES.index("fga_per_36"), CODES.index("stl_per_36")
 CUTOFF = date(2021, 10, 1)
@@ -199,3 +204,167 @@ def test_spm_record_round_trip_and_spm_only_prediction():
     prediction = spm_only(a, prepared, scored)
     residual = prediction - rows.context[scored] @ prepared.gamma - expected_offset
     assert np.ptp(residual) == pytest.approx(0.0, abs=1e-9)
+
+
+# --- as-of roster and explicit cold priors (#135) ----------------------------------------
+
+FUTURE_ON_COURT, FUTURE_BOX_ONLY, UNKNOWN = 777, 888, 555
+
+
+def _with_future_identities(rows: Rows, appearances: list[Appearance]):
+    """Append one later possession with a new on-court player and a later box-only player."""
+    later = CUTOFF + timedelta(days=60)
+    n = len(rows)
+    game = int(rows.game.max()) + 1
+
+    def add(array, value):
+        return np.concatenate([array, np.asarray([value], dtype=array.dtype)])
+
+    extended = replace(
+        rows,
+        season=add(rows.season, 2021),
+        playoff=add(rows.playoff, False),
+        day=add(rows.day, later.toordinal()),
+        game=add(rows.game, game),
+        game_ids=(*rows.game_ids, f"g{game}"),
+        team_game=add(rows.team_game, game * 2),
+        possession_seq=add(rows.possession_seq, n),
+        period=add(rows.period, 1),
+        y=add(rows.y, 200.0),
+        offense=np.vstack([rows.offense, [1, 2, 3, 4, FUTURE_ON_COURT]]),
+        defense=np.vstack([rows.defense, [5, 6, 7, 8, 9]]),
+        context=np.vstack([rows.context, [0.5, 0.0]]),
+        no_livedata=add(rows.no_livedata, False),
+    )
+    box_only = Appearance.from_record(
+        {
+            "game_id": "0022199998",
+            "game_date": later,
+            "player_id": FUTURE_BOX_ONLY,
+            "team_id": 100,
+            "opp_team_id": 200,
+            "min": 30,
+            "fga": 12,
+            "stl": 2,
+        }
+    )
+    return extended, [*appearances, box_only]
+
+
+def _both(rows: Rows, appearances: list[Appearance]):
+    a, prepared, fit, legacy = snapshot(rows, appearances)
+    return a, prepared, fit, legacy, as_of_ratings(prepared, fit, a.design, CONFIG)
+
+
+def _scores(path, snaps) -> tuple[float, float, float]:
+    write_ratings(path, snaps)
+    (loaded,) = load_ratings(path)
+    net, cold_share = team_net({UNKNOWN: 48.0}, loaded)
+    return loaded.cold, net, cold_share
+
+
+def test_future_identities_cannot_change_an_as_of_rating_artifact(tmp_path):
+    rows, appearances = synthetic()
+    pre = rows.day < CUTOFF.toordinal()
+    earlier_only = replace(
+        rows,
+        **{
+            name: getattr(rows, name)[pre]
+            for name in (
+                "season",
+                "playoff",
+                "day",
+                "game",
+                "team_game",
+                "possession_seq",
+                "period",
+                "y",
+                "offense",
+                "defense",
+                "context",
+                "no_livedata",
+            )
+        },
+    )
+    future_rows, future_box = _with_future_identities(rows, appearances)
+    runs = {
+        "earlier_only": _both(earlier_only, appearances),
+        "base": _both(rows, appearances),
+        "future": _both(future_rows, future_box),
+    }
+    as_of = {name: run[4] for name, run in runs.items()}
+    legacy = {name: run[3] for name, run in runs.items()}
+
+    # The legacy export carries every globally indexed player, so later identities enter
+    # the earlier roster, its digest and the inferred cold total.
+    assert ROOKIE not in legacy["earlier_only"].player_ids
+    assert ROOKIE in legacy["base"].player_ids
+    assert FUTURE_ON_COURT in legacy["future"].player_ids
+    assert len({snap.snapshot_id for snap in legacy.values()}) == 3
+    legacy_cold = {
+        name: _scores(tmp_path / f"legacy-{name}.csv", [snap])[0] for name, snap in legacy.items()
+    }
+    assert legacy_cold["earlier_only"] == 0.0
+    assert legacy_cold["base"] == pytest.approx(-0.3)
+
+    # The as-of export is identical whichever future identities exist.
+    first = as_of["earlier_only"]
+    for snap in as_of.values():
+        assert snap.artifact_version == AS_OF_ARTIFACT
+        np.testing.assert_array_equal(snap.player_ids, first.player_ids)
+        np.testing.assert_allclose(snap.rating, first.rating, rtol=0, atol=1e-9)
+        np.testing.assert_array_equal(snap.cold, [-0.5, 0.2])
+        assert snap.coverage == first.coverage
+        assert snap.snapshot_id == first.snapshot_id
+    ids = set(first.player_ids.tolist())
+    assert {ROOKIE, FUTURE_ON_COURT, FUTURE_BOX_ONLY}.isdisjoint(ids) and 12 in ids
+    assert first.coverage == {
+        "players": 12,
+        "box_history_players": 11,
+        "no_history_players": 1,
+        "window_players": 12,
+    }
+    # Every rostered rating equals the legacy export's rating for that player.
+    for snap in legacy.values():
+        position = {int(p): i for i, p in enumerate(snap.player_ids)}
+        for i, player in enumerate(first.player_ids):
+            np.testing.assert_allclose(
+                first.rating[i], snap.rating[position[int(player)]], rtol=0, atol=1e-9
+            )
+
+    # The written artifact gives the same cold total and unknown-player score every time.
+    scores = {name: _scores(tmp_path / f"as-of-{name}.csv", [snap]) for name, snap in as_of.items()}
+    for cold, net, cold_share in scores.values():
+        assert (cold, net, cold_share) == (pytest.approx(-0.3), pytest.approx(-0.3), 0.2)
+
+    # Keyed realized-lineup predictions for the earlier scored rows are unchanged.
+    def keyed(run, frame: Rows) -> dict[tuple[int, int], float]:
+        a, prepared, fit, *_ = run
+        scored = np.flatnonzero(
+            (frame.day >= CUTOFF.toordinal())
+            & (frame.day < (CUTOFF + timedelta(days=30)).toordinal())
+        )
+        prediction = predict_informed(a, prepared, fit, scored)["ei"]
+        return {
+            (int(frame.game[i]), int(frame.possession_seq[i])): float(v)
+            for i, v in zip(scored, prediction, strict=True)
+        }
+
+    base, future = keyed(runs["base"], rows), keyed(runs["future"], future_rows)
+    assert base.keys() == future.keys()
+    np.testing.assert_allclose(list(base.values()), list(future.values()), rtol=0, atol=1e-9)
+
+
+def test_as_of_roster_without_no_history_members_still_states_cold_priors(tmp_path):
+    rows, appearances = synthetic()
+    # Give player 12 box lines, so every rostered player has history.
+    lines = [
+        replace(row, player_id="12")
+        for row in appearances
+        if row.player_id == "11" and row.game_date < CUTOFF
+    ]
+    *_, legacy, snap = _both(rows, [*appearances, *lines])
+    assert snap.coverage["no_history_players"] == 0
+    assert _scores(tmp_path / "as-of.csv", [snap])[0] == pytest.approx(-0.3)
+    with pytest.raises(ValueError, match="mix"):
+        write_ratings(tmp_path / "mixed.csv", [legacy, snap])
