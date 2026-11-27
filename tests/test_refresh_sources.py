@@ -24,6 +24,11 @@ from bil.refresh_sources import (
 A, B = "a" * 64, "b" * 64
 
 
+def done(*args, **kwargs) -> GameRecord:  # type: ignore[no-untyped-def]
+    """Content the source marks final."""
+    return GameRecord(*args, final=True, **kwargs)
+
+
 def at(text: str) -> datetime:
     return datetime.fromisoformat(text).replace(tzinfo=UTC)
 
@@ -34,8 +39,8 @@ def capture(cid: str, when: datetime | None, **games: GameRecord) -> Capture:
 
 def test_a_correction_available_after_the_origin_enters_only_later_origins() -> None:
     played = date(2024, 1, 3)
-    first = capture("c1", at("2024-01-05T12:00:00"), g=GameRecord(played, A))
-    fixed = capture("c2", at("2024-01-10T12:00:00"), g=GameRecord(played, B))
+    first = capture("c1", at("2024-01-05T12:00:00"), g=done(played, A))
+    fixed = capture("c2", at("2024-01-10T12:00:00"), g=done(played, B))
     before = resolve([first, fixed], date(2024, 1, 8), "strict_rolling")
     assert before.games == {"box_logs/2023:g": (1, A, "c1")}
     after = resolve([first, fixed], date(2024, 1, 11), "strict_rolling")
@@ -44,7 +49,7 @@ def test_a_correction_available_after_the_origin_enters_only_later_origins() -> 
     early = resolve([first, fixed], date(2024, 1, 5), "strict_rolling")
     assert early.games == {} and early.exclusions == {"available_at_or_after_cutoff": 1}
     # An unchanged later capture is not a new revision.
-    same = capture("c3", at("2024-01-12T12:00:00"), g=GameRecord(played, B))
+    same = capture("c3", at("2024-01-12T12:00:00"), g=done(played, B))
     assert resolve([first, fixed, same], date(2024, 1, 20), "strict_rolling").games == {
         "box_logs/2023:g": (2, B, "c2")
     }
@@ -52,7 +57,7 @@ def test_a_correction_available_after_the_origin_enters_only_later_origins() -> 
 
 def test_availability_must_be_strictly_before_the_eastern_midnight_cutoff() -> None:
     # Midnight Eastern at the start of 2024-01-05 is 05:00 UTC.
-    on = capture("c1", at("2024-01-05T05:00:00"), g=GameRecord(date(2024, 1, 3), A))
+    on = capture("c1", at("2024-01-05T05:00:00"), g=done(date(2024, 1, 3), A))
     assert resolve([on], date(2024, 1, 5), "strict_rolling").games == {}
     assert resolve([on], date(2024, 1, 6), "strict_rolling").games != {}
 
@@ -60,7 +65,7 @@ def test_availability_must_be_strictly_before_the_eastern_midnight_cutoff() -> N
 def test_a_game_finishing_after_eastern_midnight_keeps_its_official_date() -> None:
     # Official date 3 January; it finished at 00:30 Eastern on 4 January and was captured at
     # 01:00 Eastern.
-    late = GameRecord(date(2024, 1, 3), A, finalized_at=at("2024-01-04T05:30:00"))
+    late = done(date(2024, 1, 3), A, finalized_at=at("2024-01-04T05:30:00"))
     seen = capture("c1", at("2024-01-04T06:00:00"), g=late)
     next_day = resolve([seen], date(2024, 1, 4), "strict_rolling")
     assert next_day.games == {} and next_day.exclusions == {"available_at_or_after_cutoff": 1}
@@ -69,10 +74,10 @@ def test_a_game_finishing_after_eastern_midnight_keeps_its_official_date() -> No
         "box_logs/2023:g": (1, A, "c1")
     }
     # With no recorded finish time, the capture instant bounds it, and the result is the same.
-    bare = capture("c1", at("2024-01-04T06:00:00"), g=GameRecord(date(2024, 1, 3), A))
+    bare = capture("c1", at("2024-01-04T06:00:00"), g=done(date(2024, 1, 3), A))
     assert resolve([bare], date(2024, 1, 4), "strict_rolling").games == {}
     # Same-day games never enter, whatever their availability.
-    today = capture("c1", at("2024-01-03T06:00:00"), g=GameRecord(date(2024, 1, 4), A))
+    today = capture("c1", at("2024-01-03T06:00:00"), g=done(date(2024, 1, 4), A))
     assert resolve([today], date(2024, 1, 4), "strict_rolling").exclusions == {
         "same_or_later_played_date": 1
     }
@@ -80,30 +85,30 @@ def test_a_game_finishing_after_eastern_midnight_keeps_its_official_date() -> No
 
 def test_missing_or_ambiguous_times_refuse_the_game() -> None:
     played = date(2024, 1, 3)
-    known = capture("c1", at("2024-01-04T12:00:00"), g=GameRecord(played, A))
-    unknown = capture("c2", None, g=GameRecord(played, B))
+    known = capture("c1", at("2024-01-04T12:00:00"), g=done(played, A))
+    unknown = capture("c2", None, g=done(played, B))
     origin = date(2024, 1, 20)
     # A later capture with no time refuses the game, rather than falling back to revision 1.
     assert resolve([known, unknown], origin, "strict_rolling").exclusions == {
         "availability_unknown": 1
     }
-    naive = capture("c1", datetime(2024, 1, 4, 12), g=GameRecord(played, A))
+    naive = capture("c1", datetime(2024, 1, 4, 12), g=done(played, A))
     assert resolve([naive], origin, "strict_rolling").exclusions == {"time_ambiguous": 1}
-    after_capture = GameRecord(played, A, finalized_at=at("2024-01-05T00:00:00"))
+    after_capture = done(played, A, finalized_at=at("2024-01-05T00:00:00"))
     assert resolve(
         [capture("c1", at("2024-01-04T12:00:00"), g=after_capture)], origin, "strict_rolling"
     ).exclusions == {"time_ambiguous": 1}
-    undated = capture("c1", at("2024-01-04T12:00:00"), g=GameRecord(None, A))
+    undated = capture("c1", at("2024-01-04T12:00:00"), g=done(None, A))
     assert resolve([undated], origin, "strict_rolling").exclusions == {"played_date_unknown": 1}
-    moved = capture("c2", at("2024-01-06T12:00:00"), g=GameRecord(date(2024, 1, 2), B))
+    moved = capture("c2", at("2024-01-06T12:00:00"), g=done(date(2024, 1, 2), B))
     assert resolve([known, moved], origin, "strict_rolling").exclusions == {
         "played_date_ambiguous": 1
     }
 
 
 def test_captures_must_be_in_retrieval_order_and_modes_are_checked() -> None:
-    first = capture("c1", at("2024-01-05T12:00:00"), g=GameRecord(date(2024, 1, 3), A))
-    second = capture("c2", at("2024-01-04T12:00:00"), g=GameRecord(date(2024, 1, 3), B))
+    first = capture("c1", at("2024-01-05T12:00:00"), g=done(date(2024, 1, 3), A))
+    second = capture("c2", at("2024-01-04T12:00:00"), g=done(date(2024, 1, 3), B))
     with pytest.raises(SourceError, match="retrieval order"):
         resolve([first, second], date(2024, 1, 20), "strict_rolling")
     with pytest.raises(SourceError, match="exactly one pinned capture"):
@@ -116,9 +121,9 @@ def test_retrospective_resolution_uses_the_official_date_rule() -> None:
     pinned = capture(
         "pin",
         at("2024-07-01T00:00:00"),
-        g1=GameRecord(date(2024, 1, 3), A),
-        g2=GameRecord(date(2024, 1, 4), B),
-        g3=GameRecord(None, B),
+        g1=done(date(2024, 1, 3), A),
+        g2=done(date(2024, 1, 4), B),
+        g3=done(None, B),
     )
     found = resolve([pinned], date(2024, 1, 4), "retrospective")
     assert found.games == {"box_logs/2023:g1": (1, A, "pin")}
@@ -129,10 +134,8 @@ def test_retrospective_resolution_uses_the_official_date_rule() -> None:
 
 def test_record_and_digest_depend_only_on_selected_revisions() -> None:
     played = date(2024, 1, 3)
-    base = capture("c1", at("2024-01-04T12:00:00"), g=GameRecord(played, A))
-    more = capture(
-        "c1", at("2024-01-04T12:00:00"), g=GameRecord(played, A), h=GameRecord(date(2024, 2, 1), B)
-    )
+    base = capture("c1", at("2024-01-04T12:00:00"), g=done(played, A))
+    more = capture("c1", at("2024-01-04T12:00:00"), g=done(played, A), h=done(date(2024, 2, 1), B))
     one = resolve([base], date(2024, 1, 10), "strict_rolling")
     two = resolve([more], date(2024, 1, 10), "strict_rolling")
     assert one.digest() == two.digest() and one.exclusions != two.exclusions
@@ -165,3 +168,23 @@ def test_the_refresh_records_its_resolution_and_refuses_strict_mode(tmp_path: Pa
     assert summary["exclusions"]["same_or_later_played_date"] > 0
     with pytest.raises(RefreshError, match="strict resolution"):
         refresh_origin(tmp_path, CUTOFF, replace(refresh_inputs(), mode="strict_rolling"))
+
+
+def test_in_progress_content_never_enters_and_unknown_finality_refuses() -> None:
+    played = date(2024, 1, 3)
+    # A partial box score captured at 23:00 Eastern on the game date, then the final one after
+    # midnight. At origin 4 January the partial content must not be selected.
+    partial = capture("c1", at("2024-01-04T04:00:00"), g=GameRecord(played, B, final=False))
+    final = capture("c2", at("2024-01-04T15:00:00"), g=done(played, A))
+    early = resolve([partial, final], date(2024, 1, 4), "strict_rolling")
+    assert early.games == {} and early.exclusions == {"available_at_or_after_cutoff": 1}
+    assert resolve([partial, final], date(2024, 1, 5), "strict_rolling").games == {
+        "box_logs/2023:g": (1, A, "c2")
+    }
+    assert resolve([partial], date(2024, 1, 5), "strict_rolling").exclusions == {"never_final": 1}
+    unsure = capture("c1", at("2024-01-04T04:00:00"), g=GameRecord(played, A))
+    assert resolve([unsure], date(2024, 1, 5), "strict_rolling").exclusions == {
+        "finality_unknown": 1
+    }
+    # Retrospective pins were captured after the season and are not asked for finality.
+    assert resolve([unsure], date(2024, 1, 5), "retrospective").games != {}

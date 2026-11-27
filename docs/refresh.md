@@ -65,10 +65,12 @@ The digest covers only the selected revisions, not the exclusion counts, because
 
 ### Timing fields the pinned sources actually carry
 
-| Source | Official date | Finish time | Availability |
-| --- | --- | --- | --- |
-| NBA.com box-log snapshot | `game_date`, the Eastern official date | Not recorded | `retrieved_at` of the player and team logs in `snapshot.json`, a capture bound |
-| Possession row set (pilot) | `game_date` | Not recorded | `game_stream.available_at`, the latest `retrieved_at` of its sources (capture bound). The loaded rows do not keep it |
+| Source | Official date | Finish time | Finality | Availability |
+| --- | --- | --- | --- | --- |
+| NBA.com box-log snapshot | `game_date`, the Eastern official date | Not recorded | No per-game flag | `retrieved_at` of the player and team logs in `snapshot.json`, a capture bound |
+| Possession row set (pilot) | `game_date` | Not recorded | `complete` in the pilot `game_stream` table | `available_at` in the pilot `game_stream` table, the latest `retrieved_at` of its sources and a capture bound. It reaches model rows as `stream_available_at` |
+
+The loaded possession rows keep neither the pilot `complete` flag nor `available_at`. The box logs are believed to list only completed games, but that is **Inferred**, not recorded. Both adapters therefore leave finality unknown, which only retrospective resolution accepts.
 
 A **capture** is one pinned retrieval of a source. A game's revision increases whenever a later capture shows different content.
 
@@ -78,17 +80,19 @@ A **capture** is one pinned retrieval of a source. A game's revision increases w
 - **`strict_rolling`.** For live captures:
   - A revision is visible only if its capture was retrieved **strictly before** the cutoff. The game's latest visible revision is used.
   - The game must have an official date before `D`, and must have finished before the cutoff.
-  - **Conservative finish rule:** with no recorded finish time, the game is taken as finished no later than the capture that first showed its content.
+  - **Finality.** Only content the source marks final is a revision. A capture of a game in progress never enters, and a game whose captures never show final content is refused (`never_final`).
+  - **Conservative finish rule:** with no recorded finish time, final content is taken as finished no later than the capture that first showed it.
   - **Corrections.** A correction captured after the cutoff never enters that origin, but enters the first origin after its capture.
   - **Late games.** A game that ends after Eastern midnight keeps its official date. It enters at the first origin after the capture that shows it.
 - **Refusals.** These games are refused and counted, never guessed:
   - a game in any capture with no retrieval time (`availability_unknown`);
+  - a game in any capture with unknown finality (`finality_unknown`);
   - a non-UTC time, or a recorded finish later than its capture (`time_ambiguous`);
   - a missing official date (`played_date_unknown`);
   - official dates that disagree across captures (`played_date_ambiguous`).
 - **Order and retractions.** Captures of a source must be in retrieval order. A game absent from a later capture keeps its earlier revision: captures may be partial, so absence is not a retraction.
 - **`retrospective`.** For the pinned 2023–25 replay. Every replay snapshot was captured after its season, so strict resolution would select nothing at any in-season origin. Retrospective resolution:
-  - requires exactly one capture per source;
+  - requires exactly one capture per source, and does not ask for finality;
   - selects games whose official date is before `D`, which is the #36 rule.
 
 ### Limits of retrospective pins

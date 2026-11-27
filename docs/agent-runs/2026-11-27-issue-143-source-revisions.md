@@ -20,11 +20,12 @@ Resolve an immutable source revision per game for each refresh origin, and recor
   - `sources.json` and the manifest `source_resolution` summary are written;
   - `load_inputs` records the box-log capture instants;
   - `strict_rolling` is refused for the replay refresh.
-- **`tests/test_refresh_sources.py`.** 9 tests:
+- **`tests/test_refresh_sources.py`.** 10 tests:
   - a correction after the origin enters only later origins;
   - the strictly-before boundary;
   - a game finishing after midnight keeps its official date and is unavailable until captured;
   - unknown, naive, inconsistent and date-ambiguous times are refused;
+  - in-progress content never enters, and unknown finality refuses the game;
   - capture order and mode checks;
   - the retrospective rule;
   - the digest is independent of exclusion counts;
@@ -43,14 +44,25 @@ Resolve an immutable source revision per game for each refresh origin, and recor
 
 | Check | Actual result |
 | --- | --- |
-| `pytest -q tests/test_refresh_sources.py tests/test_refresh.py` | 14 passed |
+| `pytest -q tests/test_refresh_sources.py tests/test_refresh.py` | 15 passed |
 | Full suite, `ruff`, `ruff format`, `mypy src` | See PR |
 | `verify-frozen` on real pins | 10 of 10 reproduced, gap 0.0. 7.0 s, 1.9 GiB. 2024-02-01 resolves 5,329 games |
+
+## Review
+
+An independent Haiku review found one blocker. The strict rule treated any captured content as final, so a partial box score captured before midnight could enter the next origin. Strict resolution now requires a per-content finality flag: in-progress content is never a revision, and unknown finality refuses the game. A test covers both.
+
+The review also flagged:
+
+- the doc's field naming, now clarified;
+- an empty-rows guard, now added;
+- raw-byte hashing without a dtype prefix. This is conservative, and is left as is.
 
 ## Blockers and remaining risks
 
 - The possession capture time (`game_stream.available_at`) is dropped by the loaded rows. Retrospective mode does not need it, but strict possession resolution will need it read.
 - Multi-capture assembly and live capture are not built.
+- Neither adapter has a finality signal yet: the pilot's `complete` flag is not loaded, and the box logs have no flag. Live strict resolution must supply one.
 
 ## Next actions
 
