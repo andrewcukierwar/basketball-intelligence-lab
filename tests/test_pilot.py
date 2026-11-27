@@ -383,6 +383,13 @@ def test_conflicting_score_leaves_possession_unresolved(tmp_path: Path) -> None:
     assert reasons == ["unassigned_dead_ball", "unresolved"]
     assert all(row["possession_seq"] is None for row in rows["score_allocation"])
 
+    # The made shot is also a control event; the rule does not count a score conflict again.
+    report: dict[str, int] = {}
+    ruled = normalize_game(
+        game, roster, raw, events, possessions, "fixture", report=report, control_ownership=True
+    )
+    assert ruled["possession"] == rows["possession"] and report["control_conflicts"] == 0
+
     flagged = normalize_game(game, roster, raw, events, possessions, "fixture", frozenset({1}))
     assert [row["status"] for row in flagged["possession"]][:2] == ["unresolved", "unresolved"]
 

@@ -407,10 +407,13 @@ def score_and_events(
     artifact_id: str,
     control_ownership: bool = False,
     control_conflicts: set[int] | None = None,
+    score_conflicts: set[int] | None = None,
 ) -> tuple[list[Row], list[Row], list[Row], Counter[int], set[int], list[CreditChoice]]:
     teams = game.home_id, game.away_id
     if control_conflicts is None:
         control_conflicts = set()
+    if score_conflicts is None:
+        score_conflicts = set()
     conflicts: set[int] = set()
     choices: list[CreditChoice] = []
     free_throw_clocks = {
@@ -534,6 +537,7 @@ def score_and_events(
                 # The parser gave this possession to the other team. Leave its offense
                 # unresolved rather than credit points against the recorded control.
                 conflicts.add(poss[0])
+                score_conflicts.add(poss[0])
             credit = item
             if event.event_type == 3:
                 trigger = getattr(event, "event_for_efficiency_stats", event)
@@ -697,7 +701,8 @@ def normalize_game(
 
     With ``control_ownership`` (#138), an accepted possession that contains a decisive
     field-goal attempt or turnover by the other team is left unresolved, as one that a score
-    contradicts is. ``report`` then counts those possessions as ``control_conflicts``.
+    contradicts is. ``report`` then counts as ``control_conflicts`` the possessions left
+    unresolved by control evidence alone, not those a score also contradicts.
     """
     scope: Row = {"game_id": game.game_id, "stream_revision": 1}
     teams = game.home_id, game.away_id
@@ -705,6 +710,7 @@ def normalize_game(
     lineups, stints, by_stint, minutes = build_stints(events, scope, teams)
     unresolved, keep = set(unresolved_possessions), set[int]()
     control_conflicts: set[int] = set()
+    score_conflicts: set[int] = set()
     for _ in range(4):
         possessions, by_poss, relabeled = build_possessions(
             parsed_possessions,
@@ -726,6 +732,7 @@ def normalize_game(
             artifact_id,
             control_ownership,
             control_conflicts,
+            score_conflicts,
         )
         if not conflicts:
             break
@@ -740,7 +747,8 @@ def normalize_game(
         report["relabeled_possessions"] = len(relabeled)
         if control_ownership:
             report["control_conflicts"] = sum(
-                possessions[seq - 1]["status"] == "unresolved" for seq in control_conflicts
+                possessions[seq - 1]["status"] == "unresolved"
+                for seq in control_conflicts - score_conflicts
             )
     reconcile_minutes(minutes, roster, truncated_boundaries(events, raw))
     for choice, option in choose_box_credits(pm, roster, choices):
