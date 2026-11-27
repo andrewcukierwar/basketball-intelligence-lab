@@ -254,7 +254,9 @@ def load_calibration(
 def _same(left: Any, right: Any, tol: float = 1e-9) -> bool:
     """Structural equality with a relative tolerance on floats (refits differ in the last bit)."""
     if isinstance(left, dict) and isinstance(right, dict):
-        return bool(left.keys() == right.keys()) and all(_same(left[k], right[k], tol) for k in left)
+        return bool(left.keys() == right.keys()) and all(
+            _same(left[k], right[k], tol) for k in left
+        )
     if isinstance(left, float) or isinstance(right, float):
         if not isinstance(left, int | float) or not isinstance(right, int | float):
             return False
