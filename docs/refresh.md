@@ -181,3 +181,112 @@ This run was made once, from a clean tree at `9494ce7`, after the review fixes. 
 The daily job (3.9 s) is about 70% input loading (2.7 s). A weekly cadence costs the same per refresh with 7 times fewer refreshes. Neither is near the budget.
 
 **Freshness.** Replay measures compute freshness only: seconds from job start to publish. Live freshness adds the wait for final captures after the night's last game, which replay cannot measure. Daily is therefore supported for **compute**; live capture latency is for #44 to measure.
+
+## Failure outcomes, drills and recovery runbook (#145)
+
+### Outcome log
+
+`build` loads the inputs once, then refreshes each origin. It writes one record per origin to `ROOT/_outcomes.jsonl` and continues after ordinary errors. It exits nonzero if any origin failed to complete. On an interrupt (`KeyboardInterrupt`, or `SystemExit` from a signal handler), it records what happened and marks the remaining origins as `skipped` before stopping.
+
+| Field | Content |
+| --- | --- |
+| `at` | UTC time of the record |
+| `origin` | The requested origin |
+| `outcome` | `published`, `unchanged`, `refused`, `unconfirmed`, `skipped` (after an interrupt) or `retired` |
+| `stage` | Refusals use `load`, `origin`, `parent`, `calibration`, `sources`, `revision` or `publish`. Unconfirmed outcomes use `publish_sync` or `revision_log` and include the artifact ID. |
+| `error`, `reason` | The exception class and message |
+| `inputs` | The loaded input digests, on refusals and publications. For a refused load, the requested sources: raw and processed roots, addendum path and SHA-256, row-set pins and calibration |
+| `artifact_id`, `checkpoint`, `path` | For publications |
+
+**Pre-fit checks.** Every refresh checks before fitting that:
+
+- the SPM parent is dated strictly before the origin (`parent`);
+- an optional #136 calibration (`--calibration DIR`) passes `load_calibration` at the origin (`calibration`).
+
+**Calibration as a parent.** An eligible calibration becomes a parent: its SHA-256 is in the artifact identity and its fit cutoff is in the manifest. Refreshes with and without a calibration are therefore different artifacts.
+
+### Drills (`refresh-drills-issue-145-v3`, 2026-11-27)
+
+`python -m bil.refresh_drills RAW PROCESSED OUT` was run once from a clean tree at `339d156` after the review fixes, in 7.4 s. Each drill uses its own root. A refusal drill passes only if all of these hold:
+
+- the last outcome record is a refusal at the expected stage;
+- the reason contains the expected cause (for example "unexpected input digest" or "differs from the pin");
+- the record carries the origin and inputs;
+- no artifact or staging directory remains.
+
+Earlier runs: `-v1` recorded no inputs for load refusals, and `-v2` accepted any load failure for two drills. Both were superseded.
+
+| Drill | Injected failure | Outcome | Pass |
+| --- | --- | --- | --- |
+| Baseline | None. 2025-01-15 with the #136 calibration | Published. The calibration `d7d2f613…` is a parent, with fit cutoff 2024-07-01 | yes |
+| Mismatched pin digest | The 2024 box-log pin SHA-256 is reversed in a copy of the addendum | Refused at `load` (`ValueError`, unexpected input digest of `snapshot.json`) | yes |
+| Missing pin | The 2024 box-log snapshot name points to a missing directory | Refused at `load` (`FileNotFoundError`) | yes |
+| Late parent fit | The SPM origin is set to the refresh origin | Refused at `parent` (`RefreshError`, late parent) | yes |
+| Failed row-set check | The 2024–25 row-manifest pin is set to zeros | Refused at `load` (`ValueError`, manifest differs from the pin) | yes |
+| Ineligible calibration | The #136 calibration at origin 2024-01-15 | Refused at `calibration` (`LineageError`, fit cutoff follows the origin) | yes |
+| Interrupted publish | Writing ratings raises midway | Refused at `publish` (`OSError`) with nothing left. A rerun published the baseline artifact ID | yes |
+| Rollback | A revision with offense ridge 9,000 is accepted, then retired | `current` moved to the revision, then back to the original, which is byte-identical to the baseline | yes |
+| Cold rebuild | New root, no checkpoints | Same artifact ID and byte-identical ratings as the baseline | yes |
+
+### Recovery runbook
+
+**Daily run.**
+
+```sh
+uv run python -m bil.refresh build RAW PROCESSED ROOT --origin YYYY-MM-DD [--calibration DIR]
+```
+
+Check the exit code, then read the new lines of `ROOT/_outcomes.jsonl`.
+
+**Refusal by stage:**
+
+- **`load`.** A pin digest, a missing file or a row-set check failed. Restore the pinned file from the raw capture, or re-capture into a new snapshot directory with a new pin. Never edit a pin to match changed data.
+- **`parent`.** A fitted parent is not dated before the origin. Use a parent fit with an earlier origin.
+- **`calibration`.** For origins before the calibration's fit cutoff, run without `--calibration` or use an earlier calibration. A tampered calibration must be rebuilt by `bil.models.calibration_lineage`.
+- **`sources`.** The source resolution was refused, for example `strict_rolling` on replay pins (#143).
+- **`revision`.** Read `ROOT/<origin>/revisions.jsonl`. Accept a real correction with `--accept-revision`, or fix the input that changed. An `inconsistent` record means an existing artifact fails its own manifest: retire it, never edit it.
+- **`publish`.** Rerun the same command. A refusal at this stage happened before the atomic rename. A kill or power loss can leave a `.<id>.staging-*` directory, which is safe to delete.
+- **`publish_sync`.** The complete directory was renamed into place, and the sync was interrupted or failed. Rerun to verify the artifact and sync the directory. If it was a revision and its publication record is absent, retire it before retrying. Use a fresh root if you need to rebuild and retire the same ID again.
+- **`revision_log`.** The complete artifact reached disk, and the publication record could not be confirmed. Inspect the log and validate the active artifact with `current`. If the publication record is absent, retire the artifact before retrying.
+
+**Resume.** Rerun the same command. Published origins are no-ops (`unchanged`), and checkpoints make rebuilds of lost artifacts cheap.
+
+**Roll back to the last good artifact:**
+
+```sh
+uv run python -m bil.refresh retire ROOT --origin YYYY-MM-DD --artifact ID --reason "..."
+```
+
+Pass the full lowercase artifact ID. This moves the artifact to `ROOT/_retired/<origin>/` and records it in `revisions.jsonl` and `_outcomes.jsonl`. Inconsistent artifacts can be retired too. An occupied retirement destination is preserved.
+
+Consumers read `bil.refresh.current(ROOT, origin)`:
+
+- **No artifact.** It returns `None`.
+- **Current artifact.** It returns the most recent active publication named in `revisions.jsonl`, or the original publication if no active revision remains.
+- **Refusals.** An inconsistent artifact, unreadable revision log, or a revision without a publication record makes the origin unreadable until recovery. This also applies when the unrecorded revision is the only artifact left.
+
+**Rebuild cold.** Build into a new root with `--no-checkpoints` and compare artifact IDs with the old root: identical inputs and code version give identical IDs. A `VERSION` change, such as v3 (#144) to v4 (#145), gives every origin a new identity. Rebuild it into a new root: in an existing root, the guard refuses it as a revision. For the #36 block cutoffs, `verify-frozen` checks values against the published export.
+
+**Measured capacity (#144, `-v2`).**
+
+| Measure | Value |
+| --- | --- |
+| Cold daily job | 3.9 s wall at 1.8 GiB |
+| Per-origin refresh | At most 0.6 s |
+| Checkpoints at retention 14 | 9.9 MB |
+
+**Single writer.** Run one refresh per `ROOT` at a time. The artifact directory and audit logs commit separately. After a kill or power loss, use `current` and inspect both logs and `_retired` before retrying.
+
+### Hand-off notes for #44 (daily shadow test)
+
+- **What to consume.** Read `current(ROOT, D)` per origin. The manifest carries everything the receipt must timestamp: input digests, source resolution digest, parents (SPM, penalty selection, calibration), configuration, code commit, and `sources.json` with per-game revisions. `ratings.csv` carries the snapshot ID.
+- **What is not built.**
+  - The refresh is replay-only. It refuses origins on or after 2025-07-01 and outside 2023–25, and refuses `strict_rolling`.
+  - A prospective shadow run needs live captures with finality and availability. That means loading the pilot `game_stream.complete` and `available_at`, or capturing box logs with a completion check.
+  - It also needs multi-capture input assembly, and a registered extension of `check_origin` for the prospective season.
+- **What to measure.**
+  - Live freshness: capture latency after the last game plus the 3.9 s compute.
+  - Drift and alerts.
+  - Coverage against the registered denominator, reconciled from `_outcomes.jsonl` (missed origins, retries, refusals) and `revisions.jsonl` (late revisions).
+- **Independent receipts.** Artifact IDs and outcome records are produced by the same process. #44's independent timestamping must hash `manifest.json` and `ratings.csv` into an external receipt before outcomes mature.
+- **Rollback during an injected failure.** This is exercised here on replay. #44 repeats it live, with backup and restore of `ROOT`.
