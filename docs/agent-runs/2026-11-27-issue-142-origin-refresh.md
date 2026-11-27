@@ -33,7 +33,7 @@ Build one origin's EI snapshot from pinned inputs, with cutoff enforcement, cont
 | Check | Actual result |
 | --- | --- |
 | `uv run pytest -q tests/test_refresh.py` | 4 passed |
-| Full `pytest`, `ruff`, `ruff format`, `mypy src` | See PR |
+| Full `pytest`, `ruff`, `ruff format`, `mypy src` | 479 passed, 3 skipped. All clean |
 | `verify-frozen` on real pins (enforced 1e-6 gate) | 10 of 10 #36 block snapshots reproduced: roster gap 0.0, no refreshed player missing from the export, and 2,077 off-roster player-cutoffs equal to the cold prior (gap 0.0). 6.7 s, 1.9 GiB peak |
 | Rerun `build --origin 2023-12-01` | `created: false`, same ID, nothing rewritten |
 
@@ -46,7 +46,7 @@ An independent Haiku review flagged one blocker: `verify-frozen` reported the ga
 - overclaims about kill and power-loss cleanup;
 - a code-version identity that was not stated.
 
-All were fixed. Enforcing the gate showed that the legacy export lists every indexed player, so the check now also verifies the off-roster players against the cold prior.
+All were fixed. A focused re-review then found that NaN gaps were masked by `max`. Every gap is now checked, with NaN tests added. The macOS `F_FULLFSYNC` limit is documented and not fixed. Enforcing the gate showed that the legacy export lists every indexed player, so the check now also verifies the off-roster players against the cold prior.
 
 ## Blockers and remaining risks
 

@@ -39,6 +39,7 @@ The output is a #135 as-of rating artifact (`ratings.csv`, `ei-ratings-as-of-v2`
 - **Atomicity.** Writing happens in a dot-prefixed staging directory beside the target. The files are fsynced, then a single `rename` publishes the directory.
   - A run interrupted by an exception removes its staging directory and leaves no artifact.
   - A killed process or a power loss can leave a `.<id>.staging-*` directory. It is never read as an artifact and can be deleted.
+  - On macOS, `fsync` does not flush the drive cache (`F_FULLFSYNC` would). Power-loss durability there is best effort, and a damaged manifest is refused, never repaired.
 - **Code changes.** The identity covers the module `VERSION`, not the model code, so a code change that changes outputs must bump `VERSION`. Otherwise a rerun returns the earlier artifact.
 
 ## Verification (2026-11-27)

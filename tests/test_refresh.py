@@ -123,3 +123,7 @@ def test_frozen_comparison_checks_the_roster_values_and_the_cold_prior() -> None
     off = compare_ratings(ours, {**legacy, 2: (0.5, 0.25 + 1e-5)}, cold)
     assert not off["reproduced"] and off["max_abs_rating_gap"] > 1e-6
     assert not compare_ratings(ours, {}, cold)["reproduced"]  # missing cutoff
+    nan = float("nan")
+    assert not compare_ratings({**ours, 2: (nan, 0.25)}, legacy, cold)["reproduced"]
+    assert not compare_ratings(ours, {**legacy, 2: (0.5, nan)}, cold)["reproduced"]
+    assert not compare_ratings(ours, {**legacy, 3: (nan, -0.1)}, cold)["reproduced"]

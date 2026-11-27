@@ -25,6 +25,7 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import os
 import shutil
 from collections.abc import Callable, Mapping, Sequence
@@ -173,12 +174,12 @@ def publish(
         target = parent / aid
         try:
             os.rename(stage, target)
-            _fsync_dir(parent)
         except OSError:
             # Another run published the same ID first. Accept it only if it is consistent.
             if existing(root, origin, aid) is None:
                 raise
             return Published(target, aid, False)
+        _fsync_dir(parent)
         return Published(target, aid, True)
     finally:
         if stage.exists():
@@ -306,12 +307,13 @@ def compare_ratings(
         "off_roster_at_cold_prior": len(dropped),
         "max_abs_rating_gap": max(gaps, default=float("inf")),
         "max_abs_cold_gap": max(cold_gaps, default=0.0),
+        "non_finite": sum(not math.isfinite(g) for g in gaps + cold_gaps),
     }
+    # Python's max skips a NaN that is not first, so every gap is checked, not only the max.
     report["reproduced"] = (
         bool(common)
         and report["missing_from_published"] == 0
-        and report["max_abs_rating_gap"] <= FROZEN_TOLERANCE
-        and report["max_abs_cold_gap"] <= FROZEN_TOLERANCE
+        and all(g <= FROZEN_TOLERANCE for g in gaps + cold_gaps)
     )
     return report
 
@@ -384,7 +386,7 @@ def main() -> None:
         report = verify_frozen(args.root, args.processed, inputs)
         print(json.dumps(report, indent=2))
         failed = sorted(cutoff for cutoff, entry in report.items() if not entry["reproduced"])
-        if failed:
+        if failed or not report:
             raise SystemExit(f"frozen rebuild did not reproduce issue-36-v1 at {failed}")
 
 
