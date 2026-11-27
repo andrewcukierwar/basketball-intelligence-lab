@@ -1,0 +1,149 @@
+{
+  "code_commit": "107accbe5cc3ab2f2d12e8eb32bdfa2e3c5fd872",
+  "cold_rating": -0.375704,
+  "cutoffs": {
+    "2025-P": "2026-04-18",
+    "2025-R1": "2025-10-01",
+    "2025-R2": "2025-12-01",
+    "2025-R3": "2026-02-01",
+    "2025-R4": "2026-04-01"
+  },
+  "games": {
+    "2024": {
+      "excluded_prefix": 83,
+      "malformed": 0,
+      "unflagged_home": 5
+    },
+    "2025": {
+      "excluded_prefix": 82,
+      "malformed": 0,
+      "unflagged_home": 5
+    }
+  },
+  "inputs": {
+    "box_logs": {
+      "2024": {
+        "snapshot": "issue-52-v1",
+        "snapshot_sha256": "e34398e754233203759f1e6ab8866dc6b61a11afcc3166b6ac9c099feca8b9bd",
+        "source_rows": 28110,
+        "unflagged_home_appearances": 118
+      },
+      "2025": {
+        "snapshot": "r1-v1",
+        "snapshot_sha256": "af41b22a07c83674dd56e26f2a3a26d4bc8acb4e1fb97c12e700416bf9a52d1b",
+        "source_rows": 28572,
+        "unflagged_home_appearances": 102
+      }
+    },
+    "rows": {
+      "2023-24": {
+        "coverage": {
+          "playoffs": {
+            "eligible_possessions": 12940,
+            "games_accepted": 81,
+            "games_in_reconciliation": 82,
+            "games_quarantined_not_scored": 1
+          },
+          "regular": {
+            "eligible_possessions": 210324,
+            "games_accepted": 1218,
+            "games_in_reconciliation": 1230,
+            "games_quarantined_not_scored": 12
+          }
+        },
+        "pilot_build": "issue-52-v1",
+        "pilot_digests": {
+          "event.parquet": "9e1c3ee3c386127e788df606fdb93c7c2a12fec153caa0e4bc27acc72944d2cb",
+          "game.parquet": "66ecc6681440c67e52290d7b1d3b3db882023e2bb4fc8d4048bc9aa87b44f8b6",
+          "score_allocation.parquet": "7476b5601a46db3f3670124aa9f1353282875387933b1bc640477655ea7df5f8"
+        },
+        "pilot_manifest_sha256": "1d6ba700ea75ddd984f9b306e018af84c5b90ec8937ad598ec31c20daba3176a",
+        "row_manifest_sha256": "38bb59c537164df9a2a1cb8042fa51187737deadeadfd216b3edce1e1877bad4",
+        "row_set": "issue-93-v1",
+        "row_set_build_id": "aebfd53045d1c7f3369e04a774362cc73454bf578ee68b3cd632c33bbaf934c6",
+        "row_set_digests": {
+          "game_reconciliation.parquet": "8f29a6b85f2df793f1e2927ef257672278f379ba6ad06d573baaf797862c1409",
+          "model_row.parquet": "c08d168aeececf2e1d2e169f578a8f4bd591bd29d05ecc86b7d0b17f03af6c9f"
+        },
+        "timing_audit": {
+          "event_and_allocation_scores_disagree": 0,
+          "own_points_sequenced_after_end": 0,
+          "own_points_sequenced_before_start": 0,
+          "possessions_without_prior_event": 1299,
+          "prior_clock_after_first_event": 0,
+          "prior_clock_before_period_start_clamped": 0
+        }
+      },
+      "2024-25": {
+        "coverage": {
+          "playoffs": {
+            "eligible_possessions": 13785,
+            "games_accepted": 84,
+            "games_in_reconciliation": 84,
+            "games_quarantined_not_scored": 0
+          },
+          "regular": {
+            "eligible_possessions": 208155,
+            "games_accepted": 1205,
+            "games_in_reconciliation": 1230,
+            "games_quarantined_not_scored": 25
+          }
+        },
+        "pilot_build": "issue-52-v1",
+        "pilot_digests": {
+          "event.parquet": "9cf6f8534050da1f80810fabcafcdb207a8fe598e18b51840f88a9a048dbf804",
+          "game.parquet": "396dff1cfd959417f692af7411bdd2f47767167d5fc3d6c98c0588cadc054780",
+          "score_allocation.parquet": "123d54ef943b14981a2e382f381b37127c1a9699679f7fe6303e8bcf6460b91c"
+        },
+        "pilot_manifest_sha256": "ad72e1f0b1b97a8ef95f1c040d353254588d9d9ecf40e3064a7b7e131d195978",
+        "row_manifest_sha256": "86b0ea747849b70c7321806599f25a8864301f16026b79b4be1daa1f5202972b",
+        "row_set": "issue-93-v1",
+        "row_set_build_id": "b151a69ca9f23df51f9597a2d90d073e96a04a7d152a7171eb4cb94fe6837d29",
+        "row_set_digests": {
+          "game_reconciliation.parquet": "d207b9b871fdcc67b92a2b0068bd98c2bbfdef6d44dc0a9b686c12a1b6d35c04",
+          "model_row.parquet": "0ab1787037010f4ffa49345fcf9506a60016811798d8fdb3fe96c5dae7d6b6a1"
+        },
+        "timing_audit": {
+          "event_and_allocation_scores_disagree": 0,
+          "own_points_sequenced_after_end": 0,
+          "own_points_sequenced_before_start": 0,
+          "possessions_without_prior_event": 1288,
+          "prior_clock_after_first_event": 0,
+          "prior_clock_before_period_start_clamped": 0
+        }
+      },
+      "_assemble_seconds": 0.33230404229834676
+    },
+    "spm": "final_contiguous_fit.json"
+  },
+  "outputs": {
+    "predictions.csv": "12219e022d61577171afa9edb6934d1675f1694c4f7bd293ecdbe97c9c68b9b9",
+    "ratings.csv": "0fbbe4fd407d8f624f727cb9513ba4da6640e761e2544ec7a5f987697f743ae2"
+  },
+  "peak_memory_mib": 1196.90625,
+  "private_outputs": [
+    "ratings.csv",
+    "predictions.csv"
+  ],
+  "protocol": {
+    "addendum_commit": "470df09de0679888cdf72c094bc744a9eb4b916e",
+    "committed": true,
+    "head_commit": "107accbe5cc3ab2f2d12e8eb32bdfa2e3c5fd872",
+    "path": "docs/research/r1-confirmatory-protocol.md",
+    "sha256": "2159cc24344ffe30344fe04992cdfd8d52bbc5097abeb5c64839653422ddd045",
+    "working_tree_clean": true
+  },
+  "role": "holdout",
+  "runtime_seconds": 3.232450374867767,
+  "schema_version": 1,
+  "scored_games": 1310,
+  "season": 2025,
+  "version": "r1-v2",
+  "versions": {
+    "duckdb": "2.0.1",
+    "numpy": "2.5.5",
+    "python": "3.14.3",
+    "scipy": "1.18.1"
+  },
+  "working_tree_clean_at_end": true
+}

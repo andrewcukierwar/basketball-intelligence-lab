@@ -24,3 +24,7 @@ Recorded and committed before any 2025–26 row is parsed. Only the capture byte
 | 2026-11-27T03:35:10Z | `8e6aa50` | `python -m bil.models.r1_holdout score data/raw data/processed/r1/holdout-2025` | **Refused before reading any outcome** (`HoldoutLocked`): the labelled digest above sat mid-row in the table, and the runner requires a line that ends with the label and digest. No results were written. The standalone line follows. | none |
 
 pre-score manifest sha256: 7d49a867d40f73dea1810d75c91950a63ace9bf8b51e4cce0c2f27bd70704b0e
+
+| UTC time | Commit | Command | What was read | Output digest |
+| --- | --- | --- | --- | --- |
+| 2026-11-27T03:35:25Z | `755c1e9` | `python -m bil.models.r1_holdout score data/raw data/processed/r1/holdout-2025` | Outcomes of the 1,310 predicted games, after the guard, the labelled log line and the manifest checks passed. Run once. **C1 `ei_worse`** (regular-season margin RMSE Δ +0.714, game 95% [0.494, 0.943], week 95% [0.432, 0.982]). **C2 `ei_worse`** (win log loss Δ +0.0404, game [0.0276, 0.0541], week [0.0262, 0.0541]). Aggregates are copied to `docs/research/r1-holdout/`. | results.json `677977d410e4240fc4d897157f336d8dc040ba9a92016c1f692091e2345e7dfd` |
