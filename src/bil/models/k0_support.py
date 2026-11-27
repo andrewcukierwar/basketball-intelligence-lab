@@ -245,6 +245,26 @@ def outcome_scores(
     return {"possessions": int(index.size), "games": int(np.unique(games).size), "scores": scores}
 
 
+def outcome_slices(
+    rows: Rows, index: Indices, teams: Indices, predictions: Mapping[str, Values], minimum: Indices
+) -> dict[str, Any]:
+    coverage = {
+        "all": np.ones(index.size, dtype=np.bool_),
+        "all_ten_250": minimum >= MIN_EXPOSURE,
+        "any_unseen": minimum == 0,
+        "any_below_250": minimum < MIN_EXPOSURE,
+    }
+    return {
+        name: outcome_scores(
+            rows,
+            index[keep],
+            teams[index[keep]],
+            {model: p[keep] for model, p in predictions.items()},
+        )
+        for name, keep in coverage.items()
+    }
+
+
 def fit_season(
     rows: Rows, design: Design, teams: Indices, season: int, stage: Path
 ) -> tuple[dict[str, Any], Indices, dict[str, Values], dict[str, RatingScores], Indices]:
@@ -268,20 +288,27 @@ def fit_season(
         effects[name], _, _, fits[name] = ridge(rows, design, index, 16000)
     if not all(np.isfinite(prediction).all() for prediction in predictions.values()):
         raise ValueError(f"nonfinite predictions in {season}")
+    ids = np.asarray(design.player_ids, dtype=np.int64)
+    prediction_path = stage / f"predictions_{season}.npz"
     np.savez_compressed(
-        stage / f"predictions_{season}.npz",
+        prediction_path,
         candidates=list(predictions),
         game_id=np.asarray(rows.game_ids)[rows.game[outcome]],
         possession_seq=rows.possession_seq[outcome],
         points_per_100=np.column_stack(list(predictions.values())),
+        player_id=ids,
+        rating_names=list(effects),
+        offense_effects=np.stack([effect[: design.size] for effect in effects.values()]),
+        defense_effects=np.stack([effect[design.size :] for effect in effects.values()]),
     )
+    prediction_digest = sha256_file(prediction_path)
 
-    ids = np.asarray(design.player_ids, dtype=np.int64)
     role_scores = {}
     outcome_minimum = np.full(outcome.size, np.iinfo(np.int64).max, dtype=np.int64)
     report: dict[str, Any] = {
         "inputs": {n: block_metadata(rows, teams, i) for n, i in blocks.items()},
         "fits": fits,
+        "predictions_sha256": prediction_digest,
         "roles": {},
     }
     for side, (role, own, other) in enumerate(
@@ -406,7 +433,7 @@ def run(processed: Path, output: Path, protocol_sha256: str) -> dict[str, Any]:
         published = load_labels(target_dir / "evaluation_labels.csv", evaluation=True)[frozen]
         results: dict[str, Any] = {"seasons": {}, "pooled": {"ratings": {}}}
         for season, (report, index, predictions, ratings, minimum) in seasons.items():
-            report["outcomes"] = outcome_scores(rows, index, teams[index], predictions)
+            report["outcomes"] = outcome_slices(rows, index, teams, predictions, minimum)
             for side, role in enumerate(ROLES):
                 report["roles"][role]["published_k0_descriptive"] = published_agreement(
                     ratings[role], published, season, side
@@ -418,22 +445,17 @@ def run(processed: Path, output: Path, protocol_sha256: str) -> dict[str, Any]:
             for name in seasons[SEASONS[0]][2]
         }
         minimum = np.concatenate([s[4] for s in seasons.values()])
-        coverage = {
-            "all": np.ones(index.size, dtype=np.bool_),
-            "all_ten_250": minimum >= MIN_EXPOSURE,
-            "any_unseen": minimum == 0,
-            "any_below_250": minimum < MIN_EXPOSURE,
-        }
-        for name, keep in coverage.items():
-            results["pooled"][name] = outcome_scores(
-                rows, index[keep], teams[index[keep]], {n: p[keep] for n, p in predictions.items()}
-            )
+        results["pooled"].update(outcome_slices(rows, index, teams, predictions, minimum))
         for role in ROLES:
             results["pooled"]["ratings"][role] = pooled_ratings(
                 [s[3][role] for s in seasons.values()]
             )
         _write_json(stage / "results.json", results)
         head, clean = _git_head()
+        outputs = {path.name: sha256_file(path) for path in sorted(stage.iterdir())}
+        for season, (report, _, _, _, _) in seasons.items():
+            if outputs[f"predictions_{season}.npz"] != report["predictions_sha256"]:
+                raise ValueError(f"predictions for {season} changed after scoring")
         manifest = {
             "version": VERSION,
             "evidence_tier": "retrospective_capture_bound",
@@ -444,7 +466,7 @@ def run(processed: Path, output: Path, protocol_sha256: str) -> dict[str, Any]:
             "target_digests": target_digests,
             "versions": _versions(),
             "runtime_seconds": time.perf_counter() - start,
-            "outputs": {path.name: sha256_file(path) for path in sorted(stage.iterdir())},
+            "outputs": outputs,
         }
         _write_json(stage / "manifest.json", manifest)
         stage.rename(output)

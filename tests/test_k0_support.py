@@ -5,7 +5,14 @@ from pathlib import Path
 import numpy as np
 from test_rapm_targets import synthetic
 
-from bil.models.k0_support import fit_season, lineup_slots, schedule_blocks, supported_contrasts
+from bil.data.pilot_sources import sha256_file
+from bil.models.k0_support import (
+    fit_season,
+    lineup_slots,
+    outcome_slices,
+    schedule_blocks,
+    supported_contrasts,
+)
 from bil.models.rapm.multiseason import build_matrix
 
 
@@ -24,7 +31,14 @@ def test_schedule_and_frozen_outcomes_use_disjoint_games(tmp_path: Path) -> None
     assert set(report["roles"]) == {"offense", "defense"}
     assert minimum.shape == index.shape
     assert np.array_equal(index, partitions["outcome"])
-    with np.load(tmp_path / "predictions_2021.npz") as frozen:
+    prediction_path = tmp_path / "predictions_2021.npz"
+    assert report["predictions_sha256"] == sha256_file(prediction_path)
+    slices = outcome_slices(rows, index, teams, predictions, minimum)
+    assert slices["all"]["possessions"] == index.size
+    assert (
+        slices["all_ten_250"]["possessions"] + slices["any_below_250"]["possessions"] == index.size
+    )
+    with np.load(prediction_path) as frozen:
         assert np.array_equal(frozen["possession_seq"], rows.possession_seq[index])
         assert np.array_equal(frozen["points_per_100"], np.column_stack(list(predictions.values())))
 
