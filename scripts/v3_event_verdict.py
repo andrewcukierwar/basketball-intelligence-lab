@@ -27,6 +27,7 @@ MIN_SLOT_EVENTS = 200  # L6b: player slots by V2 type with at least this many ev
 MIN_SLOT_AGREEMENT = 0.99  # L6b
 MAX_UNMATCHED_EVENTS = 0.001  # L6c: V2-only and V3-only event shares
 MAX_DELTA_CHANGE = 0.5  # L7, (points per 100)^2
+MIN_CLASS_AGREEMENT = 0.99  # L8 (revision 2): parser class of revision-2 events vs V2
 PRIMARY = "rapm_context"
 
 
@@ -82,6 +83,15 @@ def season_limits(
         and all(v["agreement"] >= MIN_SLOT_AGREEMENT for v in slots.values())
         and all(v <= MAX_UNMATCHED_EVENTS for v in unmatched.values()),
     }
+    revised = fields.get("revised_events")
+    if revised is not None:  # revision-2 outputs only
+        agreement = revised["class_agreement"]
+        results["L8"] = {
+            "matched": revised["matched"],
+            "class_agreement": agreement,
+            "pass": (agreement is None and not revised["v3_rows"])
+            or (agreement is not None and agreement >= MIN_CLASS_AGREEMENT),
+        }
     return results
 
 

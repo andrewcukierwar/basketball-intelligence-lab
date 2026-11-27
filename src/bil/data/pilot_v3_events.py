@@ -282,33 +282,56 @@ SHOT_TYPES = {"Made Shot": 1, "Missed Shot": 2}
 HOME_VOTE_SHARE = 0.9
 MIN_HOME_VOTES = 5
 DOUBLE_FOULS = {(6, 10), (6, 16)}  # double personal, double technical
-# Fallback codes for V3 subtypes missing from the table (#133 revision). The parser reads a
-# foul's class (technical, double, flagrant), not its exact code, and a turnover's code only
-# as zero ("no turnover") or not.
+# Revision 2 (#133): V3 pairs absent from the 2020–23 table. A documented rule pair first,
+# then a class-preserving fallback that quarantines whenever the class is unclear.
+RULE_TYPES = {
+    # NBA rule from 2023–24: in-game flopping is a non-unsportsmanlike technical foul.
+    ("Foul", "Flopping"): (6, 12),
+}
 TECHNICAL_FOUL = (6, 11)
 PERSONAL_FOUL = (6, 1)
 TURNOVER = (5, 1)
-TECHNICAL_TEXT = re.compile(r"T\.FOUL", re.IGNORECASE)
+TECHNICAL_TEXT = re.compile(r"(?<![A-Z.])T\.FOUL", re.IGNORECASE)
+PERSONAL_TEXT = re.compile(r"(?<![A-Z.])P\.FOUL", re.IGNORECASE)
 UNSAFE_FOUL = re.compile(r"FLAGRANT|DOUBLE", re.IGNORECASE)
+TECHNICAL_CODES = {11, 12, 13, 18, 19, 25, 30}  # pbpstats Foul.is_technical
 
 
 def fallback_code(action_type: str, sub_type: str, text: str) -> tuple[int, int] | None:
     """A class-preserving code for an unknown foul or turnover subtype, or None.
 
-    Fouls: technical when the subtype names a technical or the text carries ``T.FOUL``;
-    flagrant and double fouls have no safe class and stay unmapped; any other is personal.
-    Turnovers: any named subtype is a real turnover. An unnamed turnover maps to "no
-    turnover" in the table, so it never reaches here.
+    pbpstats reads a foul's class, and a turnover's code only as zero ("no turnover") or
+    not. Fouls: none when a flagrant or double foul is named; technical when the subtype
+    names a technical or the text carries the ``T.FOUL`` marker; personal only with the
+    ``P.FOUL`` marker; otherwise none, because inbound, block, take and similar classes
+    change free-throw and possession handling. Turnovers: any named subtype is a real one.
     """
     if action_type == "Foul":
         if UNSAFE_FOUL.search(sub_type) or UNSAFE_FOUL.search(text):
             return None
         if "technical" in sub_type.lower() or TECHNICAL_TEXT.search(text):
             return TECHNICAL_FOUL
-        return PERSONAL_FOUL
+        if PERSONAL_TEXT.search(text):
+            return PERSONAL_FOUL
+        return None
     if action_type == "Turnover" and sub_type:
         return TURNOVER
     return None
+
+
+def event_class(event_type: int, action_type: int) -> str:
+    """The class the parser distinguishes for a foul or turnover code (revision-2 limit L8)."""
+    if event_type == 6:
+        if action_type in TECHNICAL_CODES:
+            return "technical"
+        if action_type in {10, 16}:
+            return "double"
+        if action_type in {14, 15}:
+            return "flagrant"
+        return "personal" if action_type == 1 else f"foul_{action_type}"
+    if event_type == 5:
+        return "no_turnover" if action_type == 0 else "turnover"
+    return f"type_{event_type}"
 
 
 @dataclass(frozen=True)
@@ -529,6 +552,8 @@ def rebuild_game(
         key = (primary.fields["actionType"].strip(), primary.fields["subType"].strip())
         if key in ACTION_TYPES:
             event_type, action_type = ACTION_TYPES[key]
+        elif key in RULE_TYPES:
+            event_type, action_type = RULE_TYPES[key]
         elif key[0] in SHOT_TYPES:
             # Shot action codes are read by neither pbpstats nor the build, so a new shot
             # subtype becomes a plain made or missed field goal. Any other unknown pair is not.

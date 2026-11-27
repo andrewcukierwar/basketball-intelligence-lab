@@ -17,8 +17,15 @@ from typing import Any
 
 import duckdb
 
-from bil.data.pilot_inputs import GameIssue, _v2_field, archive_rows, box_scores, event_games
-from bil.data.pilot_v3_events import ACTION_TYPES, SHOT_TYPES, fallback_code, rebuilt_games
+from bil.data.pilot_inputs import (
+    GameIssue,
+    _v2_field,
+    archive_rows,
+    box_scores,
+    event_games,
+    nba_game_id,
+)
+from bil.data.pilot_v3_events import ACTION_TYPES, SHOT_TYPES, event_class, rebuilt_games
 
 ROW_KEY = (
     "period, offense_team_id, list_sort(offense_player_ids) AS offense, "
@@ -141,14 +148,15 @@ def _normal(column: str, value: str) -> object:
     return None if parsed in (None, 0, "") else parsed
 
 
-def fallback_events(v3_path: Path) -> dict[str, int]:
-    """V3 rows whose (actionType, subType) the table lacks, by pair and fallback code."""
-    found: Counter[str] = Counter()
+def revised_events(v3_path: Path) -> dict[tuple[str, int], tuple[str, str]]:
+    """Typed V3 rows coded by revision 2 (rule pairs and fallback), by game and number."""
+    found: dict[tuple[str, int], tuple[str, str]] = {}
     for row in archive_rows(v3_path):
         key = (row["actionType"].strip(), row["subType"].strip())
         if key[0] and key not in ACTION_TYPES and key[0] not in SHOT_TYPES:
-            found[f"{key} -> {fallback_code(*key, row['description'])}"] += 1
-    return dict(sorted(found.items()))
+            number = int(float(row["actionNumber"]))
+            found.setdefault((nba_game_id(row["gameId"]), number), key)
+    return found
 
 
 def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
@@ -169,11 +177,13 @@ def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
     # Player slots by V2 event type, over events where either side names a player.
     slot_events: Counter[tuple[str, str]] = Counter()
     slot_mismatches: Counter[tuple[str, str]] = Counter()
-    fallbacks: dict[str, dict[str, int]] = {}
+    revised_pairs: Counter[str] = Counter()
+    revised_codes: Counter[str] = Counter()
+    revised_disagree: Counter[str] = Counter()
     for suffix in ("", "_po"):
-        fallbacks[suffix or "_regular"] = fallback_events(
-            snapshot / f"nbastatsv3{suffix}_{season}.tar.xz"
-        )
+        revised = revised_events(snapshot / f"nbastatsv3{suffix}_{season}.tar.xz")
+        for pair in revised.values():
+            revised_pairs[str(pair)] += 1
         real = dict(event_games(snapshot / f"nbastats{suffix}_{season}.tar.xz"))
         rebuilt = rebuilt_games(
             snapshot / f"nbastatsv3{suffix}_{season}.tar.xz",
@@ -197,6 +207,15 @@ def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
             events["v3"] += len(v3)
             for number in v2.keys() & v3.keys():
                 events["matched"] += 1
+                if (game_id, number) in revised:
+                    left_class, right_class = (
+                        event_class(int(row["EVENTMSGTYPE"]), int(row["EVENTMSGACTIONTYPE"]))
+                        for row in (v2[number], v3[number])
+                    )
+                    label = f"{revised[game_id, number]} v2={left_class} v3={right_class}"
+                    revised_codes[label] += 1
+                    revised_disagree["events"] += 1
+                    revised_disagree["disagreements"] += left_class != right_class
                 kind = v2[number]["EVENTMSGTYPE"]
                 for column in FIELDS:
                     left = _normal(column, v2[number][column])
@@ -225,7 +244,17 @@ def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
         "events_v3_only_share": events["v3_only"] / events["v3"] if events["v3"] else None,
         "field_agreement": {c: 1 - mismatches[c] / matched if matched else None for c in FIELDS},
         "player_agreement_by_type": by_type,
-        "fallback_events": fallbacks,
+        "revised_events": {
+            "v3_rows": dict(sorted(revised_pairs.items())),
+            "matched": revised_disagree["events"],
+            "class_disagreements": revised_disagree["disagreements"],
+            "class_agreement": (
+                1 - revised_disagree["disagreements"] / revised_disagree["events"]
+                if revised_disagree["events"]
+                else None
+            ),
+            "by_class": dict(sorted(revised_codes.items())),
+        },
     }
 
 

@@ -18,6 +18,7 @@ from bil.data.pilot_v3_events import (
     V3_FIELDS,
     Action,
     derive_home,
+    event_class,
     fallback_code,
     flagrant_events,
     rebuild_game,
@@ -270,11 +271,20 @@ def test_flagrant_events_and_games_without_livedata(tmp_path: Path) -> None:
 def test_unknown_foul_and_turnover_subtypes_keep_their_class() -> None:
     assert fallback_code("Foul", "Novel", "X Novel T.FOUL (P1.PN)") == (6, 11)
     assert fallback_code("Foul", "Novel Technical", "X") == (6, 11)
-    assert fallback_code("Foul", "Novel", "X NOVEL.FOUL (P2.T1)") == (6, 1)
+    assert fallback_code("Foul", "Novel", "X P.FOUL (P2.T1)") == (6, 1)
+    assert fallback_code("Foul", "Novel", "X NOVEL.FOUL (P2.T1)") is None
+    assert fallback_code("Foul", "Novel", "X C.P.FOUL (P2.T1)") is None
+    assert fallback_code("Foul", "Novel", "X SHOOT.FOUL (P2.T1)") is None
     assert fallback_code("Foul", "Novel", "X FLAGRANT.FOUL.TYPE1") is None
     assert fallback_code("Foul", "Double Novel", "X") is None
     assert fallback_code("Turnover", "Novel Turnover", "X") == (5, 1)
     assert fallback_code("Violation", "Novel", "X") is None
+    assert event_class(6, 12) == event_class(6, 11) == "technical"
+    assert (event_class(6, 1), event_class(6, 5), event_class(5, 0)) == (
+        "personal",
+        "foul_5",
+        "no_turnover",
+    )
     game = [*GAME, v3(15, 23, "Foul", "Novel", A1, AWAY, "A1 Novel T.FOUL (P1.PN)")]
     events = rebuild_game("0022200001", game, LIVE, (HOME, AWAY), HOME, ROSTER)
     foul = next(e.fields for e in events if e.fields["EVENTNUM"] == "23")
