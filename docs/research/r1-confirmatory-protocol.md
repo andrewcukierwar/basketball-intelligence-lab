@@ -189,8 +189,16 @@ Warnings are not acted on. The limits and rules cannot change after capture. If 
    - the box build and the gate, which read outcomes for reconciliation;
    - box appearances strictly before each cutoff, and the pre-holdout rows.
 2. **Fit and freeze.** For R1, R2, R3, R4, P and the final snapshot in turn, fit and write the ratings snapshot. Then write the team-game pregame predictions, with no outcomes joined. The digests of all of these go in a pre-score manifest.
-3. **Log and commit.** The access log (§5) is committed with the pre-score manifest digest.
-4. **Score.** The scoring step refuses to run unless the committed log contains that digest and the prediction files match it.
+3. **Log and commit.** The access log (§5) is committed with a line `pre-score manifest sha256: <digest>`. The entry also records:
+   - that `predict` read the team log's margins only as team-rating history, from earlier days;
+   - that scored games enter the predictions with no margin;
+   - that `ei_oracle_minutes` uses each game's realized minutes, not its score, as in #39. It is a reported diagnostic only.
+4. **Score.** The scoring step runs once. It refuses before reading any outcome unless:
+   - the guard passes;
+   - the committed log carries that labelled line;
+   - the prediction files match the manifest.
+
+   It also refuses if results already exist.
 5. **D1.** After scoring results are committed, D1 runs under §3.3.
 
 ## 5. Access log and artifacts

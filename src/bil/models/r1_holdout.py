@@ -24,6 +24,7 @@ import csv
 import hashlib
 import json
 import os
+import shutil
 import time
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -62,6 +63,7 @@ from bil.models.expected_impact import (
 from bil.models.expected_impact_outer import ADDENDUM, outer_logs, parse_config
 from bil.models.rapm.baseline import _peak_memory_mib
 from bil.models.rapm.multiseason import (
+    FROZEN_BLOCK,
     HOLDOUT_START_YEAR,
     REPO_ROOT,
     SEASON_PINS,
@@ -117,14 +119,57 @@ class HoldoutLocked(RuntimeError):
     """A 2025–26 read was attempted without a frozen, committed protocol."""
 
 
+# Files the frozen block's "protocols" digests name (protocol §0 and frozen block).
+PROTOCOL_FILES = {
+    "validation_strategy": "docs/validation-strategy.md",
+    "expected_impact_protocol": "docs/research/expected-impact-protocol.md",
+    "outer_addendum": "docs/research/expected-impact-outer-addendum.md",
+    "team_outcomes_protocol": "docs/research/team-outcomes-protocol.md",
+    "epm_agreement_protocol": "docs/research/epm-agreement-protocol.md",
+    "season_quality": "docs/research/season-quality-2017-2025.md",
+}
+LOG_LABEL = "pre-score manifest sha256: "
+
+
+def frozen_block() -> dict[str, Any]:
+    match = FROZEN_BLOCK.search(PROTOCOL.read_text(encoding="utf-8"))
+    if match is None:
+        raise HoldoutLocked("the R1 protocol has no frozen-config block")
+    block: dict[str, Any] = json.loads(match.group(1))
+    return block
+
+
 def guard() -> dict[str, Any]:
-    """Lift the holdout guard, or refuse. A digest from the command line cannot lift it."""
+    """Lift the holdout guard, or refuse. A digest from the command line cannot lift it.
+
+    The protocol must match ``R1_PROTOCOL_SHA256``, be committed unchanged on a clean tree,
+    be frozen, and every protocol its frozen block names must still match its digest.
+    """
     if R1_PROTOCOL_SHA256 is None:
         raise HoldoutLocked("R1 is not frozen: R1_PROTOCOL_SHA256 is unset")
     try:
-        return verify_addendum(PROTOCOL, R1_PROTOCOL_SHA256, REPO_ROOT)
+        freeze = verify_addendum(PROTOCOL, R1_PROTOCOL_SHA256, REPO_ROOT)
     except AddendumError as exc:
         raise HoldoutLocked(str(exc)) from exc
+    block = frozen_block()
+    if block.get("status") != "frozen":
+        raise HoldoutLocked("the R1 protocol's frozen block is not marked frozen")
+    for key, relative in PROTOCOL_FILES.items():
+        if sha256_file(REPO_ROOT / relative) != block["protocols"][key]:
+            raise HoldoutLocked(f"{relative} differs from the digest the R1 protocol registers")
+    return freeze
+
+
+def _snapshot_dir(raw: Path, season: int, snapshot: str) -> Path:
+    """A pinned snapshot directory; names are plain and seasons map to their own label."""
+    if not snapshot or any(c in snapshot for c in "/\\") or snapshot.startswith("."):
+        raise ValueError(f"invalid snapshot name {snapshot!r}")
+    if season == HOLDOUT_SEASON:
+        guard()
+        return raw / season_label(season) / snapshot
+    if season > HOLDOUT_SEASON:
+        raise ValueError(f"R1 reads no season after {HOLDOUT_SEASON}")
+    return raw / SEASON_PINS[season].label / snapshot
 
 
 def season_label(season: int) -> str:
@@ -152,9 +197,16 @@ def _fetch(url: str, path: Path, attempts: int = 3) -> str:
 
 def capture_holdout_logs(raw: Path, snapshot: str = "r1-v1") -> dict[str, Any]:
     """Capture and pin the 2025–26 NBA.com player and team logs. Nothing is parsed here."""
-    guard()
-    directory = raw / season_label(HOLDOUT_SEASON) / snapshot
+    directory = _snapshot_dir(raw, HOLDOUT_SEASON, snapshot)
     directory.mkdir(mode=0o700, parents=True)
+    try:
+        return _capture(directory, snapshot)
+    except BaseException:
+        shutil.rmtree(directory)  # a retry starts from an empty directory (§4.1)
+        raise
+
+
+def _capture(directory: Path, snapshot: str) -> dict[str, Any]:
     end = HOLDOUT_SEASON + 1
     record: dict[str, Any] = {
         "schema_version": 1,
@@ -193,8 +245,7 @@ def box_logs(
         return rows, profile, raw / SEASON_PINS[season].label / pin["snapshot"]
     if season != HOLDOUT_SEASON:
         raise ValueError(f"R1 reads no season after {HOLDOUT_SEASON}")
-    guard()
-    directory = raw / season_label(season) / pin["snapshot"]
+    directory = _snapshot_dir(raw, season, pin["snapshot"])
     record = read_json(checked_file(directory / "snapshot.json", pin["sha256"]))
     if record["season_start_year"] != season or record["attribution"] != ATTRIBUTION:
         raise ValueError("box log snapshot season or attribution mismatch")
@@ -367,7 +418,8 @@ def predict(raw: Path, processed: Path, output: Path, season: int) -> dict[str, 
         preseason = [s for s in loaded if s.as_of == blocks[0].cutoff]
         index = BoxIndex.build(logs)
         teams = sorted({t for g in games for t in g.teams})
-        target = [g for g in games if g.season == season]
+        # Scored games carry no outcome; the team rating sees only earlier days' margins.
+        target = [replace(g, margin=None) for g in games if g.season == season]
         inputs = build_inputs(target, games, index, {season: in_season}, pace, teams, team_config)
         early = build_inputs(target, games, index, {season: preseason}, pace, teams, team_config)
         predictions = predict_all(inputs, calib)
@@ -425,11 +477,7 @@ def _load_predictions(output: Path, raw: Path) -> tuple[Inputs, dict[str, Any], 
             raise ValueError(f"{name} differs from the pre-score manifest")
     season = manifest["season"]
     pin = manifest["inputs"]["box_logs"][str(season)]
-    if season == HOLDOUT_SEASON:
-        guard()
-        directory = raw / season_label(season) / pin["snapshot"]
-    else:
-        directory = raw / SEASON_PINS[season].label / pin["snapshot"]
+    directory = _snapshot_dir(raw, season, pin["snapshot"])
     outcomes = {g.game_id: g for g in team_games(directory, season)[0]}
     with (output / "predictions.csv").open(newline="", encoding="utf-8") as handle:
         records = list(csv.DictReader(handle))
@@ -456,15 +504,26 @@ def _subset(
     return Inputs(games, {}, detail), {n: (m[mask], p[mask]) for n, (m, p) in predictions.items()}
 
 
+def access_logged(log: str, digest: str) -> bool:
+    """The log must carry a labelled line naming the pre-score manifest digest."""
+    return any(line.strip().endswith(f"{LOG_LABEL}{digest}") for line in log.splitlines())
+
+
 def score_run(raw: Path, output: Path, seal: bool) -> dict[str, Any]:
     """Score frozen predictions. The holdout needs its pre-score digest in the committed log."""
     manifest_digest = sha256_file(output / "manifest.json")
+    if (output / "results.json").exists():
+        raise FileExistsError("this run is already scored (single shot)")
+    if (
+        json.loads((output / "manifest.json").read_text(encoding="utf-8"))["season"]
+        == HOLDOUT_SEASON
+    ):
+        guard()
+        logged = _run_git(REPO_ROOT, "show", f"HEAD:{ACCESS_LOG.relative_to(REPO_ROOT)}")
+        if logged.returncode != 0 or not access_logged(logged.stdout, manifest_digest):
+            raise HoldoutLocked("the committed access log lacks the pre-score manifest digest")
     inputs, predictions, manifest = _load_predictions(output, raw)
     season = manifest["season"]
-    if season == HOLDOUT_SEASON:
-        logged = _run_git(REPO_ROOT, "show", f"HEAD:{ACCESS_LOG.relative_to(REPO_ROOT)}")
-        if logged.returncode != 0 or manifest_digest not in logged.stdout:
-            raise HoldoutLocked("the committed access log lacks the pre-score manifest digest")
     scored = score(inputs, predictions, [season])
     regular = scored["regular"]["pooled"]["ei_minus"]["team_rating"]
     r3 = date.fromisoformat(manifest["cutoffs"][f"{season}-R3"])
