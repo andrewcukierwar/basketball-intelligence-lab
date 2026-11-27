@@ -201,7 +201,12 @@ def refreshes(
                     t0 = time.perf_counter()
                     p = prepare(analysis, cutoff, spm, logs[season - 1], logs[season])
                     cache[cutoff] = (p, time.perf_counter() - t0)
+                    hit = False
+                else:
+                    hit = True
                 p, prep_seconds = cache[cutoff]
+                # Each refresh counts its preparation once: measured on a miss, added on a hit.
+                prep_seconds = prep_seconds if hit else 0.0
                 scored_mask = in_season & (rows.day >= cutoff.toordinal())
                 if end is not None:
                     scored_mask &= rows.day < end.toordinal()

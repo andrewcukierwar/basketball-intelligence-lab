@@ -1,12 +1,12 @@
 # EI refresh cadence against the daily team rating: results (#129)
 
 - **Issue:** [#129](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/129). [Registered protocol](refresh-cadence-protocol.md), SHA-256 `340eaede…69c2aa`.
-- **Decision:** [ADR-0038](../DECISIONS.md#adr-0038--refresh-ei-at-least-weekly-on-court-refresh-closes-the-team-level-gap).
+- **Decision:** [ADR-0038](../DECISIONS.md#adr-0038--refresh-ei-at-least-weekly-on-court-refresh-removes-the-detectable-team-level-gap).
 - **Evidence class:** **Experimental** development evidence on 2023–25, which #36, #39 and #136 had already examined.
   - #42's 2025–26 result stands as recorded.
   - No 2025–26 data was read, and nothing is compared with EPM.
 - **Run:** `issue-129-v1`, from a clean worktree at commit `28246bb`.
-  - Runtime 168 s and peak memory 1.95 GiB, on 2,621 scored games.
+  - Runtime 167 s and peak memory 1.95 GiB, on 2,621 scored games.
   - Private outputs are under `data/processed/team_outcomes/issue-129-v1`.
 
 ## Verdict
@@ -15,7 +15,8 @@
 
 - **Daily refresh.** It improves EI's pooled 2023–25 regular-season margin RMSE by **−0.142 [−0.191, −0.091]** against block refresh. Its difference from the daily team rating falls from +0.142 to **−0.000 [−0.104, +0.098]**.
 - **Weekly refresh.** It gives −0.127 [−0.175, −0.077] against block, and +0.014 [−0.093, +0.116] against the daily team rating.
-- **Where the gain comes from.** It is entirely **on-court** refresh. Box refresh of the prior alone (`daily_box`) changes RMSE by +0.000 [−0.029, +0.029].
+- **Where the gain comes from.** At game level it comes from **on-court** refresh. Box refresh of the prior alone (`daily_box`) changes RMSE by +0.000 [−0.029, +0.029].
+- **What "closes" means.** The criterion is met, but it does not show equivalence. Against the daily team rating, both finer cadences are inconclusive, with intervals about ±0.10 wide. The weekly week-cluster interval [−0.115, +0.148] still includes the original +0.142 gap. Read the result as "no longer detectably worse", not as "equal".
 
 ## Reproduction
 
@@ -76,7 +77,11 @@ This also confirms the #135 inference that the v2 artifact leaves the published 
 | Daily minus team daily | +0.127 |
 | Block minus team daily | +0.155 |
 
-**Matched cadence.** At matched cadence, EI is better than the team rating at block refresh, and level with it at weekly refresh. The team rating loses more from slow refresh (+0.324) than EI does (+0.142). The #39 gap is therefore a cadence artifact.
+**Matched cadence.** At matched cadence, EI is better than the team rating at block refresh, and level with it at weekly refresh. The team rating loses more from slow refresh (+0.324) than EI does (+0.142). This suggests the #39 gap is largely a cadence effect.
+
+Two caveats apply:
+- The team ridge (half-life 60, ridge 4) was tuned for daily refit, so `team_block` may be penalized beyond cadence alone.
+- The original `block_vs_team_daily` week interval [−0.021, +0.298] already included zero.
 
 ## Possession outcomes
 
@@ -89,7 +94,7 @@ Possession MSE on all 2023–25 rows, regular season and playoffs pooled (445,20
 | `daily` | 14251.16 | −3.17 [−4.26, −2.10] | [−4.51, −1.91] |
 | `daily_box` | 14253.49 | −0.84 [−1.66, −0.02] | [−1.62, −0.08] |
 
-At possession level, box refresh helps a little. On-court refresh (`daily − daily_box`) adds −2.34 [−3.00, −1.66]. The regular-season gains are larger in 2023–24 (daily −4.17) than in 2024–25 (−2.43).
+At possession level, box refresh does help a little, unlike at game level. On-court refresh (`daily − daily_box`) adds −2.34 [−3.00, −1.66]. The regular-season gains are larger in 2023–24 (daily −4.17) than in 2024–25 (−2.43).
 
 ## Season-aware calibration (strict, 2024–25)
 
@@ -135,14 +140,20 @@ The season-aware calibration improves every model slightly and leaves the cadenc
 
 A finer refresh rates newly active players sooner.
 
-**Runtime.** These are the times on this machine. A full EI refresh (window, context, prior and ridge) takes 0.45 to 0.49 s on average, with a maximum of 0.66 s. A box-only refresh takes 0.14 s. A daily season of about 210 refreshes is therefore about 95 s of fitting.
+**Runtime.** The per-refresh figures in `results.json` count the preparation step twice whenever a refresh computed it: once in the elapsed time and again as the cached preparation time. The recorded 0.45 to 0.49 s mean for a full refresh, and 0.14 s for box-only, are therefore overstatements. The runner is fixed for future runs.
 
-These times include the shared preparation step for every cadence. The per-cadence totals in `results.json` therefore double-count it when cadences share a date, and the 168 s wall clock is the authoritative total.
+The authoritative bound is the wall clock. 167 s covered everything:
+- loading;
+- 503 full refits;
+- 416 box-only refreshes;
+- scoring.
+
+That is under 0.33 s per full refit, and under about 70 s for a daily season of around 210 refreshes. This was measured on this machine.
 
 ## Interpretation
 
-- **Cause of the #39 gap.** EI's deficit to the daily team rating in #39 is explained by stale on-court information. It is not explained by the prior or by box refresh.
-- **Recommendation.** Refreshing the on-court ridge at least weekly removes it. This supports a daily or weekly cadence for the #43 refresh, with sub-second refit cost.
+- **Cause of the #39 gap.** EI's deficit to the daily team rating in #39 is consistent with stale on-court information. At game level, box refresh of the prior does not explain it.
+- **Recommendation.** After at least weekly on-court refresh, EI is no longer detectably worse than the daily team rating. This supports a daily or weekly cadence for the #43 refresh, with sub-second refit cost.
 - **Minutes and calibration.** Both were held fixed, so this isolates cadence. The pregame-minutes heuristic remains the shared limit.
 
 ## Limits
@@ -150,7 +161,9 @@ These times include the shared preparation step for every cadence. The per-caden
 These are as registered:
 
 - the evidence is development evidence on previously examined seasons;
-- the penalties were tuned at block cadence;
+- the 8,000/8,000 penalties were tuned at block cadence and may disadvantage finer cadences, which is a conservative direction;
+- the team ridge was tuned for daily refit, which affects the matched-cadence team comparators;
+- the 2023–25 seasons were already used by #36, #39 and #136;
 - `daily_box` holds the block context coefficients;
 - there is one strict-calibration season;
 - there is no availability information;

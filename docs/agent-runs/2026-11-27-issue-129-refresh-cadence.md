@@ -23,7 +23,7 @@ Test whether weekly or daily EI refresh closes #39's team-level gap to the daily
 ## Key decisions and discoveries
 
 - **Result.** Daily and weekly refresh both close the gap. All of the game-level gain comes from on-court refresh. The team rating suffers more than EI from slow refresh. At matched block cadence, EI beats it by −0.182.
-- **Runtime.** A refresh takes about 0.5 s, so daily refresh is cheap.
+- **Runtime.** A full refit takes under 0.33 s by the wall-clock bound, so daily refresh is cheap. The recorded per-refresh figures double-count preparation. The runner is fixed, and the doc gives the bound.
 - **Pre-registration plumbing check.** It used reduced cutoffs and confirmed the gates. The post-freeze block calibration slope was printed, and it matches #136. No evaluation metrics were computed before registration.
 
 ## Verification performed
@@ -32,12 +32,13 @@ Test whether weekly or daily EI refresh closes #39's team-level gap to the daily
 | --- | --- |
 | `uv run pytest -q` | 478 passed, 3 skipped |
 | `ruff check`, `ruff format --check`, `mypy src` | Pass |
-| Registered run `issue-129-v1` | Clean tree at `28246bb`, 168 s, 1.95 GiB. Gates: possession 0.0, EI margin 2.3e-6, team margin 5.0e-7 |
+| Registered run `issue-129-v1` | Clean tree at `28246bb`, 167 s, 1.95 GiB. Gates: possession 0.0, EI margin 2.3e-6, team margin 5.0e-7 |
 
 ## Blockers and remaining risks
 
-- The per-refresh runtime totals double-count shared preparation. The 168 s wall clock is authoritative.
-- No independent pre-run review was run. Review is requested on the PR.
+- The per-refresh runtime totals double-count shared preparation. The 167 s wall clock is authoritative.
+- No independent pre-run review was run.
+- A post-run review (Sonnet, fresh context) found no blockers. Its non-blocking items were addressed: the runtime accounting, wording that does not claim equivalence, the matched-cadence caveats and fuller limits. The remaining item is that there is no synthetic test of `refreshes`/`daily_box`, which rests on the reproduction gate and `prepare`'s assertions.
 - The pregame-minutes heuristic is unchanged and has no availability information.
 
 ## Next actions
