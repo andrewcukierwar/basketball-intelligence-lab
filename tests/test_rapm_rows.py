@@ -46,7 +46,9 @@ def _game_tables(data: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
             "elapsed_ms": None,
             "observed_at": WHEN,
             "kind": data.get("first_kinds", {}).get(str(row["possession_seq"]), "shot"),
-            "team_id": row["offense_team_id"],
+            "team_id": data.get("event_teams", {}).get(
+                str(row["possession_seq"]), row["offense_team_id"]
+            ),
             "home_delta": None,
             "away_delta": None,
             "revises_seq": None,
@@ -336,6 +338,12 @@ def _link_to_missing_possession(data: dict[str, Any]) -> None:
     data["score_allocations"][0]["possession_seq"] = 99
 
 
+def _wrong_side_control_event(data: dict[str, Any]) -> None:
+    # An eligible away possession whose field-goal attempt the home team made (#138). The same
+    # event on possessions 2 (multiple lineups) and 4 (unresolved) never reaches a model row.
+    data["event_teams"] = {"2": "100", "4": "100", "6": "100"}
+
+
 def _repeated_player(data: dict[str, Any]) -> None:
     data["lineups"][1]["player_ids"][4] = "11"
 
@@ -363,6 +371,26 @@ def test_pilot_ledger_gaps_block_the_build(tmp_path: Path, mutation: Mutation, c
     output = tmp_path / "out"
     with pytest.raises(ValueError, match=check):
         build_rows(pilot, output, COMMIT, pin)
+    assert not output.exists()
+
+
+def test_wrong_side_control_event_blocks_rule_builds_and_is_recorded_for_frozen_ones(
+    tmp_path: Path,
+) -> None:
+    # #138: a frozen pilot without the rule still rebuilds, with the conflict recorded.
+    pilot, pin = _pilot(tmp_path, _wrong_side_control_event)
+    manifest = build_rows(pilot, tmp_path / "legacy", COMMIT, pin)
+    assert manifest["control_ownership"] == {
+        "pilot_rule": None,
+        "enforced": False,
+        "eligible_conflicts": 1,
+    }
+    recorded = json.loads((pilot / "manifest.json").read_text(encoding="utf-8"))
+    recorded["control_ownership_rule"] = "control-ownership-issue-138-v1"
+    (pilot / "manifest.json").write_text(json.dumps(recorded), encoding="utf-8")
+    output = tmp_path / "strict"
+    with pytest.raises(ValueError, match=r"\{'eligible_control_events_match_offense': 1\}"):
+        build_rows(pilot, output, COMMIT, sha256_file(pilot / "manifest.json"))
     assert not output.exists()
 
 

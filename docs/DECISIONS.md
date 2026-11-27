@@ -525,3 +525,22 @@ V2 remains the event source of record.
   - **Synthetic regression.** Later identities change the v1 roster, digest and inferred cold total. They change nothing in v2.
   - **Frozen artifacts.** In the frozen artifacts every non-eligible exported player carries the inferred cold total. Published margins are therefore unaffected, and only coverage reporting is.
 - **Links:** [#135](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/135), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), [ADR-0031](#adr-0031--expected-impact-v1-as-the-m5-integrated-reference)
+
+## ADR-0034 — Opt-in control-ownership rule and independent ownership checks
+
+- **Date:** 2026-11-27
+- **Status:** Accepted for checks. Normalizer rule is opt-in.
+- **Evidence class:** Original (rule), Inferred (development-build assessment). [Report](research/possession-ownership.md).
+- **Decision:**
+  - **Evidence.** A field-goal attempt, or a turnover outside a clock at which the other team shoots free throws, is decisive evidence of the team in control.
+  - **Checks.** `pilot check` counts accepted possessions that such an event contradicts, and the RAPM row builder counts eligible ones. Both enforce zero only for builds that declare the rule. For older builds they report the count, so ADR-0022 classifications stay as recorded.
+  - **Rule.** `pilot build --control-ownership` (`control-ownership-issue-138-v1`) leaves those possessions unresolved. Row builds from a rule pilot must have zero conflicts.
+- **Why opt-in:**
+  - **Precedent.** The same-clock and free-throw-miss rules are opt-in (ADR-0028, ADR-0030).
+  - **Frozen pilots.** Frozen pilot builds must still rebuild their published row sets.
+  - **Recording.** For those builds the row builder records conflicts in its manifest instead of failing.
+- **Evidence:** Flagged possessions in the canonical 2018–25 builds range from 0 to 23 per season, under 0.01% of accepted possessions. Every reviewed flag was a genuine merge (12 of 12). Each pre-exemption false positive found was a dead-ball turnover in an and-one cluster.
+- **Consequences:**
+  - **Possession builds.** New possession-source builds, including any future registered #133 validation, should use the rule.
+  - **Frozen results.** Published results stay as recorded. Re-estimating them without the flagged possessions would be a new registered comparison.
+- **Links:** [#138](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/138), [#133](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/133), [ADR-0033](#adr-0033--do-not-adopt-the-v3-event-path-after-its-registered-validations-failed)

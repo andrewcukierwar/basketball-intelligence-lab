@@ -245,6 +245,7 @@ def test_build_routes_duckdb_spills_to_private_staging(
             "order_repair_v2": False,
             "free_throw_miss_rule": False,
             "event_source": "v2",
+            "control_ownership": False,
         }
         return []
 
@@ -382,8 +383,119 @@ def test_conflicting_score_leaves_possession_unresolved(tmp_path: Path) -> None:
     assert reasons == ["unassigned_dead_ball", "unresolved"]
     assert all(row["possession_seq"] is None for row in rows["score_allocation"])
 
+    # The made shot is also a control event; the rule does not count a score conflict again.
+    report: dict[str, int] = {}
+    ruled = normalize_game(
+        game, roster, raw, events, possessions, "fixture", report=report, control_ownership=True
+    )
+    assert ruled["possession"] == rows["possession"] and report["control_conflicts"] == 0
+
     flagged = normalize_game(game, roster, raw, events, possessions, "fixture", frozenset({1}))
     assert [row["status"] for row in flagged["possession"]][:2] == ["unresolved", "unresolved"]
+
+
+def _scoreless_q2_variant(owner: int, extra: tuple[Event, ...] = ()) -> tuple[Any, ...]:
+    """Add an away missed field goal to the scoreless Q2 possession and give it to ``owner``."""
+    game, roster, events, possessions = synthetic_game()
+    start, end = possessions[2].events
+    miss = Event(50, 2, 2, 600, start.current_players, start.score, game.away_id, 22)
+    added = [miss, *extra]
+    for event in added:
+        events.insert(events.index(end), event)
+    possessions[2] = Possession([start, *added, end], owner)
+    raw = {
+        event.event_num: RawEvent(
+            {"PLAYER1_TEAM_ID": "200", "PLAYER1_ID": "21", "PLAYER2_ID": "26"}
+            if event.event_type == 8
+            else {},
+            [event.event_num + 1],
+        )
+        for event in events
+    }
+    return game, roster, raw, events, possessions
+
+
+def _q2(rows: dict[str, list[dict[str, Any]]]) -> list[tuple[object, ...]]:
+    return [
+        (row["offense_team_id"], row["defense_team_id"], row["status"])
+        for row in rows["possession"]
+        if row["period"] == 2
+    ]
+
+
+def test_wrong_side_scoreless_possession_is_left_unresolved() -> None:
+    # #138: score, minutes and box plus-minus cannot tell these two owners apart.
+    rows, legacy, reports = {}, {}, {}
+    for owner in (200, 100):
+        game, roster, raw, events, possessions = _scoreless_q2_variant(owner)
+        reports[owner] = {}
+        rows[owner] = normalize_game(
+            game,
+            roster,
+            raw,
+            events,
+            possessions,
+            "fixture",
+            report=reports[owner],
+            control_ownership=True,
+        )
+        legacy[owner] = normalize_game(game, roster, raw, events, possessions, "fixture")
+    assert _q2(rows[200]) == [("200", "100", "accepted")]
+    assert _q2(rows[100]) == [("100", "200", "unresolved")]
+    assert reports == {
+        200: {"relabeled_possessions": 0, "control_conflicts": 0},
+        100: {"relabeled_possessions": 0, "control_conflicts": 1},
+    }
+    assert rows[200]["score_allocation"] == rows[100]["score_allocation"]
+    # Without the opt-in rule the flip passes, as frozen builds recorded it.
+    assert _q2(legacy[100]) == [("100", "200", "accepted")]
+
+    game, roster, raw, events, possessions = _scoreless_q2_variant(100)
+    # Independent feed offense for the miss relabels the unresolved possession as before.
+    relabel = normalize_game(
+        game,
+        roster,
+        raw,
+        events,
+        possessions,
+        "fixture",
+        offense_evidence={50: 200},
+        control_ownership=True,
+    )
+    assert _q2(relabel) == [("200", "100", "accepted")]
+    # A feed that agrees with the flipped owner cannot override the control event.
+    contested = normalize_game(
+        game,
+        roster,
+        raw,
+        events,
+        possessions,
+        "fixture",
+        offense_evidence={50: 100},
+        control_ownership=True,
+    )
+    assert _q2(contested) == [("100", "200", "unresolved")]
+
+
+def test_turnover_at_an_opponent_free_throw_clock_is_ambiguous() -> None:
+    # #138: a home turnover recorded while the away team shoots free throws (an and-one
+    # cluster, for example) does not contradict the away possession.
+    def run(*extra: tuple[int, int, int]) -> list[tuple[object, ...]]:
+        game, roster, _, _, _ = _scoreless_q2_variant(200)
+        players = synthetic_game()[2][-1].current_players
+        added = tuple(
+            Event(num, kind, 2, 590, players, {100: 3}, team, player)
+            for num, kind, team, player in [(51, 5, 100, 11), *extra]
+        )
+        game, roster, raw, events, possessions = _scoreless_q2_variant(200, added)
+        return _q2(
+            normalize_game(
+                game, roster, raw, events, possessions, "fixture", control_ownership=True
+            )
+        )
+
+    assert run() == [("200", "100", "unresolved")]
+    assert run((52, 3, 200, 22)) == [("200", "100", "accepted")]
 
 
 @dataclass
@@ -507,7 +619,7 @@ def test_minutes_tolerance_grows_with_truncated_substitution_clocks() -> None:
 
 
 def test_check_build_passes_synthetic_output_and_catches_defects(tmp_path: Path) -> None:
-    from bil.data.pilot_check import check_build
+    from bil.data.pilot_check import check_build, control_conflicts, ownership_coverage
 
     game, roster, events, possessions = synthetic_game()
     raw = {
@@ -605,6 +717,34 @@ def test_check_build_passes_synthetic_output_and_catches_defects(tmp_path: Path)
     moved = check_build(build(roster, "moved"), tmp_path / "moved-snapshot")
     assert moved["credited_lineup_contains_shooter"] == 1
     assert moved["shooters_on_court"] == 1
+    assert "control_events_match_possession_offense" not in moved
+
+    # #138: an away field-goal attempt inside the accepted home Q2 possession is a violation
+    # for a build made with the rule, and is reported without failing an older build.
+    rows["event_actor"].pop()
+    q2 = next(row for row in rows["possession"] if row["period"] == 2)
+    assert q2["status"] == "accepted" and q2["offense_team_id"] == str(game.home_id)
+    attempt = next(row for row in rows["event"] if row["seq"] == q2["start_seq"])
+    attempt.update(kind="shot", team_id=str(game.away_id))
+    older = build(roster, "flipped")
+    assert not any(check_build(older, tmp_path / "flipped-snapshot").values())
+    assert control_conflicts(older) == 1
+    manifest = json.loads((older / "manifest.json").read_text(encoding="utf-8"))
+    manifest["control_ownership_rule"] = "control-ownership-issue-138-v1"
+    (older / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    flipped = check_build(older, tmp_path / "flipped-snapshot")
+    assert flipped["control_events_match_possession_offense"] == 1
+    assert sum(flipped.values()) == 1
+    coverage = ownership_coverage(tmp_path / "flipped")
+    assert {
+        "family": "shot",
+        "status": "accepted",
+        "agree": 2,
+        "disagree": 1,
+        "ambiguous": 0,
+        "no_team": 0,
+        "evidence_source": "parser_event_team",
+    } in coverage["events"]
 
 
 def _v3_archive(path: Path, rows: list[list[str]]) -> None:

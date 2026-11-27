@@ -17,7 +17,13 @@ from typing import cast
 
 import duckdb
 
-from bil.data.pilot_check import check_build, check_seasons
+from bil.data.pilot_check import (
+    CONTROL_CHECK,
+    check_build,
+    check_seasons,
+    control_conflicts,
+    ownership_coverage,
+)
 from bil.data.pilot_clock_order import RULE_VERSION, ClockOrder, Declined, reorder_same_clock
 from bil.data.pilot_evidence import compare as compare_evidence
 from bil.data.pilot_free_throw import RULE_VERSION as FREE_THROW_RULE_VERSION
@@ -40,7 +46,14 @@ from bil.data.pilot_inputs import (
     v2_substitutions,
     v3_games,
 )
-from bil.data.pilot_normalize import MINUTES_TOLERANCE_MS, Row, Rows, located, normalize_game
+from bil.data.pilot_normalize import (
+    CONTROL_OWNERSHIP_RULE,
+    MINUTES_TOLERANCE_MS,
+    Row,
+    Rows,
+    located,
+    normalize_game,
+)
 from bil.data.pilot_order import OrderRepair, repair_order
 from bil.data.pilot_order_v2 import VERSION as ORDER_V2_VERSION
 from bil.data.pilot_order_v2 import (
@@ -83,6 +96,7 @@ class Reconstruction:
     v3_period_defect: bool
     livedata_starters: frozenset[tuple[int, int]]
     relabeled_possessions: int
+    control_conflicts: int = 0
 
 
 def period_scores(events: list[ParserEvent], game: GameBox) -> dict[int, tuple[int, int]]:
@@ -272,6 +286,7 @@ def _build_game(
     free_throw_miss_rule: bool = False,
     missing: GameIssue | None = None,
     parser_version: str = PARSER_VERSION,
+    control_ownership: bool = False,
 ) -> Rows:
     kind = GAME_PREFIXES[game.game_id[:3]]
     cross = cross or CrossFeed()
@@ -391,6 +406,7 @@ def _build_game(
                         result.unresolved_possessions,
                         cross.offense or None,
                         report,
+                        control_ownership,
                     )
                 return Reconstruction(
                     result.events,
@@ -400,6 +416,7 @@ def _build_game(
                     defect,
                     result.livedata_starters,
                     report.get("relabeled_possessions", 0),
+                    report.get("control_conflicts", 0),
                 )
 
             return choose_starters(
@@ -510,6 +527,14 @@ def _build_game(
                 "datanba_possession_labels",
                 f"{built.relabeled_possessions} unresolved possessions labeled from data.nba "
                 "offense on every shot, free throw and turnover",
+            )
+            issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
+        if built.control_conflicts:
+            labels.append("control_ownership_conflicts")
+            warning = GameIssue(
+                "control_ownership_conflicts",
+                f"{built.control_conflicts} possessions left unresolved: a field-goal attempt or "
+                "turnover by the other team contradicts the parser offense",
             )
             issues.append(_issue_row(game.game_id, len(issues) + 1, warning, "warning", refs))
         if missed_free_throws is not None:
@@ -715,6 +740,7 @@ def _season_games(
     order_repair_v2: bool = False,
     free_throw_miss_rule: bool = False,
     event_source: str = "v2",
+    control_ownership: bool = False,
 ) -> Iterator[Rows]:
     games, players = box_scores(connection, snapshot_dir, include_free_throws=free_throw_miss_rule)
     expected = chosen or set(games)
@@ -802,6 +828,7 @@ def _season_games(
                     order_repair_v2,
                     free_throw_miss_rule,
                     parser_version=parser_version,
+                    control_ownership=control_ownership,
                 )
                 remaining.remove(game_id)
         for game_id in sorted(remaining):
@@ -823,6 +850,7 @@ def _season_games(
                 free_throw_miss_rule,
                 missing=rebuild_issues.get(game_id),
                 parser_version=parser_version,
+                control_ownership=control_ownership,
             )
 
 
@@ -886,6 +914,7 @@ def build_pilot(
     order_repair_v2: bool = False,
     free_throw_miss_rule: bool = False,
     event_source: str = "v2",
+    control_ownership: bool = False,
 ) -> dict[str, object]:
     if re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
         raise ValueError("Record a full Git commit for the pilot build")
@@ -914,6 +943,7 @@ def build_pilot(
                 order_repair_v2=order_repair_v2,
                 free_throw_miss_rule=free_throw_miss_rule,
                 event_source=event_source,
+                control_ownership=control_ownership,
             )
             artifacts = write_tables(connection, games, staging, output)
             results = summarize_reviews(read_game_reviews(connection, output))
@@ -964,6 +994,7 @@ def build_pilot(
                 if ft_log is not None
                 else {}
             ),
+            **({"control_ownership_rule": CONTROL_OWNERSHIP_RULE} if control_ownership else {}),
             "source_snapshot_sha256": snapshot_hash,
             "source_artifacts": snapshot["artifacts"],
             "output_artifacts": artifacts,
@@ -989,6 +1020,12 @@ def main() -> None:
     build.add_argument("output_dir", type=Path)
     build.add_argument("--code-commit", required=True)
     build.add_argument("--game-id", action="append", type=nba_game_id)
+    build.add_argument(
+        "--control-ownership",
+        action="store_true",
+        help="leave possessions that the other team's field-goal attempt or turnover "
+        "contradicts unresolved (#138)",
+    )
     build.add_argument(
         "--same-clock-rule",
         action="store_true",
@@ -1041,6 +1078,10 @@ def main() -> None:
     check = subcommands.add_parser("check", help="check an exported build's invariants")
     check.add_argument("output_dir", type=Path)
     check.add_argument("snapshot_dir", type=Path)
+    ownership = subcommands.add_parser(
+        "ownership", help="report control-event coverage of possession offense (#138)"
+    )
+    ownership.add_argument("output_dir", type=Path)
     seasons = subcommands.add_parser(
         "check-seasons", help="check identity and chronology across several season builds"
     )
@@ -1054,8 +1095,15 @@ def main() -> None:
         for name, count in results.items():
             print(f"{'FAIL' if count else 'ok  '} {name}: {count}")
         print(f"{len(results) - len(failed)} of {len(results)} checks passed.")
+        if CONTROL_CHECK not in results:
+            print(
+                f"info {CONTROL_CHECK}: {control_conflicts(args.output_dir)} "
+                "(reported only: built without --control-ownership)"
+            )
         if failed:
             raise SystemExit(1)
+    elif args.action == "ownership":
+        print(json.dumps(ownership_coverage(args.output_dir), indent=2, sort_keys=True))
     elif args.action == "check-seasons":
         if len(args.pairs) % 2:
             raise SystemExit("Pass a snapshot directory after each build directory")
@@ -1099,6 +1147,7 @@ def main() -> None:
             args.order_repair_v2,
             args.free_throw_miss_rule,
             args.event_source,
+            args.control_ownership,
         )
         print(json.dumps(manifest["coverage"], sort_keys=True))
 
