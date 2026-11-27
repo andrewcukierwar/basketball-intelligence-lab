@@ -12,8 +12,11 @@ as-of rating artifact. The refresh is replay-only on pinned 2023–25 inputs: no
 - **Idempotence.** If `ROOT/D/<id>` exists and its manifest names the same ID, the refresh is a
   no-op and nothing is fitted or rewritten. Changed inputs give a new ID in a new directory.
 - **Atomicity.** The artifact is written into a staging directory inside `ROOT` and renamed into
-  place. An interrupted run leaves no artifact, only a dot-prefixed staging directory that is
-  removed on exit and never read as an artifact.
+  place. A run interrupted by an exception removes its staging directory. A killed process or
+  power loss can leave a dot-prefixed staging directory, which is never read as an artifact.
+  Files are fsynced before the rename.
+- **Code changes.** The identity covers ``VERSION``, not the model code. A code change that
+  changes outputs must bump ``VERSION``.
 """
 
 from __future__ import annotations
@@ -66,6 +69,7 @@ from bil.models.spm_build import checked_file, read_json
 VERSION = "origin-refresh-issue-142-v1"
 MANIFEST = "manifest.json"
 RATINGS = "ratings.csv"
+FROZEN_TOLERANCE = 1e-6
 
 
 class RefreshError(ValueError):
@@ -127,11 +131,16 @@ def existing(root: Path, origin: date, aid: str) -> Path | None:
     manifest = target / MANIFEST
     if not manifest.is_file():
         raise RefreshError(f"{target} exists without a manifest")
-    record = json.loads(manifest.read_text(encoding="utf-8"))
+    try:
+        record = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RefreshError(f"{target} has an unreadable manifest") from error
+    if not isinstance(record, dict) or not isinstance(record.get("outputs"), dict):
+        raise RefreshError(f"{target} has a malformed manifest")
     if record.get("artifact_id") != aid or record.get("origin") != origin.isoformat():
         raise RefreshError(f"{target} holds a different artifact")
     ratings = target / RATINGS
-    if not ratings.is_file() or sha256_file(ratings) != record["outputs"][RATINGS]:
+    if not ratings.is_file() or sha256_file(ratings) != record["outputs"].get(RATINGS):
         raise RefreshError(f"{target} ratings do not match their manifest")
     return target
 
@@ -160,9 +169,11 @@ def publish(
         (stage / MANIFEST).write_text(
             json.dumps(manifest, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
         )
+        _fsync(stage)
         target = parent / aid
         try:
             os.rename(stage, target)
+            _fsync_dir(parent)
         except OSError:
             # Another run published the same ID first. Accept it only if it is consistent.
             if existing(root, origin, aid) is None:
@@ -172,6 +183,22 @@ def publish(
     finally:
         if stage.exists():
             shutil.rmtree(stage)
+
+
+def _fsync(directory: Path) -> None:
+    for path in directory.iterdir():
+        if path.is_file():
+            with path.open("rb") as handle:
+                os.fsync(handle.fileno())
+    _fsync_dir(directory)
+
+
+def _fsync_dir(directory: Path) -> None:
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def refresh_origin(root: Path, origin: date, inputs: Inputs) -> Published:
@@ -252,6 +279,43 @@ def load_inputs(raw: Path, processed: Path, scratch: Path) -> Inputs:
     )
 
 
+Pair = tuple[float, float]
+
+
+def compare_ratings(
+    ours: Mapping[int, Pair], theirs: Mapping[int, Pair], cold: Pair | None
+) -> dict[str, Any]:
+    """Compare a refreshed v2 roster with a published legacy (#36) export of the same cutoff.
+
+    The legacy export lists every globally indexed player. The v2 roster keeps only players
+    eligible at the cutoff, and every other indexed player scores at the explicit ``cold`` prior
+    (#135). So each refreshed player must match its published value, no refreshed player may be
+    missing from the export, and each published player off the roster must equal the cold prior.
+    """
+    common = sorted(set(ours) & set(theirs))
+    dropped = sorted(set(theirs) - set(ours))
+    gaps = [abs(a - b) for p in common for a, b in zip(ours[p], theirs[p], strict=True)]
+    cold_gaps = [
+        abs(a - b)
+        for p in dropped
+        for a, b in zip(theirs[p], cold or (float("inf"),) * 2, strict=True)
+    ]
+    report: dict[str, Any] = {
+        "players": len(ours),
+        "missing_from_published": len(set(ours) - set(theirs)),
+        "off_roster_at_cold_prior": len(dropped),
+        "max_abs_rating_gap": max(gaps, default=float("inf")),
+        "max_abs_cold_gap": max(cold_gaps, default=0.0),
+    }
+    report["reproduced"] = (
+        bool(common)
+        and report["missing_from_published"] == 0
+        and report["max_abs_rating_gap"] <= FROZEN_TOLERANCE
+        and report["max_abs_cold_gap"] <= FROZEN_TOLERANCE
+    )
+    return report
+
+
 def verify_frozen(root: Path, processed: Path, inputs: Inputs) -> dict[str, Any]:
     """Refresh at the #36 block cutoffs and compare with the published `issue-36-v1` ratings."""
     directory = processed / "expected_impact" / "issue-36-v1"
@@ -270,18 +334,18 @@ def verify_frozen(root: Path, processed: Path, inputs: Inputs) -> dict[str, Any]
         for block in season_blocks(rows, season):
             done = refresh_origin(root, block.cutoff, inputs)
             with (done.path / RATINGS).open(newline="", encoding="utf-8") as handle:
-                ours = {
-                    int(r["player_id"]): (float(r["rating_offense"]), float(r["rating_defense"]))
-                    for r in csv.DictReader(handle)
-                }
-            theirs = published[block.cutoff.isoformat()]
-            missing = sorted(set(ours) - set(theirs))
-            gap = max(abs(a - b) for p in ours for a, b in zip(ours[p], theirs[p], strict=True))
+                records = list(csv.DictReader(handle))
+            ours = {
+                int(r["player_id"]): (float(r["rating_offense"]), float(r["rating_defense"]))
+                for r in records
+            }
+            colds = {(float(r["cold_offense"]), float(r["cold_defense"])) for r in records}
+            if len(colds) != 1:
+                raise RefreshError(f"{done.path} does not carry one cold prior")
+            theirs = published.get(block.cutoff.isoformat(), {})
             report[block.cutoff.isoformat()] = {
                 "artifact_id": done.artifact_id,
-                "players": len(ours),
-                "missing_from_published": len(missing),
-                "max_abs_rating_gap": gap,
+                **compare_ratings(ours, theirs, colds.pop()),
             }
     return report
 
@@ -317,7 +381,11 @@ def main() -> None:
                 )
             )
     else:
-        print(json.dumps(verify_frozen(args.root, args.processed, inputs), indent=2))
+        report = verify_frozen(args.root, args.processed, inputs)
+        print(json.dumps(report, indent=2))
+        failed = sorted(cutoff for cutoff, entry in report.items() if not entry["reproduced"])
+        if failed:
+            raise SystemExit(f"frozen rebuild did not reproduce issue-36-v1 at {failed}")
 
 
 if __name__ == "__main__":

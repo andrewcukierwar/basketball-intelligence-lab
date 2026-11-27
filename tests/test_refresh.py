@@ -18,6 +18,7 @@ from bil.refresh import (
     RATINGS,
     Inputs,
     RefreshError,
+    compare_ratings,
     publish,
     refresh_origin,
 )
@@ -96,6 +97,12 @@ def test_inconsistent_existing_artifacts_and_out_of_scope_origins_are_refused(
     (done.path / RATINGS).write_text("tampered", encoding="utf-8")
     with pytest.raises(RefreshError, match="do not match"):
         refresh_origin(tmp_path, CUTOFF, inputs())
+    (done.path / MANIFEST).write_text("{not json", encoding="utf-8")
+    with pytest.raises(RefreshError, match="unreadable manifest"):
+        refresh_origin(tmp_path, CUTOFF, inputs())
+    (done.path / MANIFEST).write_text("[]", encoding="utf-8")
+    with pytest.raises(RefreshError, match="malformed manifest"):
+        refresh_origin(tmp_path, CUTOFF, inputs())
     (done.path / MANIFEST).unlink()
     with pytest.raises(RefreshError, match="without a manifest"):
         refresh_origin(tmp_path, CUTOFF, inputs())
@@ -103,3 +110,16 @@ def test_inconsistent_existing_artifacts_and_out_of_scope_origins_are_refused(
         refresh_origin(tmp_path, date(2022, 10, 1), inputs())
     with pytest.raises(RefreshError, match="outside the replay seasons"):
         refresh_origin(tmp_path, date(2025, 10, 1), replace(inputs(), seasons=(2025,)))
+
+
+def test_frozen_comparison_checks_the_roster_values_and_the_cold_prior() -> None:
+    cold = (-0.3, -0.1)
+    ours = {1: (1.0, -1.0), 2: (0.5, 0.25)}
+    legacy = {**ours, 3: cold}
+    ok = compare_ratings(ours, legacy, cold)
+    assert ok["reproduced"] and ok["off_roster_at_cold_prior"] == 1
+    assert not compare_ratings(ours, {1: (1.0, -1.0)}, cold)["reproduced"]  # unpublished player
+    assert not compare_ratings(ours, {**legacy, 3: (0.0, -0.1)}, cold)["reproduced"]  # not cold
+    off = compare_ratings(ours, {**legacy, 2: (0.5, 0.25 + 1e-5)}, cold)
+    assert not off["reproduced"] and off["max_abs_rating_gap"] > 1e-6
+    assert not compare_ratings(ours, {}, cold)["reproduced"]  # missing cutoff
