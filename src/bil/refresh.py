@@ -28,6 +28,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -155,6 +156,11 @@ def check_origin(origin: date, seasons: Sequence[int] = OUTER_SEASONS) -> int:
 
 
 def existing(root: Path, origin: date, aid: str) -> Path | None:
+    found = _existing_record(root, origin, aid)
+    return found[0] if found is not None else None
+
+
+def _existing_record(root: Path, origin: date, aid: str) -> tuple[Path, dict[str, Any]] | None:
     target = root / origin.isoformat() / aid
     if not target.exists():
         return None
@@ -172,7 +178,7 @@ def existing(root: Path, origin: date, aid: str) -> Path | None:
     ratings = target / RATINGS
     if not ratings.is_file() or sha256_file(ratings) != record["outputs"].get(RATINGS):
         raise RefreshError(f"{target} ratings do not match their manifest")
-    return target
+    return target, record
 
 
 def publish(
@@ -181,6 +187,7 @@ def publish(
     """Run ``write`` into a staging directory and rename it into place, unless already there."""
     found = existing(root, origin, aid)
     if found is not None:
+        _sync_publication(found)
         return Published(found, aid, False)
     parent = root / origin.isoformat()
     parent.mkdir(parents=True, exist_ok=True)
@@ -207,9 +214,16 @@ def publish(
             # Another run published the same ID first. Accept it only if it is consistent.
             if existing(root, origin, aid) is None:
                 raise
+            _sync_publication(target)
             return Published(target, aid, False)
-        _fsync_dir(parent)
+        _sync_publication(target)
         return Published(target, aid, True)
+    except BaseException as error:
+        # A signal may arrive after rename succeeded but before Python resumes.
+        if not stage.exists():
+            setattr(error, "refresh_stage", "publish_sync")
+            setattr(error, "refresh_artifact_id", aid)
+        raise
     finally:
         if stage.exists():
             shutil.rmtree(stage)
@@ -229,6 +243,15 @@ def _fsync_dir(directory: Path) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def _sync_publication(target: Path) -> None:
+    try:
+        _fsync_dir(target.parent)
+    except BaseException as error:
+        setattr(error, "refresh_stage", "publish_sync")
+        setattr(error, "refresh_artifact_id", target.name)
+        raise
 
 
 # --- checkpoints ------------------------------------------------------------------------
@@ -509,7 +532,7 @@ def refresh_origin(
     """Build and publish the snapshot for ``origin``; a no-op when it already exists.
 
     Any failure carries the phase it happened in (:func:`stage_of`): ``origin``, ``parent``,
-    ``calibration``, ``sources``, ``revision`` or ``publish``. See ``_refresh_origin``.
+    ``calibration``, ``sources``, ``revision``, ``publish``, ``publish_sync`` or ``revision_log``.
     """
     stage = ["origin"]
     try:
@@ -555,8 +578,11 @@ def _refresh_origin(
     input_ids = {**inputs.input_ids, "source_resolution": resolution.digest()}
     aid = artifact_id(origin, input_ids, inputs.parents, inputs.config)
     stage[0] = "revision"
-    if existing(root, origin, aid) is not None:
-        return Published(root / origin.isoformat() / aid, aid, False)
+    found = existing(root, origin, aid)
+    if found is not None:
+        current(root, origin)  # an unrecorded revision must be retired before retrying
+        _sync_publication(found)
+        return Published(found, aid, False)
     others, broken = [], []
     for name in _others(root, origin, aid):
         try:
@@ -582,8 +608,10 @@ def _refresh_origin(
         )
     revision = None
     if others:
+        previous = current(root, origin)
+        assert previous is not None  # existing() already validated at least one artifact
         revision = revision_record(
-            root, origin, others[-1], aid, input_ids, inputs, resolution.record()
+            root, origin, previous.name, aid, input_ids, inputs, resolution.record()
         )
         if not accept_revision:
             _append(log, {**revision, "action": "refused"})
@@ -626,6 +654,7 @@ def _refresh_origin(
         head, clean = _git_head()
         return {
             "inputs": input_ids,
+            "previous_artifact_id": revision["previous_artifact_id"] if revision else None,
             "source_resolution": resolution.summary(),
             "calibration": calibration,
             "checkpoint": state["checkpoint"],
@@ -642,7 +671,11 @@ def _refresh_origin(
     done = publish(root, origin, aid, write)
     stage[0] = "revision_log"  # the artifact is published; only its revision record failed
     if revision is not None:  # recorded only once the accepted revision is actually published
-        _append(log, {**revision, "action": "published"})
+        try:
+            _append(log, {**revision, "action": "published"})
+        except BaseException as error:
+            setattr(error, "refresh_artifact_id", aid)
+            raise
     return replace(done, checkpoint=state["checkpoint"])
 
 
@@ -658,14 +691,17 @@ def record_outcome(root: Path, record: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _failure(origin: date | None, stage: str, error: BaseException, ids: Any) -> dict[str, Any]:
-    return {
+    record = {
         "origin": origin.isoformat() if origin else None,
-        "outcome": "refused",
+        "outcome": "unconfirmed" if stage in {"publish_sync", "revision_log"} else "refused",
         "stage": stage,
         "error": type(error).__name__,
-        "reason": str(error),
+        "reason": str(error) or type(error).__name__,
         "inputs": ids,
     }
+    if aid := getattr(error, "refresh_artifact_id", None):
+        record["artifact_id"] = aid
+    return record
 
 
 def requested_inputs(
@@ -743,46 +779,71 @@ def build(
 def current(root: Path, origin: date) -> Path | None:
     """The artifact consumers should read for ``origin``.
 
-    It is the single valid artifact. If an accepted revision left several, it is the latest
-    one ``revisions.jsonl`` records as published. Retired artifacts are not candidates.
+    Of the valid artifacts, prefer the latest recorded publication, then the original.
+    An unrecorded revision or inconsistent artifact makes the origin unreadable.
     """
-    found: dict[str, Path] = {}
+    found: dict[str, tuple[Path, dict[str, Any]]] = {}
     for name in _others(root, origin, ""):
         try:
-            path = existing(root, origin, name)
+            artifact = _existing_record(root, origin, name)
         except RefreshError as error:  # fail closed: an inconsistent artifact must be retired
             raise RefreshError(
                 f"{origin}: {error}; retire it before reading this origin"
             ) from error
-        if path is not None:
-            found[name] = path
-    if len(found) <= 1:
-        return next(iter(found.values()), None)
+        if artifact is not None:
+            found[name] = artifact
+    if not found:
+        return None
     log = root / origin.isoformat() / REVISIONS
-    entries = (
-        [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
-        if log.is_file()
-        else []
-    )
-    accepted = [e["new_artifact_id"] for e in entries if e.get("action") == "published"]
-    # Only the original publication may lack a "published" record; anything else is unexplained.
-    unrecorded = sorted(set(found) - set(accepted))
-    if len(unrecorded) > 1:
-        raise RefreshError(f"{origin} holds unrecorded artifacts {unrecorded}")
-    for name in reversed(accepted):
+    try:
+        entries = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+        accepted = [entry for entry in entries if entry["action"] == "published"]
+        published = [entry["new_artifact_id"] for entry in accepted]
+        legacy_original = accepted[0]["previous_artifact_id"] if accepted else None
+        published_ids = set(published)
+    except FileNotFoundError:
+        published, published_ids, legacy_original = [], set(), None
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise RefreshError(f"{origin} has an unreadable revision log") from error
+    # Before revision lineage was written to manifests, the first accepted record named
+    # the original. With no history, only a single unmarked artifact can be the original.
+    if not published and len(found) == 1:
+        legacy_original = next(iter(found))
+    originals = [
+        name
+        for name, (_, record) in found.items()
+        if name not in published_ids
+        and (
+            record.get("previous_artifact_id", "legacy") is None
+            or ("previous_artifact_id" not in record and name == legacy_original)
+        )
+    ]
+    unrecorded = sorted(set(found) - published_ids - set(originals))
+    if unrecorded or len(originals) > 1:
+        raise RefreshError(f"{origin} holds unrecorded artifacts {unrecorded or originals}")
+    for name in reversed(published):
         if name in found:
-            return found[name]
+            return found[name][0]
+    if originals:
+        return found[originals[0]][0]
     raise RefreshError(f"{origin} holds {sorted(found)} and no record says which is current")
 
 
 def retire(root: Path, origin: date, aid: str, reason: str) -> Path:
     """Roll back by moving an artifact to ``ROOT/_retired/<origin>/``; recorded, never deleted."""
+    if re.fullmatch(r"[0-9a-f]{64}", aid) is None:
+        raise RefreshError("retirement requires a full 64-character lowercase artifact ID")
     source = root / origin.isoformat() / aid
-    if aid.startswith(".") or not source.is_dir():  # an inconsistent artifact can be retired
+    if source.is_symlink() or source.parent.is_symlink() or not source.is_dir():
         raise RefreshError(f"{source} is not a published artifact")
     target = root / RETIRED / origin.isoformat() / aid
+    if target.parent.is_symlink() or target.parent.parent.is_symlink():
+        raise RefreshError(f"{target.parent} is not a safe retirement directory")
+    if target.exists() or target.is_symlink():
+        raise RefreshError(f"{target} already holds a retired artifact")
     target.parent.mkdir(parents=True, exist_ok=True)
     os.rename(source, target)
+    _fsync_dir(target.parent)
     _fsync_dir(source.parent)
     entry = {"origin": origin.isoformat(), "artifact_id": aid, "reason": reason}
     _append(
@@ -972,7 +1033,7 @@ def main() -> None:
         for outcome in outcomes:
             print(json.dumps(outcome, default=str))
         if failures:
-            raise SystemExit(f"{failures} origin(s) refused; see {args.root / OUTCOMES}")
+            raise SystemExit(f"{failures} origin(s) did not complete. See {args.root / OUTCOMES}")
     else:
         inputs = load()
         report = verify_frozen(args.root, args.processed, inputs)

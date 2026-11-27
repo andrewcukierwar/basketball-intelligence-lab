@@ -138,6 +138,92 @@ def test_inconsistent_artifacts_fail_closed_and_can_be_retired(tmp_path: Path) -
         current(tmp_path, CUTOFF)
 
 
+def test_retire_rejects_an_invalid_id_or_occupied_destination(tmp_path: Path) -> None:
+    first = refresh_origin(tmp_path, CUTOFF, inputs())
+    with pytest.raises(RefreshError, match="full 64-character"):
+        retire(tmp_path, CUTOFF, "", "invalid id")
+    destination = tmp_path / RETIRED / CUTOFF.isoformat() / first.artifact_id
+    destination.mkdir(parents=True)
+    with pytest.raises(RefreshError, match="already holds a retired artifact"):
+        retire(tmp_path, CUTOFF, first.artifact_id, "occupied destination")
+    assert current(tmp_path, CUTOFF) == first.path
+    assert destination.is_dir()
+
+
+def test_unrecorded_revision_fails_closed_after_original_is_retired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = inputs()
+    first = refresh_origin(tmp_path, CUTOFF, base)
+    second = refresh_origin(
+        tmp_path,
+        CUTOFF,
+        replace(base, config={**base.config, "offense_ridge": 31.0}),
+        accept_revision=True,
+    )
+    retire(tmp_path, CUTOFF, first.artifact_id, "original retired")
+    third_inputs = replace(base, config={**base.config, "offense_ridge": 32.0})
+    original_append = refresh._append
+
+    def fail_revision_log(path: Path, record: dict[str, object]) -> None:
+        if path.name == refresh.REVISIONS and record.get("action") == "published":
+            raise OSError("could not record publication")
+        original_append(path, record)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(refresh, "_append", fail_revision_log)
+        [outcome], failures = build(tmp_path, [CUTOFF], lambda: third_inputs, accept_revision=True)
+    assert failures == 1
+    assert (outcome["outcome"], outcome["stage"]) == ("unconfirmed", "revision_log")
+    third_id = str(outcome["artifact_id"])
+    assert (second.path.parent / third_id / RATINGS).is_file()
+    with pytest.raises(RefreshError, match="unrecorded"):
+        current(tmp_path, CUTOFF)
+    retire(tmp_path, CUTOFF, second.artifact_id, "previous revision retired")
+    with pytest.raises(RefreshError, match="unrecorded"):
+        refresh_origin(tmp_path, CUTOFF, third_inputs, accept_revision=True)
+    retire(tmp_path, CUTOFF, third_id, "unconfirmed revision")
+    assert current(tmp_path, CUTOFF) is None
+
+
+def test_post_rename_interrupt_is_unconfirmed_and_retry_syncs_the_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sync = refresh._fsync_dir
+    origin_dir = tmp_path / CUTOFF.isoformat()
+
+    def interrupt_publication_sync(path: Path) -> None:
+        if path == origin_dir:
+            raise KeyboardInterrupt
+        sync(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(refresh, "_fsync_dir", interrupt_publication_sync)
+        with pytest.raises(KeyboardInterrupt):
+            build(tmp_path, [CUTOFF], inputs)
+    [record] = outcomes(tmp_path)
+    artifact = origin_dir / str(record["artifact_id"])
+    assert (record["outcome"], record["stage"], record["reason"]) == (
+        "unconfirmed",
+        "publish_sync",
+        "KeyboardInterrupt",
+    )
+    assert artifacts(tmp_path) == [artifact.name]
+    assert (artifact / RATINGS).is_file()
+
+    synced = []
+
+    def track_sync(path: Path) -> None:
+        synced.append(path)
+        sync(path)
+
+    monkeypatch.setattr(refresh, "_fsync_dir", track_sync)
+    [record], failures = build(tmp_path, [CUTOFF], inputs)
+    assert failures == 0 and record["outcome"] == "unchanged"
+    assert synced == [origin_dir]
+    assert current(tmp_path, CUTOFF) == artifact
+
+
 def test_an_interrupt_is_recorded_and_still_stops_the_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

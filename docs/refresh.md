@@ -186,14 +186,14 @@ The daily job (3.9 s) is about 70% input loading (2.7 s). A weekly cadence costs
 
 ### Outcome log
 
-`build` loads the inputs once, then refreshes each origin. It writes one record per origin to `ROOT/_outcomes.jsonl` and never stops at a failed origin. It exits nonzero if any origin was refused. On an interrupt (`KeyboardInterrupt`, or `SystemExit` from a signal handler), it records the interrupted origin as refused and the remaining origins as `skipped`, then stops.
+`build` loads the inputs once, then refreshes each origin. It writes one record per origin to `ROOT/_outcomes.jsonl` and continues after ordinary errors. It exits nonzero if any origin failed to complete. On an interrupt (`KeyboardInterrupt`, or `SystemExit` from a signal handler), it records what happened and marks the remaining origins as `skipped` before stopping.
 
 | Field | Content |
 | --- | --- |
 | `at` | UTC time of the record |
 | `origin` | The requested origin |
-| `outcome` | `published`, `unchanged`, `refused`, `skipped` (after an interrupt) or `retired` |
-| `stage` | For refusals: `load`, `origin`, `parent`, `calibration`, `sources`, `revision`, `publish` or `revision_log` (the artifact was published, but its revision record failed) |
+| `outcome` | `published`, `unchanged`, `refused`, `unconfirmed`, `skipped` (after an interrupt) or `retired` |
+| `stage` | Refusals use `load`, `origin`, `parent`, `calibration`, `sources`, `revision` or `publish`. Unconfirmed outcomes use `publish_sync` or `revision_log` and include the artifact ID. |
 | `error`, `reason` | The exception class and message |
 | `inputs` | The loaded input digests, on refusals and publications. For a refused load, the requested sources: raw and processed roots, addendum path and SHA-256, row-set pins and calibration |
 | `artifact_id`, `checkpoint`, `path` | For publications |
@@ -245,7 +245,9 @@ Check the exit code, then read the new lines of `ROOT/_outcomes.jsonl`.
 - **`calibration`.** For origins before the calibration's fit cutoff, run without `--calibration` or use an earlier calibration. A tampered calibration must be rebuilt by `bil.models.calibration_lineage`.
 - **`sources`.** The source resolution was refused, for example `strict_rolling` on replay pins (#143).
 - **`revision`.** Read `ROOT/<origin>/revisions.jsonl`. Accept a real correction with `--accept-revision`, or fix the input that changed. An `inconsistent` record means an existing artifact fails its own manifest: retire it, never edit it.
-- **`publish`.** Rerun the same command. An interrupted run leaves no artifact. A kill or power loss can leave a `.<id>.staging-*` directory, which is safe to delete.
+- **`publish`.** Rerun the same command. A refusal at this stage happened before the atomic rename. A kill or power loss can leave a `.<id>.staging-*` directory, which is safe to delete.
+- **`publish_sync`.** The complete directory was renamed into place, and the sync was interrupted or failed. Rerun to verify the artifact and sync the directory. If it was a revision and its publication record is absent, retire it before retrying. Use a fresh root if you need to rebuild and retire the same ID again.
+- **`revision_log`.** The complete artifact reached disk, and the publication record could not be confirmed. Inspect the log and validate the active artifact with `current`. If the publication record is absent, retire the artifact before retrying.
 
 **Resume.** Rerun the same command. Published origins are no-ops (`unchanged`), and checkpoints make rebuilds of lost artifacts cheap.
 
@@ -255,14 +257,13 @@ Check the exit code, then read the new lines of `ROOT/_outcomes.jsonl`.
 uv run python -m bil.refresh retire ROOT --origin YYYY-MM-DD --artifact ID --reason "..."
 ```
 
-This moves the artifact to `ROOT/_retired/<origin>/`. It is recorded in both `revisions.jsonl` and `_outcomes.jsonl`, and nothing is deleted. Inconsistent artifacts can be retired too.
+Pass the full lowercase artifact ID. This moves the artifact to `ROOT/_retired/<origin>/` and records it in `revisions.jsonl` and `_outcomes.jsonl`. Inconsistent artifacts can be retired too. An occupied retirement destination is preserved.
 
 Consumers read `bil.refresh.current(ROOT, origin)`:
 
 - **No artifact.** It returns `None`.
-- **One artifact.** It returns the single valid artifact.
-- **Several artifacts.** It returns the last one `revisions.jsonl` records as published.
-- **Refusals.** It **refuses** if any artifact at the origin is inconsistent (retire it first), if more than one artifact lacks a `published` record, or if no record names a current one.
+- **Current artifact.** It returns the most recent active publication named in `revisions.jsonl`, or the original publication if no active revision remains.
+- **Refusals.** An inconsistent artifact, unreadable revision log, or a revision without a publication record makes the origin unreadable until recovery. This also applies when the unrecorded revision is the only artifact left.
 
 **Rebuild cold.** Build into a new root with `--no-checkpoints` and compare artifact IDs with the old root: identical inputs and code version give identical IDs. A `VERSION` change, such as v3 (#144) to v4 (#145), gives every origin a new identity. Rebuild it into a new root: in an existing root, the guard refuses it as a revision. For the #36 block cutoffs, `verify-frozen` checks values against the published export.
 
@@ -274,7 +275,7 @@ Consumers read `bil.refresh.current(ROOT, origin)`:
 | Per-origin refresh | At most 0.6 s |
 | Checkpoints at retention 14 | 9.9 MB |
 
-**Single writer.** There is no locking. Run one refresh per `ROOT` at a time. A crash between publication and the revision-log append leaves an accepted artifact with no `published` record. `current` then refuses, and the operator must record or retire it.
+**Single writer.** Run one refresh per `ROOT` at a time. The artifact directory and audit logs commit separately. After a kill or power loss, use `current` and inspect both logs and `_retired` before retrying.
 
 ### Hand-off notes for #44 (daily shadow test)
 
