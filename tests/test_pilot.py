@@ -619,7 +619,7 @@ def test_minutes_tolerance_grows_with_truncated_substitution_clocks() -> None:
 
 
 def test_check_build_passes_synthetic_output_and_catches_defects(tmp_path: Path) -> None:
-    from bil.data.pilot_check import check_build, ownership_coverage
+    from bil.data.pilot_check import check_build, control_conflicts, ownership_coverage
 
     game, roster, events, possessions = synthetic_game()
     raw = {
@@ -717,15 +717,22 @@ def test_check_build_passes_synthetic_output_and_catches_defects(tmp_path: Path)
     moved = check_build(build(roster, "moved"), tmp_path / "moved-snapshot")
     assert moved["credited_lineup_contains_shooter"] == 1
     assert moved["shooters_on_court"] == 1
-    assert moved["control_events_match_possession_offense"] == 0
+    assert "control_events_match_possession_offense" not in moved
 
-    # #138: an away field-goal attempt inside the accepted home Q2 possession is a violation.
+    # #138: an away field-goal attempt inside the accepted home Q2 possession is a violation
+    # for a build made with the rule, and is reported without failing an older build.
     rows["event_actor"].pop()
     q2 = next(row for row in rows["possession"] if row["period"] == 2)
     assert q2["status"] == "accepted" and q2["offense_team_id"] == str(game.home_id)
     attempt = next(row for row in rows["event"] if row["seq"] == q2["start_seq"])
     attempt.update(kind="shot", team_id=str(game.away_id))
-    flipped = check_build(build(roster, "flipped"), tmp_path / "flipped-snapshot")
+    older = build(roster, "flipped")
+    assert not any(check_build(older, tmp_path / "flipped-snapshot").values())
+    assert control_conflicts(older) == 1
+    manifest = json.loads((older / "manifest.json").read_text(encoding="utf-8"))
+    manifest["control_ownership_rule"] = "control-ownership-issue-138-v1"
+    (older / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    flipped = check_build(older, tmp_path / "flipped-snapshot")
     assert flipped["control_events_match_possession_offense"] == 1
     assert sum(flipped.values()) == 1
     coverage = ownership_coverage(tmp_path / "flipped")

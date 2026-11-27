@@ -17,7 +17,13 @@ from typing import cast
 
 import duckdb
 
-from bil.data.pilot_check import check_build, check_seasons, ownership_coverage
+from bil.data.pilot_check import (
+    CONTROL_CHECK,
+    check_build,
+    check_seasons,
+    control_conflicts,
+    ownership_coverage,
+)
 from bil.data.pilot_clock_order import RULE_VERSION, ClockOrder, Declined, reorder_same_clock
 from bil.data.pilot_evidence import compare as compare_evidence
 from bil.data.pilot_free_throw import RULE_VERSION as FREE_THROW_RULE_VERSION
@@ -1089,6 +1095,11 @@ def main() -> None:
         for name, count in results.items():
             print(f"{'FAIL' if count else 'ok  '} {name}: {count}")
         print(f"{len(results) - len(failed)} of {len(results)} checks passed.")
+        if CONTROL_CHECK not in results:
+            print(
+                f"info {CONTROL_CHECK}: {control_conflicts(args.output_dir)} "
+                "(reported only: built without --control-ownership)"
+            )
         if failed:
             raise SystemExit(1)
     elif args.action == "ownership":

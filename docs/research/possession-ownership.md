@@ -28,7 +28,7 @@ The evidence source is the parser's event team (`event.team_id`). The normalizer
 ## Where the rule runs
 
 - **`pilot build --control-ownership`** (opt-in, rule `control-ownership-issue-138-v1`). This option leaves an accepted possession unresolved when a decisive event by the other team contradicts it, as a contradicting score already does. The manifest records `control_ownership_rule`, and each affected game gets a `control_ownership_conflicts` warning.
-- **`pilot check`** always runs `control_events_match_possession_offense` on accepted possessions.
+- **`pilot check`** enforces `control_events_match_possession_offense` on accepted possessions for builds that declare the rule. For older builds it prints the count as an `info` line without failing. This keeps their acceptance and the ADR-0022 classification in `season_quality` as recorded.
 - **`rapm_rows`** always counts `eligible_control_events_match_offense` on eligible possessions and records the count under `control_ownership` in its manifest. For a pilot built with the rule, the count must be zero or the build fails. Pilot builds made without the rule still rebuild their frozen row sets, and their conflicts are recorded rather than enforced.
 - **`pilot ownership BUILD`** reports coverage and disagreement by event family and possession status.
 
@@ -67,7 +67,7 @@ The rebuild used snapshot `data/raw/2022-23/issue-5-v2` and a single commit for 
 
 | Build | `check` | Possessions changed | Eligible conflicts in rows | Model rows |
 | --- | --- | --- | --- | ---: |
-| Without rule (`issue-138-base-v1`) | 26 of 27 (`control_events_match_possession_offense`: 4) | — | — | — |
+| Without rule (`issue-138-base-v1`) | 26 of 26, `info` line reports 4 conflicts | — | — | — |
 | With rule (`issue-138-control-v2`) | 27 of 27 | 4 accepted → unresolved, in 4 games with a `control_ownership_conflicts` warning | 0 (enforced) | 224,037 |
 | Frozen `issue-19-v6` rows rebuilt | — | — | 2 (recorded, not enforced) | 224,039 |
 

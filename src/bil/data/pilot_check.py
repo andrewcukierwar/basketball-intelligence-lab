@@ -101,11 +101,6 @@ CHECKS = {
            or p.offense_team_id not in (g.home_team_id, g.away_team_id)
            or p.defense_team_id not in (g.home_team_id, g.away_team_id)
            or p.status not in ('accepted', 'excluded', 'unresolved')""",
-    "control_events_match_possession_offense": f"""
-        select count(distinct (p.game_id, p.possession_seq)) from possession p
-        join event e on e.game_id = p.game_id and e.seq >= p.start_seq and e.seq < p.end_seq
-        where p.status = 'accepted' and {DECISIVE_CONTROL}
-          and e.team_id is not null and e.team_id <> p.offense_team_id""",
     "event_scores_equal_finals": """
         select count(*) from game g join (
           select game_id, sum(home_delta) as home, sum(away_delta) as away from event group by 1
@@ -282,6 +277,16 @@ def _same_offense_violations(
     )
 
 
+CONTROL_CHECK = "control_events_match_possession_offense"
+# Accepted possessions that a decisive control event by the other team contradicts (#138).
+CONTROL_SQL = f"""
+    select count(distinct (p.game_id, p.stream_revision, p.possession_seq)) from possession p
+    join event e on e.game_id = p.game_id and e.stream_revision = p.stream_revision
+      and e.seq >= p.start_seq and e.seq < p.end_seq
+    where p.status = 'accepted' and {DECISIVE_CONTROL}
+      and e.team_id is not null and e.team_id <> p.offense_team_id
+"""
+
 OWNERSHIP_EVENTS = f"""
     select e.kind as family, p.status,
            count(*) filter ({DECISIVE_CONTROL} and e.team_id = p.offense_team_id) as agree,
@@ -337,8 +342,26 @@ def ownership_coverage(output: Path) -> dict[str, list[dict[str, object]]]:
     return report
 
 
+def control_conflicts(output: Path) -> int:
+    """Count accepted possessions that a decisive control event contradicts (#138)."""
+    with duckdb.connect() as connection:
+        for name in ("event", "possession"):
+            connection.execute(
+                f"create view {name} as select * from read_parquet({_literal(output / name)}"
+                " || '.parquet')"
+            )
+        row = connection.execute(CONTROL_SQL).fetchone()
+    return row[0] if row else -1
+
+
 def check_build(output: Path, snapshot: Path) -> dict[str, int]:
-    """Return the number of violations for each check. Every value is zero for a valid build."""
+    """Return the number of violations for each check. Every value is zero for a valid build.
+
+    ``control_events_match_possession_offense`` is a check only for builds made with the #138
+    rule (``control_ownership_rule`` in the manifest). Older builds report it through
+    ``control_conflicts`` and ``ownership_coverage`` without failing, so their acceptance and
+    the ADR-0022 classification stay as recorded.
+    """
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     year = manifest["season_start_year"]
     if type(year) is not int:
@@ -365,7 +388,10 @@ def check_build(output: Path, snapshot: Path) -> dict[str, int]:
         results["consecutive_offenses_accounted_for"] = _same_offense_violations(
             connection, snapshot, year, manifest.get("event_source")
         )
-        for name, sql in CHECKS.items():
+        checks = dict(CHECKS)
+        if manifest.get("control_ownership_rule") is not None:
+            checks[CONTROL_CHECK] = CONTROL_SQL
+        for name, sql in checks.items():
             row = connection.execute(sql).fetchone()
             results[name] = row[0] if row else -1
     return results

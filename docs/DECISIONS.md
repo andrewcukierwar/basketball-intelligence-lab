@@ -520,7 +520,7 @@ V2 remains the event source of record.
 - **Evidence class:** Original (rule), Inferred (development-build assessment). [Report](research/possession-ownership.md).
 - **Decision:**
   - **Evidence.** A field-goal attempt, or a turnover outside a clock at which the other team shoots free throws, is decisive evidence of the team in control.
-  - **Checks.** `pilot check` counts accepted possessions that such an event contradicts. The RAPM row builder counts eligible ones.
+  - **Checks.** `pilot check` counts accepted possessions that such an event contradicts, and the RAPM row builder counts eligible ones. Both enforce zero only for builds that declare the rule. For older builds they report the count, so ADR-0022 classifications stay as recorded.
   - **Rule.** `pilot build --control-ownership` (`control-ownership-issue-138-v1`) leaves those possessions unresolved. Row builds from a rule pilot must have zero conflicts.
 - **Why opt-in:**
   - **Precedent.** The same-clock and free-throw-miss rules are opt-in (ADR-0028, ADR-0030).
