@@ -38,6 +38,17 @@
 1. **Recommended: a V2-free event path, validated before freeze.** Build V2-schema events from V3 actions, with liveData as the cross-check. Validate on 2023–24 and 2024–25, where V2 also exists: compare accepted games, possession rows, lineups and #36 predictions against the V2 builds, against limits registered before the comparison. If it passes, amend R1 §4.1–4.2 to name that path and the validation, then freeze as planned. All of this uses pre-holdout data only. It is development work with its own issue.
 2. **Declare R1 confirmatory unavailable** and report EI v1 on its development and outer-fold evidence only.
 
+## Redesign v2 (2026-11-26)
+
+- **Decision.** Both #133 validations failed (ADR-0033), and the maintainer chose "Redesign R1".
+- **Protocol v2 (box-only).**
+  - **Inputs.** It captures only the 2025–26 Bill Mill player and team logs, plus the D1 EPM capture.
+  - **Primary claim (C1).** The team regular-season margin RMSE of `ei` against `team_rating`, under the strict two-interval rule. C2 is win log loss.
+  - **The `ei` variant.** It updates its box prior through 2025–26, but its on-court part uses only 2023–25 rows.
+  - **Possession analyses.** P1 and P2 are now unavailable.
+  - **Quality gate.** The unchanged box-feature build reconciliation, and at least 97% of the 1,230 scheduled games.
+- **Dependency.** The protocol cites ADR-0033 and the #133 validation report, which live in PR #134.
+
 ## Next actions
 
 1. **Maintainer decision** on the options above. #42 is labelled blocked.
