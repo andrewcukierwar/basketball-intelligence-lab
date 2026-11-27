@@ -6,7 +6,7 @@
   - 2021–23 are the #35 development seasons, and 2023–25 were already examined by #36.
   - Nothing here is fit or compared with EPM. No 2025–26 data was read.
 - **Run:** `issue-125-v1`, from a clean worktree at commit `0582f7d`.
-  - Runtime 464 s, of which 358 s was the four bundle fits. Peak memory 1.88 GiB.
+  - Runtime 463 s, of which 358 s was the four bundle fits. Peak memory 1.84 GiB (1,884 MiB).
   - Private outputs are under `data/processed/expected_impact/issue-125-v1`.
 
 ## Verdict
@@ -41,7 +41,7 @@ Possession MSE is in squared points per 100 possessions. Each delta is `ei` (Ski
 | --- | ---: | ---: | --- |
 | `ei_raw` (v1, primary) | +0.09 [−0.54, +0.71] | **+0.38 [−0.52, +1.23]** | inconclusive |
 | `ei_skills_recent` (ablation) | +0.04 [−0.15, +0.24] | −0.15 [−0.30, −0.01] | skills_better |
-| `ei_zero_prior` (matched, 8,000/8,000) | −3.32 [−4.22, −2.51] | −6.04 [−6.96, −5.10] | skills_better |
+| `ei_zero_prior` (matched, 8,000/8,000) | −3.31 [−4.22, −2.51] | −6.04 [−6.96, −5.10] | skills_better |
 | `rapm_context` (4,000/8,000) | −2.24 [−3.00, −1.48] | −4.22 [−5.00, −3.47] | skills_better |
 | `rapm` (zero-prior, 4,000/8,000) | −31.15 | −37.76 | skills_better |
 | `context` | −19.42 | −28.95 | skills_better |

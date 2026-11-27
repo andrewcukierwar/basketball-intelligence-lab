@@ -44,7 +44,7 @@ Complete the Skills → SPM → informed-RAPM chain with chronologically fitted,
 | `uv run pytest -q` | 481 passed, 3 skipped |
 | `ruff check`, `ruff format --check`, `mypy src` | Pass |
 | Pre-registration plumbing check (one block, reduced DE settings) | v1 reproduction gap 0.0. No scores computed |
-| Registered run `issue-125-v1` | Clean tree at `0582f7d`, 464 s, 1.88 GiB. v1 reproduction gap 0.0 in both folds |
+| Registered run `issue-125-v1` | Clean tree at `0582f7d`, 463 s, 1.84 GiB. v1 reproduction gap 0.0 in both folds |
 
 ## Blockers and remaining risks
 
