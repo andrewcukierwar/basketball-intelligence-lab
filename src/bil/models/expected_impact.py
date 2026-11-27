@@ -65,6 +65,11 @@ SPM_FITS = {2021: "contiguous-2021/fit.json", 2022: "contiguous-2022/fit.json"}
 FINAL_SPM_FIT = "final_contiguous_fit.json"
 WINDOW = TEMPORAL_BY_NAME["W2"]
 BASELINE_PENALTIES = (4000.0, 8000.0)
+# Rating artifact versions. The frozen #35/#36/#39/#42 runners write the legacy export, whose
+# roster is every globally indexed player. The as-of export (#135) keeps only players eligible
+# at the cutoff and carries explicit cold priors.
+LEGACY_ARTIFACT = "ei-ratings-v1"
+AS_OF_ARTIFACT = "ei-ratings-as-of-v2"
 
 
 # --- SPM prior snapshots ---------------------------------------------------------------
@@ -221,6 +226,11 @@ class Ratings:
     intercept: float
     snapshot_id: str
     spm_origin: str
+    # Set only on an as-of artifact (#135): its version, the explicit per-side prior for a
+    # player absent from the roster, and roster coverage counts.
+    artifact_version: str = LEGACY_ARTIFACT
+    cold: FloatArray | None = None
+    coverage: Mapping[str, int] | None = None
 
     @property
     def rating(self) -> FloatArray:
@@ -254,6 +264,63 @@ def ratings(
         fit.intercept,
         digest.hexdigest(),
         prepared.spm.origin,
+    )
+
+
+def cold_prior(spm: SpmFit) -> FloatArray:
+    """Per-side SPM prior of a player with no completed box history: each side's intercept."""
+    blank = np.full((1, len(CODES)), np.nan)
+    return np.asarray([float(model.predict(blank)[0]) for model in spm.pair])
+
+
+def as_of_ratings(
+    prepared: Prepared, fit: PlayerFit, design: Design, config: Mapping[str, Any]
+) -> Ratings:
+    """Versioned snapshot whose roster is eligible at the cutoff (#135).
+
+    A player is on the roster with completed box history before the cutoff or exposure in the
+    fit window, which ends before it. Anyone else, including players who first appear later in
+    a globally indexed design, scores at the explicit per-side ``cold`` prior. That is the value
+    the legacy export gave them, so ratings are unchanged while the roster, coverage and digest
+    no longer depend on future identities. Possession-level predictions still use ``prepared``
+    and the full design.
+    """
+    full = ratings(prepared, fit, design, config)
+    keep = np.flatnonzero(full.box_history | (full.exposure > 0))
+    keep = keep[np.argsort(full.player_ids[keep], kind="stable")]
+    ids, prior, deviation = full.player_ids[keep], full.prior[keep], full.deviation[keep]
+    exposure, box_history = full.exposure[keep], full.box_history[keep]
+    cold = cold_prior(prepared.spm)
+    coverage = {
+        "players": int(ids.size),
+        "box_history_players": int(box_history.sum()),
+        "no_history_players": int((~box_history).sum()),
+        "window_players": int((exposure > 0).sum()),
+    }
+    # The digest covers the values at the precision the artifact writes them. A design that
+    # also indexes later players solves a larger system, which moves the same fit by ~1e-15.
+    digest = hashlib.sha256()
+    digest.update(AS_OF_ARTIFACT.encode())
+    digest.update(json.dumps(dict(config), sort_keys=True, default=str).encode())
+    digest.update(json.dumps(coverage, sort_keys=True).encode())
+    digest.update(ids.astype(np.int64).tobytes() + box_history.astype(np.bool_).tobytes())
+    floats = (prior, deviation, exposure, prepared.gamma, cold)
+    scalars = (fit.intercept, prepared.context_intercept)
+    for value in (*(v for a in floats for v in np.ravel(a)), *scalars):
+        digest.update(f"{float(value):.6f}|".encode())
+    return Ratings(
+        prepared.cutoff,
+        ids,
+        prior,
+        deviation,
+        exposure,
+        box_history,
+        fit.intercept,
+        digest.hexdigest(),
+        prepared.spm.origin,
+        AS_OF_ARTIFACT,
+        cold,
+        coverage,
     )
 
 
@@ -395,7 +462,23 @@ def development(
     return results, snapshots, predictions_out
 
 
+AS_OF_COLUMNS = ["artifact_version", "cold_offense", "cold_defense"]
+
+
 def write_ratings(path: Path, snapshots: Iterable[Ratings]) -> None:
+    """Write one CSV of snapshots, all legacy or all as-of (#135).
+
+    The as-of version adds the artifact version and the explicit per-side cold priors to each
+    row; a legacy file keeps its frozen columns.
+    """
+    snapshots = list(snapshots)
+    versions = {snap.artifact_version for snap in snapshots}
+    if len(versions) > 1:
+        raise ValueError(f"cannot mix rating artifact versions in one file: {sorted(versions)}")
+    as_of = versions == {AS_OF_ARTIFACT}
+    for snap in snapshots:
+        if as_of and (snap.cold is None or not snap.player_ids.size):
+            raise ValueError(f"as-of snapshot {snap.cutoff} needs cold priors and a roster")
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow(
@@ -413,6 +496,7 @@ def write_ratings(path: Path, snapshots: Iterable[Ratings]) -> None:
                 "box_history",
                 "snapshot_id",
                 "spm_origin",
+                *(AS_OF_COLUMNS if as_of else []),
             ]
         )
         for snap in snapshots:
@@ -430,6 +514,11 @@ def write_ratings(path: Path, snapshots: Iterable[Ratings]) -> None:
                         bool(snap.box_history[i]),
                         snap.snapshot_id,
                         snap.spm_origin,
+                        *(
+                            [snap.artifact_version, *(f"{v:.6f}" for v in snap.cold)]
+                            if as_of and snap.cold is not None
+                            else []
+                        ),
                     ]
                 )
 

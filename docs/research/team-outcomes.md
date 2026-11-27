@@ -68,7 +68,7 @@ In the playoffs, which are reported but not adjudicated, EI and the team rating 
 - **Excluded:** five 2024–25 games had no single home team (neutral sites, ADR-0017), and 314 had play-in, Cup final or preseason prefixes.
 - **Opening-week fallback:** 63 team-games used previous-season minutes.
 - **Roster heuristic:** it dropped 1,596 player-team projections.
-- **Cold ratings:** no projected minutes fell on the cold rating. Every projected player had a snapshot row, either from the ratings design universe or with an SPM fallback prior inside it.
+- **Cold ratings:** no projected minutes fell on the cold rating. Every projected player had a snapshot row, either from the ratings design universe or with an SPM fallback prior inside it. Some of those rows were players not yet eligible at the snapshot cutoff, each carrying the cold total. Margins are unaffected, but the cold-minute share is understated. See the [as-of artifact note](expected-impact-v1.md#as-of-rating-artifact-135) (#135).
 
 ## Frozen for M7
 
