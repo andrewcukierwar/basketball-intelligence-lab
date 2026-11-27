@@ -207,7 +207,7 @@ The daily job (3.9 s) is about 70% input loading (2.7 s). A weekly cadence costs
 
 ### Drills (`refresh-drills-issue-145-v3`, 2026-11-27)
 
-`python -m bil.refresh_drills RAW PROCESSED OUT` was run once from a clean tree after the review fixes. Each drill uses its own root. A refusal drill passes only if all of these hold:
+`python -m bil.refresh_drills RAW PROCESSED OUT` was run once from a clean tree at `339d156` after the review fixes, in 7.4 s. Each drill uses its own root. A refusal drill passes only if all of these hold:
 
 - the last outcome record is a refusal at the expected stage;
 - the reason contains the expected cause (for example "unexpected input digest" or "differs from the pin");

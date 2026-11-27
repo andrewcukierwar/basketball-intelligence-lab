@@ -3,7 +3,7 @@
 - **Date:** 2026-11-27
 - **Status:** Awaiting review
 - **Related issues:** #145 (part of #43), #44, #136, #142, #143, #144
-- **Branch / commit / PR:** `claude/issue-145-failure-drills`. The drill run was at `e27e0fb`.
+- **Branch / commit / PR:** `claude/issue-145-failure-drills`, PR #152. The final drill run was at `339d156`.
 
 ## Objective and authorized scope
 
@@ -40,7 +40,24 @@ Exercise quality gates and provenance failures in the local refresh, with audita
 | Check | Actual result |
 | --- | --- |
 | Full `pytest`, `ruff`, `ruff format`, `mypy src` | See PR |
-| Drills `refresh-drills-issue-145-v2`, clean tree at `e27e0fb` | 9 of 9 pass. 7.3 s |
+| Drills `refresh-drills-issue-145-v3`, clean tree at `339d156` | 9 of 9 pass with strict causes. 7.4 s |
+
+## Review
+
+An independent Haiku review found four blockers, all fixed with tests:
+
+- `retire` could not retire an inconsistent artifact;
+- `current` silently skipped inconsistent artifacts (it now fails closed and refuses unrecorded extras);
+- interrupts left no outcome record (they are now recorded, with the remaining origins as `skipped`);
+- two drills accepted any load failure (their expected causes are now strict).
+
+Optional findings, also fixed:
+
+- the stage of the same-ID check and of the post-publication revision log;
+- inputs on publication records;
+- the documented `VERSION` identity change and `current` semantics.
+
+The drills were rerun as `-v3`.
 
 ## Blockers and remaining risks
 

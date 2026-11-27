@@ -653,7 +653,8 @@ V2 remains the event source of record.
   - **Outcomes.** Every requested origin gets one record in `ROOT/_outcomes.jsonl`: published, unchanged, refused or retired. A refusal carries its stage, reason and inputs, and one refused origin never stops the others.
   - **Pre-fit checks.** Parents are checked before fitting. An optional #136 calibration is re-checked by `load_calibration` and becomes a parent.
   - **Rollback.** Rollback moves an artifact to `ROOT/_retired/` with a record. Nothing is deleted.
-- **Evidence:** In `refresh-drills-issue-145-v2`, seven failure and recovery drills plus the cold rebuild and the baseline all pass on the pinned inputs:
+  - **Fail closed.** `current()` refuses when an inconsistent or unrecorded artifact is present, and interrupts are recorded before the run stops.
+- **Evidence:** In `refresh-drills-issue-145-v3`, seven failure and recovery drills plus the cold rebuild and the baseline all pass on the pinned inputs:
   - mismatched pin;
   - missing pin;
   - late parent;
