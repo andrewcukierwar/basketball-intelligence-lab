@@ -54,7 +54,7 @@ EI clearly beats home court alone and its own preseason snapshot. **Inferred:** 
 ### 3.2 Reported slices
 
 - **Early season (R1 and R2 blocks).** EI is worse than the team rating even before December: RMSE Δ +0.348 [+0.051, +0.636] / [+0.078, +0.642], log loss Δ +0.0339 [+0.0162, +0.0513] / [+0.0140, +0.0557]. Against the preseason snapshot it is within noise (RMSE Δ −0.029 [−0.082, +0.021]). A player-based prior was expected to help most early, when team margins are few, so this is a **negative result**.
-- **Oracle minutes.** Knowing who played and for how long recovers 0.22 RMSE of the 0.71 gap. That is not enough to overtake the team rating. In #39's 2023–25 folds, oracle minutes recovered 0.09 of a 0.14 gap ([team-outcomes.md](team-outcomes.md)).
+- **Oracle minutes.** Knowing who played and for how long recovers 0.22 RMSE of the 0.71 gap. That is not enough to overtake the team rating. In #39's 2023–24 and 2024–25 evaluation folds, oracle minutes recovered 0.09 of a 0.14 gap ([team-outcomes.md](team-outcomes.md)).
 - **Playoffs** (85 games, not adjudicated). RMSE: team rating 15.65, home court 17.43, EI 17.89. Log loss: 0.638, 0.688 and 0.710.
 - **Cold minute share by block.** It is the share of predicted minutes given the fixed cold rating (−0.375704): R1 0.071, R2 0.0035, R3 0.0076, R4 0.0033, P 0.0.
 
@@ -97,7 +97,7 @@ All were recorded in the access log at the time.
 - **Top overlap, total:** top 25, EI 60% against prior 64%; top 50, 52% against 56%.
 - **Comparison with #40's 2024–25 expected row:** total r 0.874, prior 0.806.
 - **Experimental reading.** A year-old on-court deviation still moves EI toward EPM on defense. On offense and total it no longer beats the updated box prior, consistent with the staleness discussed in §3.3.
-- The intercept-fallback slice has only 3 players, so its correlations are undefined. They are written as `NaN` in `d1-results.json`, which the #40 writer also does, so strict JSON parsers need `allow_nan`.
+- The intercept-fallback slice has only 3 players, so its correlations are undefined. They are written as `NaN` in `d1-results.json`, because the shared `bil.data.pilot_sources.write_json` uses `json.dumps` defaults. Strict JSON parsers will reject them.
 
 ## 6. Methodology fidelity and unresolved gaps
 
