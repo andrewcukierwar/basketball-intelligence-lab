@@ -52,3 +52,34 @@ These figures describe the accepted games only. They do not rescue the result, b
 - **Paired seasons.** No V2-paired season with liveData remains unexposed: liveData starts in 2020–21 and V2 ends in 2024–25.
 
 Outputs (private): `data/processed/<season>/issue-133-v1{,-rows,-compare.json,-fields.json}`, `data/processed/quality/issue-133-v1/`, and `data/processed/expected_impact/issue-133-v1-{model-check,verdict}.json`.
+
+## Revision 2: verdict fail (L8)
+
+**Protocol:** [v3-event-path-protocol-r2.md](v3-event-path-protocol-r2.md), registered at commit `807463c` (file SHA-256 `67aa7ab1…7ae9`). This run used that commit with a clean tracked tree and no deviations. Classification: Experimental, because 2023–25 were exposed by the first run.
+
+| Season | L1 | L2 | L3 | L4 | L5 | L6 | L8 | L7 (both seasons) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2023–24 | pass | pass | pass | pass | pass | pass | **fail** | pass |
+| 2024–25 | pass | pass | pass | pass | pass | pass | **fail** | pass |
+
+Under revision 2's §4 the path is **not adopted**. There is no further revision on 2023–25, and #42 stays blocked.
+
+- **Coverage restored.**
+  - 2023–24 regular season: 1,220 of 1,230 games (99.2%) against V2's 1,218, with 3 accepted by V2 only.
+  - 2024–25: 1,199 (97.5%) against 1,205, with 6 accepted by V2 only.
+  - Remaining rebuild quarantines: `v3_unmapped_action` 1 and 4, which are the unmarked `Bench` and empty-subtype fouls the narrowed fallback refuses. `v3_substitution_unpaired` 1 and 1.
+- **Fidelity.**
+  - Row mismatch: 0.22% and 0.24%.
+  - Per-game points gap: 0.23% and 0.24%.
+  - Lowest player slot: 99.76% and 99.75%.
+- **#36 rerun.** The `rapm_context` delta moves by +0.060, from −4.594 to −4.534. Both intervals exclude 0, and every verdict is unchanged.
+- **Why L8 fails.**
+  - **Agreement.** 1 of 80 (2023–24) and 1 of 18 (2024–25) revision-2 events agree with V2 on parser class.
+  - **The mismatch.** Every disagreement is a flopping foul. V2 codes it as foul action **32**, a code pbpstats 1.3.11 does not classify, so to the parser it is neither technical nor personal. Revision 2 coded it as a non-unsportsmanlike technical (6, 12).
+  - **The rest agree.** The one `10 Second Violaton` turnover agrees in each season.
+- **Reading (Inferred).**
+  - **What failed.** The documented-rule mapping does not match V2's own coding.
+  - **What the other limits show.** The rows are nearly unaffected, by L4, L5 and L7, which suggests that in these games the parser's handling of the two classes rarely differs.
+  - **Why the verdict stands.** L8 was registered to test class agreement, not row effects. The verdict is not overridden here.
+
+Outputs (private): `data/processed/<season>/issue-133-v2{,-rows,-compare.json,-fields.json}`, `data/processed/quality/issue-133-v2/` and `data/processed/expected_impact/issue-133-v2-{model-check,verdict}.json`.

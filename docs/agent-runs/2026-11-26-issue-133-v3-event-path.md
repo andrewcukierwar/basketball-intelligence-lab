@@ -1,7 +1,7 @@
 # Agent run: V2-free event path from V3 and liveData (#133)
 
 - **Date:** 2026-11-26
-- **Status:** Blocked. The registered validation failed, and how to proceed needs a maintainer decision.
+- **Status:** Blocked. Both registered validations failed (the first on coverage, revision 2 on L8), and how R1 proceeds needs a maintainer decision.
 - **Related issues:** #133, #42.
 - **Branch / commit / PR:** `claude/issue-133-v3-event-path`. The registration commit is `8da7a7e`. The PR is listed on the issue.
 
@@ -37,6 +37,17 @@
 | Validation, `scripts/v3_event_verdict.py` | FAIL: L2 and L3 in both seasons; L1, L4–L7 pass |
 | Independent review | Sonnet pre-registration review and focused re-review; no blockers at registration |
 
+## Revision 2 (maintainer chose "Revised protocol")
+
+- **What changed.** `v3-live-events-2` maps `('Foul', 'Flopping')` to a non-unsportsmanlike technical by NBA rule. It adds a narrow class-preserving fallback for other unknown fouls and turnovers, and a new limit, L8: parser-class agreement of the revised events with V2.
+- **Review.** The reviewer's pre-registration blockers were fixed: L8 added and the personal-foul default narrowed. A focused re-review found none left.
+- **Registration and result.** Registered at `807463c`. The run passes L1–L7 (coverage 99.2% and 97.5%) and fails L8: V2 codes flopping as foul action 32, unknown to pbpstats, so 79 of 80 and 17 of 18 classes disagree. Not adopted, and no further revision under its rules.
+
+| Check | Actual result |
+| --- | --- |
+| Revision-2 verdict | FAIL: L8 in both seasons; L1–L7 pass |
+| `uv run pytest -q` | 454 passed, 3 skipped |
+
 ## Blockers and remaining risks
 
 - **#42.** No registered path builds 2025–26 events.
@@ -44,6 +55,6 @@
 
 ## Next actions (maintainer decision)
 
-1. **Accept the failure.** Redesign R1 without 2025–26 play-by-play.
-2. **Register a revised protocol.** Disclose the exposure, map unknown foul and turnover subtypes by a structural fallback, rerun on 2023–25 as Experimental evidence, and accept weaker assurance for 2025–26.
-3. **Wait** for an archive that holds V2-equivalent 2025–26 events.
+1. **Redesign R1.** Run it without 2025–26 play-by-play, for example on outcomes that need only box scores. This is what revision 2's outcome rule directs.
+2. **Wait** for an archive that holds V2-equivalent 2025–26 events.
+3. **Override L8 (maintainer only).** Accept revision 2 despite L8, as a recorded deviation, on the grounds that L1–L7 pass. An agent must not do this unilaterally.
