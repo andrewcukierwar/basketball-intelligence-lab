@@ -31,8 +31,9 @@ Make each Expected Impact snapshot's roster, coverage, metadata and digest invar
 | Check | Actual result |
 | --- | --- |
 | `pytest -q` (worktree, `PYTHONPATH=src`) | 464 passed, 3 skipped |
+| Independent review (Sonnet subagent, fresh context) | No blockers. Fixed: the sign of a rounded zero could move the digest. Docs now note the 1e-6 cold-total precision |
 | `ruff check`, `ruff format`, `mypy src` | Pass |
-| `load_ratings` on frozen `issue-35-v1` and `issue-36-v1` | 11 snapshots each. Cold totals are unchanged (−0.356921, −0.369487 and −0.375704) |
+| `load_ratings` on frozen `issue-35-v1` and `issue-36-v1` | 11 snapshots each. Cold totals are unchanged (−0.356921, −0.369487 and −0.375704). A v2 cold total is the sum of two 6-decimal priors, so it can differ from a v1 inferred total by up to 1e-6 |
 
 ## Blockers and remaining risks
 

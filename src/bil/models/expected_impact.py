@@ -307,7 +307,8 @@ def as_of_ratings(
     floats = (prior, deviation, exposure, prepared.gamma, cold)
     scalars = (fit.intercept, prepared.context_intercept)
     for value in (*(v for a in floats for v in np.ravel(a)), *scalars):
-        digest.update(f"{float(value):.6f}|".encode())
+        # Adding 0.0 maps a rounded -0.0 to 0.0, so sign noise on zero cannot move the digest.
+        digest.update(f"{round(float(value), 6) + 0.0:.6f}|".encode())
     return Ratings(
         prepared.cutoff,
         ids,
