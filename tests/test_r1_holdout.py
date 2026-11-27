@@ -30,8 +30,8 @@ def game(day: date, playoff: bool = False, season: int = 2025) -> Game:
     )
 
 
-def test_guard_refuses_until_frozen(tmp_path: Path) -> None:
-    assert r1_holdout.R1_PROTOCOL_SHA256 is None
+def test_guard_refuses_until_frozen(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(r1_holdout, "R1_PROTOCOL_SHA256", None)
     with pytest.raises(HoldoutLocked):
         guard()
     with pytest.raises(HoldoutLocked):

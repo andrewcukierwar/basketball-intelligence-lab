@@ -96,7 +96,9 @@ from bil.models.team_outcomes import (
 PROTOCOL = REPO_ROOT / "docs/research/r1-confirmatory-protocol.md"
 PINS = REPO_ROOT / "docs/research/r1-holdout-pins.json"
 ACCESS_LOG = REPO_ROOT / "docs/research/r1-holdout-access-log.md"
-R1_PROTOCOL_SHA256: str | None = None  # set only by the stage-B freeze commit
+R1_PROTOCOL_SHA256: str | None = (
+    "2159cc24344ffe30344fe04992cdfd8d52bbc5097abeb5c64839653422ddd045"  # stage-B freeze
+)
 VERSION = "r1-v2"
 HOLDOUT_SEASON = HOLDOUT_START_YEAR
 # The locked SPM fit's no-history prior with zero deviation: the cold rating of every

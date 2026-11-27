@@ -1,6 +1,6 @@
 # R1 joint confirmatory registration: 2025–26 holdout
 
-**Status:** **DRAFT v2 for maintainer review.** Nothing in 2025–26 has been captured or read.
+**Status:** **FROZEN (stage B, 2026-11-26).** The maintainer approved protocol v2 ("Approved, please continue"). Nothing in 2025–26 had been captured or read at freeze.
 
 **Revision v2: box-only R1 (2026-11-26).** The maintainer chose to redesign R1 without 2025–26 play-by-play ("Redesign R1").
 - **Why.** The pinned archive has no 2025–26 V2 events. Both registered validations of a V2-free event path failed ([#133](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/133), [validation](v3-event-path-validation.md), ADR-0033).
@@ -244,13 +244,21 @@ It also records unresolved fidelity gaps and the status of Actual impact. Result
 ```json
 {
   "issue": 42,
-  "status": "draft",
+  "status": "frozen",
   "protocol_version": 2,
   "holdout_inputs": ["bill_mill_player_log_2025", "bill_mill_team_log_2025", "epm_capture_d1"],
   "holdout_season": 2025,
   "cohort": {"dates": ["2025-07-01", "2026-07-01"], "game_prefixes": ["002", "004"]},
-  "code_commit": "set at freeze",
-  "reproduction_digests": "set at freeze",
+  "code_commit": "fd9352a67022535a9fdadaeffd84321ed8fd3165",
+  "reproduction_digests": {
+    "reproduction_run": "data/processed/r1/reproduction-fd9352a",
+    "ei_ratings_2024_identical_to_issue_36_v1": "f7798d608b74849be39e744df7aca3898b4111134f45078724f1aff6b74e8e31",
+    "team_predictions_2024_identical_to_issue_39_v1": "ac18d79ca179a144a001b3663ff4fd07cec85cf0296c50589efaaffca36b4f8d",
+    "dry_run_2024_predictions": "7b006a881cb7cd596ae1beff43201188dc5113c9bfb1ac882e7480cc1c3cad30",
+    "dry_run_2024_ratings": "4bf0eeb4c7155fc8f79a177924febb950d86c598a34f850cd1eebc5d186f47d2",
+    "dry_run_2024_sealed_results": "64850a8910da614e0998e751326a2dce08b57182c07fe89aa54d1bb5d97424da",
+    "dry_run_sealed_results_access_time": "2026-11-26T20:27:41 local, unopened before freeze"
+  },
   "protocols": {
     "validation_strategy": "7f4b7a041ade4a7df0006eb24d1a655698507f54fa90fedc7346cccc516e9e13",
     "expected_impact_protocol": "28869a50993ce93e598997b3dd56cce246c5a3915c1205cff30975ccaf64889d",
