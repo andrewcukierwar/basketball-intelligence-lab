@@ -16,8 +16,10 @@ from bil.models.team_outcomes import load_ratings
 from bil.refresh import (
     MANIFEST,
     RATINGS,
+    REVISIONS,
     Inputs,
     RefreshError,
+    RevisionConflict,
     compare_ratings,
     publish,
     refresh_origin,
@@ -68,11 +70,20 @@ def test_rerun_is_a_no_op_and_changed_inputs_get_a_new_artifact(tmp_path: Path) 
     again = refresh_origin(tmp_path, CUTOFF, inputs())
     assert not again.created and again.path == first.path
     assert (first.path / RATINGS).stat().st_mtime_ns == stamp
-    changed = refresh_origin(tmp_path, CUTOFF, inputs(ids={**IDS, "box_logs": {"2021": "c" * 64}}))
+    new_ids = inputs(ids={**IDS, "box_logs": {"2021": "c" * 64}})
+    # A changed input at a published origin is recorded and refused, never silently published
+    # (#144); accepting it publishes beside the old artifact, which is never overwritten.
+    with pytest.raises(RevisionConflict, match="recorded"):
+        refresh_origin(tmp_path, CUTOFF, new_ids)
+    changed = refresh_origin(tmp_path, CUTOFF, new_ids, accept_revision=True)
     assert changed.created and changed.artifact_id != first.artifact_id
     assert sorted(p.name for p in (tmp_path / CUTOFF.isoformat()).iterdir()) == sorted(
-        [first.artifact_id, changed.artifact_id]
+        [first.artifact_id, changed.artifact_id, REVISIONS]
     )
+    log = [json.loads(line) for line in (tmp_path / CUTOFF.isoformat() / REVISIONS).open()]
+    assert [r["action"] for r in log] == ["refused", "published"]
+    assert log[0]["changed_inputs"] == ["box_logs", "source_resolution"]
+    assert log[0]["games_changed"] == 0 and log[0]["games_recaptured_unchanged"] > 0
     record = json.loads((first.path / MANIFEST).read_text(encoding="utf-8"))
     assert record["artifact_id"] == first.artifact_id and record["parents"] == PARENTS
     assert record["eligibility"]["cutoff"] == CUTOFF.isoformat()

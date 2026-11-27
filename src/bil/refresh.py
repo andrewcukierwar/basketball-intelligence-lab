@@ -30,7 +30,7 @@ import os
 import shutil
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import Any
@@ -43,6 +43,7 @@ from bil.features.box_build import PLAYER_LOG, TEAM_LOG
 from bil.models.expected_impact import (
     SPM_MANIFEST,
     SPM_RUN,
+    Prepared,
     SpmFit,
     as_of_ratings,
     fit_informed,
@@ -62,6 +63,7 @@ from bil.models.rapm.multiseason import (
     SEASON_PINS,
     TEMPORAL_BY_NAME,
     Analysis,
+    PlayerFit,
     Scenario,
     _git_head,
     _prepare,
@@ -77,10 +79,13 @@ from bil.refresh_sources import (
     resolve,
 )
 
-VERSION = "origin-refresh-issue-143-v2"
+VERSION = "origin-refresh-issue-144-v3"
 MANIFEST = "manifest.json"
 RATINGS = "ratings.csv"
 SOURCES = "sources.json"
+REVISIONS = "revisions.jsonl"
+CHECKPOINTS = "_checkpoints"
+CHECKPOINT_RETENTION = 14  # origins whose fitted state is kept
 FROZEN_TOLERANCE = 1e-6
 
 
@@ -108,6 +113,11 @@ class Published:
     path: Path
     artifact_id: str
     created: bool
+    checkpoint: str = "none"  # "computed", "reused" or "none"
+
+
+class RevisionConflict(RefreshError):
+    """An origin already holds a different artifact; the change was recorded, not published."""
 
 
 def season_of(origin: date) -> int:
@@ -215,6 +225,217 @@ def _fsync_dir(directory: Path) -> None:
         os.close(descriptor)
 
 
+# --- checkpoints ------------------------------------------------------------------------
+
+
+def _checkpoint_paths(store: Path, origin: date, aid: str) -> tuple[Path, Path]:
+    stem = f"{origin.isoformat()}-{aid}"
+    return store / f"{stem}.npz", store / f"{stem}.json"
+
+
+def _identity(origin: date, input_ids: Mapping[str, Any], inputs: Inputs) -> dict[str, Any]:
+    return {
+        "version": VERSION,
+        "origin": origin.isoformat(),
+        "inputs": input_ids,
+        "parents": inputs.parents,
+        "config": inputs.config,
+    }
+
+
+def save_checkpoint(
+    store: Path,
+    origin: date,
+    aid: str,
+    identity: Mapping[str, Any],
+    prepared: Prepared,
+    fit: PlayerFit,
+    retention: int = CHECKPOINT_RETENTION,
+) -> None:
+    """Write the fitted state of one origin. The JSON sidecar is written last and commits it.
+
+    Only window rows and their weights are kept per cutoff. The per-loaded-row prior offset is
+    recomputed from the priors on load, so storage is bounded by the window, not the row set.
+    """
+    store.mkdir(parents=True, exist_ok=True)
+    npz, meta = _checkpoint_paths(store, origin, aid)
+    stage = Path(mkdtemp(prefix=".checkpoint-", dir=store))
+    try:
+        np.savez_compressed(
+            stage / "state.npz",
+            index=prepared.index,
+            weights=prepared.weights,
+            gamma=prepared.gamma,
+            player_ids=prepared.player_ids,
+            priors=prepared.priors,
+            box_history=prepared.box_history,
+            effects=fit.effects,
+            used=fit.used,
+            exposure=fit.exposure,
+        )
+        record = {
+            "artifact_id": aid,
+            "identity": identity,
+            "npz_sha256": sha256_file(stage / "state.npz"),
+            "context_intercept": prepared.context_intercept,
+            "intercept": fit.intercept,
+            "info": fit.info,
+            "audit": prepared.audit,
+        }
+        (stage / "meta.json").write_text(
+            json.dumps(record, sort_keys=True, default=str) + "\n", encoding="utf-8"
+        )
+        _fsync(stage)
+        os.replace(stage / "state.npz", npz)
+        os.replace(stage / "meta.json", meta)
+        _fsync_dir(store)
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+    # A superseded identity of the same origin is never reused again.
+    for old in store.glob(f"{origin.isoformat()}-*"):
+        if old.stem != npz.stem:
+            old.unlink(missing_ok=True)
+    prune_checkpoints(store, retention, protect=origin)
+
+
+def load_checkpoint(
+    store: Path, origin: date, aid: str, identity: Mapping[str, Any], inputs: Inputs
+) -> tuple[Prepared, PlayerFit] | None:
+    """The fitted state of ``origin``, only if every identity component matches exactly."""
+    npz, meta = _checkpoint_paths(store, origin, aid)
+    if not meta.is_file() or not npz.is_file():
+        return None
+    try:
+        record = json.loads(meta.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    same = json.dumps(record.get("identity"), sort_keys=True, default=str) == json.dumps(
+        dict(identity), sort_keys=True, default=str
+    )
+    if record.get("artifact_id") != aid or not same or sha256_file(npz) != record["npz_sha256"]:
+        return None
+    with np.load(npz, allow_pickle=False) as state:
+        data = {name: state[name] for name in state.files}
+    design = inputs.analysis.design
+    m, priors = design.size, data["priors"]
+    offset = np.asarray(design.players @ np.concatenate([priors[:m, 0], priors[:m, 1]]))
+    prepared = Prepared(
+        origin,
+        data["index"],
+        data["weights"],
+        float(record["context_intercept"]),
+        data["gamma"],
+        data["player_ids"],
+        priors,
+        data["box_history"],
+        offset,
+        inputs.spm,
+        record["audit"],
+    )
+    fit = PlayerFit(
+        float(record["intercept"]),
+        data["effects"],
+        data["used"],
+        data["exposure"],
+        record["info"],
+    )
+    return prepared, fit
+
+
+def prune_checkpoints(
+    store: Path, keep: int = CHECKPOINT_RETENTION, protect: date | None = None
+) -> list[str]:
+    """Remove checkpoints of all but the ``keep`` latest origins, never ``protect`` (the origin
+    just written, so a backfill keeps its own state); returns the removed stems.
+
+    A state file without its committing sidecar is an orphan and is always removed.
+    """
+    for orphan in store.glob("*.npz"):
+        if not orphan.name.startswith(".") and not orphan.with_suffix(".json").exists():
+            orphan.unlink(missing_ok=True)
+    stems = sorted({p.stem for p in store.glob("*.json") if not p.name.startswith(".")})
+    origins = sorted({stem[:10] for stem in stems})
+    old = set(origins[:-keep]) if keep > 0 else set(origins)
+    old.discard(protect.isoformat() if protect else "")
+    removed = []
+    for stem in stems:
+        if stem[:10] in old:
+            for suffix in (".json", ".npz"):
+                (store / f"{stem}{suffix}").unlink(missing_ok=True)
+            removed.append(stem)
+    return removed
+
+
+# --- late revisions ---------------------------------------------------------------------
+
+
+def _others(root: Path, origin: date, aid: str) -> list[str]:
+    parent = root / origin.isoformat()
+    if not parent.is_dir():
+        return []
+    return sorted(
+        d.name
+        for d in parent.iterdir()
+        if d.is_dir() and not d.name.startswith(".") and d.name != aid
+    )
+
+
+def revision_record(
+    root: Path,
+    origin: date,
+    previous: str,
+    aid: str,
+    input_ids: Mapping[str, Any],
+    inputs: Inputs,
+    sources: Mapping[str, Any],
+) -> dict[str, Any]:
+    """What differs between a published artifact and the one a refresh would now publish."""
+    old = root / origin.isoformat() / previous
+    manifest = json.loads((old / MANIFEST).read_text(encoding="utf-8"))
+    path = old / SOURCES
+    before = json.loads(path.read_text(encoding="utf-8"))["games"] if path.is_file() else {}
+    after = sources["games"]
+    both = set(before) & set(after)
+    changed = sorted(k for k in both if before[k][:2] != after[k][:2])  # revision or content
+    recaptured = sorted(k for k in both if before[k][:2] == after[k][:2] and before[k] != after[k])
+    added, removed = sorted(set(after) - set(before)), sorted(set(before) - set(after))
+    inputs_before = manifest.get("inputs", {})
+    return {
+        "detected_at": datetime.now(UTC).isoformat(),
+        "origin": origin.isoformat(),
+        "previous_artifact_id": previous,
+        "new_artifact_id": aid,
+        "changed_inputs": sorted(
+            k
+            for k in set(inputs_before) | set(input_ids)
+            if inputs_before.get(k) != input_ids.get(k)
+        ),
+        "changed_config": sorted(
+            k
+            for k in set(manifest.get("config", {})) | set(inputs.config)
+            if manifest.get("config", {}).get(k) != inputs.config.get(k)
+        ),
+        "changed_parents": sorted(
+            k
+            for k in set(manifest.get("parents", {})) | set(inputs.parents)
+            if manifest.get("parents", {}).get(k) != inputs.parents.get(k)
+        ),
+        "version_changed": manifest.get("version") != VERSION,
+        "games_changed": len(changed),
+        "games_recaptured_unchanged": len(recaptured),
+        "games_added": len(added),
+        "games_removed": len(removed),
+        "examples": {"changed": changed[:50], "added": added[:50], "removed": removed[:50]},
+    }
+
+
+def _append(path: Path, record: Mapping[str, Any]) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, sort_keys=True, default=str) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
 def replay_captures(
     inputs: Inputs, retrieved: Mapping[str, Any] | None = None
 ) -> tuple[Capture, ...]:
@@ -243,22 +464,86 @@ def resolution_for(origin: date, inputs: Inputs) -> Resolution:
     return resolve(inputs.captures or replay_captures(inputs), origin, inputs.mode)
 
 
-def refresh_origin(root: Path, origin: date, inputs: Inputs) -> Published:
-    """Build and publish the snapshot for ``origin``; a no-op when it already exists."""
+def refresh_origin(
+    root: Path,
+    origin: date,
+    inputs: Inputs,
+    *,
+    checkpoints: Path | None = None,
+    reuse: bool = True,
+    accept_revision: bool = False,
+    retention: int = CHECKPOINT_RETENTION,
+) -> Published:
+    """Build and publish the snapshot for ``origin``; a no-op when it already exists.
+
+    - **Checkpoints.** With a ``checkpoints`` store, the fitted state of the origin is reused
+      when its full identity matches (``reuse``), and saved otherwise.
+    - **Late revisions.** If the origin already holds a different artifact, what changed is
+      appended to ``ROOT/<origin>/revisions.jsonl`` and :class:`RevisionConflict` is raised,
+      unless ``accept_revision`` publishes the new artifact beside the old one (also recorded).
+    """
     season = check_origin(origin, inputs.seasons)
     resolution = resolution_for(origin, inputs)
     input_ids = {**inputs.input_ids, "source_resolution": resolution.digest()}
     aid = artifact_id(origin, input_ids, inputs.parents, inputs.config)
     if existing(root, origin, aid) is not None:
         return Published(root / origin.isoformat() / aid, aid, False)
+    others, broken = [], []
+    for name in _others(root, origin, aid):
+        try:
+            existing(root, origin, name)
+            others.append(name)
+        except RefreshError as error:
+            broken.append({"artifact_id": name, "reason": str(error)})
+    log = root / origin.isoformat() / REVISIONS
+    if broken:
+        _append(
+            log,
+            {
+                "detected_at": datetime.now(UTC).isoformat(),
+                "origin": origin.isoformat(),
+                "new_artifact_id": aid,
+                "inconsistent": broken,
+                "action": "refused",
+            },
+        )
+        raise RevisionConflict(
+            f"{origin} holds inconsistent artifacts {[b['artifact_id'] for b in broken]}; "
+            f"recorded in {REVISIONS} and not published"
+        )
+    revision = None
+    if others:
+        revision = revision_record(
+            root, origin, others[-1], aid, input_ids, inputs, resolution.record()
+        )
+        if not accept_revision:
+            _append(log, {**revision, "action": "refused"})
+            raise RevisionConflict(
+                f"{origin} already holds {others}; the revision to {aid[:12]} was recorded in "
+                f"{REVISIONS} and not published"
+            )
+    identity = _identity(origin, input_ids, inputs)
+    state = {"checkpoint": "none"}
 
     def write(stage: Path) -> Mapping[str, Any]:
         analysis = inputs.analysis
-        prepared = prepare(
-            analysis, origin, inputs.spm, inputs.logs[season - 1], inputs.logs[season]
+        loaded = (
+            load_checkpoint(checkpoints, origin, aid, identity, inputs)
+            if checkpoints is not None and reuse
+            else None
         )
-        offense, defense = inputs.config["offense_ridge"], inputs.config["defense_ridge"]
-        fit = fit_informed(analysis, prepared, offense, defense, f"refresh:{origin}")
+        if loaded is not None:
+            prepared, fit = loaded
+            state["checkpoint"] = "reused"
+        else:
+            prepared = prepare(
+                analysis, origin, inputs.spm, inputs.logs[season - 1], inputs.logs[season]
+            )
+            offense, defense = inputs.config["offense_ridge"], inputs.config["defense_ridge"]
+            fit = fit_informed(analysis, prepared, offense, defense, f"refresh:{origin}")
+            if checkpoints is not None:
+                save_checkpoint(checkpoints, origin, aid, identity, prepared, fit, retention)
+                state["checkpoint"] = "computed"
         snap = as_of_ratings(
             prepared,
             fit,
@@ -273,6 +558,7 @@ def refresh_origin(root: Path, origin: date, inputs: Inputs) -> Published:
         return {
             "inputs": input_ids,
             "source_resolution": resolution.summary(),
+            "checkpoint": state["checkpoint"],
             "parents": inputs.parents,
             "config": inputs.config,
             "snapshot_id": snap.snapshot_id,
@@ -282,7 +568,10 @@ def refresh_origin(root: Path, origin: date, inputs: Inputs) -> Published:
             "working_tree_clean": clean,
         }
 
-    return publish(root, origin, aid, write)
+    done = publish(root, origin, aid, write)
+    if revision is not None:  # recorded only once the accepted revision is actually published
+        _append(log, {**revision, "action": "published"})
+    return replace(done, checkpoint=state["checkpoint"])
 
 
 # --- pinned replay inputs --------------------------------------------------------------
@@ -417,6 +706,8 @@ def main() -> None:
         p.add_argument("root", type=Path)
         if name == "build":
             p.add_argument("--origin", type=date.fromisoformat, required=True, action="append")
+            p.add_argument("--no-checkpoints", action="store_true", help="neither read nor save")
+            p.add_argument("--accept-revision", action="store_true")
     args = parser.parse_args()
     args.root.mkdir(parents=True, exist_ok=True)
     scratch = Path(mkdtemp(prefix=".inputs-", dir=args.root))
@@ -426,13 +717,20 @@ def main() -> None:
         shutil.rmtree(scratch, ignore_errors=True)
     if args.command == "build":
         for origin in args.origin:
-            done = refresh_origin(args.root, origin, inputs)
+            done = refresh_origin(
+                args.root,
+                origin,
+                inputs,
+                checkpoints=None if args.no_checkpoints else args.root / CHECKPOINTS,
+                accept_revision=args.accept_revision,
+            )
             print(
                 json.dumps(
                     {
                         "origin": origin.isoformat(),
                         "artifact_id": done.artifact_id,
                         "created": done.created,
+                        "checkpoint": done.checkpoint,
                         "path": str(done.path),
                     }
                 )

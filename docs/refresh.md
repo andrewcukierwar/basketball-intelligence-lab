@@ -104,3 +104,80 @@ The identity still includes the whole-season pin digests, so re-versioning a pin
 ### Verification (2026-11-27)
 
 `verify-frozen` with resolution reproduced all 10 #36 block snapshots, with roster gap 0.0 and cold gap 0.0. For example, the 2024-02-01 origin resolves 5,329 games and excludes 3,797 on or after `D`. The resolution added about 0.3 s, for 7.0 s in total and a peak of 1.9 GiB. `sources.json` is about 0.9 MB per origin.
+
+## Checkpoints, late revisions and capacity (#144)
+
+### Checkpoints
+
+`refresh_origin(..., checkpoints=STORE)` saves the fitted state of each origin. The state is the window row indices and weights, the context fit, the priors and box-history flags, and the player effects, intercept and exposure.
+
+- **Reuse.** A later refresh of that origin reuses the state only when the stored identity (version, origin, input digests including the source resolution, parents and configuration) and the state digest both match exactly. Otherwise it refits and overwrites the checkpoint.
+- **Size.** The per-loaded-row prior offset is recomputed from the priors on load, so a checkpoint is bounded by the window, not the row set.
+- **Retention.** Checkpoints of the latest 14 origins are retained by default (`CHECKPOINT_RETENTION`).
+
+Warm builds repeat cold computations exactly, so warm and cold artifacts are identical. An approximate rolling update of the solver, such as decaying the normal equations from day to day, was rejected: it cannot give bit-identical artifacts, and a full refit already costs well under a second. Most incrementality therefore comes from idempotent artifacts: a daily run computes only the origins not yet published.
+
+### Late revisions
+
+If an origin already holds a valid artifact with a different ID, the refresh appends a record to `ROOT/<origin>/revisions.jsonl` and raises `RevisionConflict` without publishing. The record holds:
+
+- the previous and new IDs;
+- the input digests that changed;
+- the counts of games with changed content, recaptured with unchanged content, added and removed, with examples.
+
+`--accept-revision` publishes the new artifact beside the old one, and that is recorded too. Nothing is overwritten.
+
+### Capacity budget (registered before the #144 measurement run)
+
+**Workload.** A daily replay of every origin from 2025-01-01 to 2025-01-31, plus the weekly 2024–25 plan from #129 (1 October and every Monday through the last game). It runs in two passes:
+
+1. **Cold:** fresh artifact root, no checkpoint reuse, checkpoints written.
+2. **Warm:** fresh artifact root, reusing pass 1's checkpoints, with retention set to cover the workload.
+
+It also runs one **cold daily job**: a fresh process running `bil.refresh build` for one new origin (2025-02-03), which loads, resolves, fits and publishes. A **late-revision drill** alters one pre-origin game's captured content at a published origin.
+
+**Pass criteria.** These are fixed before the run:
+
+| Check | Budget |
+| --- | --- |
+| Warm/cold equality | Every workload origin has the same artifact ID and byte-identical `ratings.csv` in both passes. |
+| Peak resident memory | At most 4 GiB, for the capacity process and for the daily job. |
+| Per-origin refresh, in process | At most 5 s at the maximum. |
+| Cold daily job, wall clock (compute freshness) | At most 120 s. |
+| Checkpoint store at default retention | At most 500 MB (14 × the mean checkpoint size). |
+| Late-revision drill | Refused, recorded with the altered game, and the original artifact untouched. |
+
+**Supported cadence.** Daily if every row passes. The weekly cadence is reported for comparison. Replay measures only compute freshness. Live freshness adds the wait for source captures after the last game, which replay cannot measure.
+
+### Capacity results (`refresh-capacity-issue-144-v2`, 2026-11-27)
+
+This run was made once, from a clean tree at `9494ce7`, after the review fixes. The first run (`-v1`, at `3d645b8`) passed the same checks with near-identical numbers. It was superseded because the runner did not yet assert warm reuse, and it extrapolated the retained store size instead of measuring it. Outputs are under `data/interim/refresh-capacity-issue-144-v2`.
+
+**Workload.** 65 distinct origins:
+
+- 31 daily origins in January 2025;
+- 38 weekly origins, 2024-10-01 to 2025-06-16;
+- 4 Mondays shared between the two.
+
+| Check | Budget | Measured | Pass |
+| --- | --- | --- | --- |
+| Warm/cold equality | All origins identical | 65 of 65 with the same artifact ID and byte-identical ratings | yes |
+| Warm reused, cold computed | Every origin | Every warm origin reused its checkpoint, and every cold origin computed | yes |
+| Peak resident memory | ≤ 4 GiB | 2.08 GiB (capacity process); 1.76 GiB (daily job) | yes |
+| Per-origin refresh, maximum | ≤ 5 s | 0.58 s | yes |
+| Cold daily job, wall clock (compute freshness) | ≤ 120 s | 3.9 s | yes |
+| Checkpoint store at retention 14 | ≤ 500 MB | 9.9 MB, measured over the latest 14 origins (0.70 MB per checkpoint) | yes |
+| Late-revision drill | Refused and recorded | Refused. Recorded one changed game (`box_logs/2024:0022400001`, input `source_resolution`). The original artifact was untouched | yes |
+
+**Supported compute cadence: daily.**
+
+**Per-origin cost.**
+
+| Pass | Mean | Maximum | Includes |
+| --- | --- | --- | --- |
+| Cold | 0.52 s | 0.58 s | Prepare, fit and checkpoint save |
+| Warm | 0.06 s | 0.08 s | Checkpoint load and publish |
+
+The daily job (3.9 s) is about 70% input loading (2.7 s). A weekly cadence costs the same per refresh with 7 times fewer refreshes. Neither is near the budget.
+
+**Freshness.** Replay measures compute freshness only: seconds from job start to publish. Live freshness adds the wait for final captures after the night's last game, which replay cannot measure. Daily is therefore supported for **compute**; live capture latency is for #44 to measure.
