@@ -1,7 +1,7 @@
 # Agent run: #42 R1 joint confirmatory registration (draft)
 
 - **Date:** 2026-11-26
-- **Status:** **Blocked.** The maintainer approved the plan, but stage B stopped before any code was written: the pinned pipeline's required V2 play-by-play feed does not exist for 2025–26. **No 2025–26 data captured or read** (metadata only, see below).
+- **Status:** **Awaiting maintainer approval of protocol v2 (box-only).** Earlier blocked: stage B stopped before any code was written, because the pinned pipeline's required V2 play-by-play feed does not exist for 2025–26. **No 2025–26 data captured or read** (metadata only, see below).
 - **Related issues:** #42, #36, #39, #40, #38, #41, #55
 - **Branch:** `claude/issue-42-r1-registration`
 
@@ -47,6 +47,10 @@
   - **The `ei` variant.** It updates its box prior through 2025–26, but its on-court part uses only 2023–25 rows.
   - **Possession analyses.** P1 and P2 are now unavailable.
   - **Quality gate.** The unchanged box-feature build reconciliation, and at least 97% of the 1,230 scheduled games.
+- **Review.** A Sonnet review found three blockers, all fixed:
+  - the cold rating, now fixed at #36's −0.375704;
+  - the reproduction proof, now using #36's own row seasons;
+  - dry-run scores, now sealed until freeze.
 - **Dependency.** The protocol cites ADR-0033 and the #133 validation report, which live in PR #134.
 
 ## Next actions

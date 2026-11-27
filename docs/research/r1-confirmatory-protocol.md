@@ -93,6 +93,11 @@ The registration freezes in two stages. No 2025–26 byte is fetched before stag
   - **Box logs.** 2024–25 is `issue-52-v1` (`e34398e7…b9bd`), and 2025–26 is the new pinned capture. The prior at `c` uses box appearances dated strictly before `c` (the dated retrospective view).
 - **Cutoffs.** These are unchanged from protocol v1: R1 2025-10-01, R2 2025-12-01, R3 2026-02-01 and R4 2026-04-01. P is the earliest played date of a `004` game in the pinned 2025–26 team log. A final snapshot at 2026-07-01 is written for S, D1 and later use.
 - **`ei_preseason`.** The R1 snapshot held for every date. Reported in T2 to show the in-season box updates.
+- **Cold rating.** A player absent from a snapshot (a rookie or call-up, for example) gets the snapshot's cold rating (#39 §1).
+  - **The #36 rule.** `team_outcomes.load_ratings` reads the cold rating from a ratings row with no box history and no window possessions, and uses 0.0 if there is none. In every `issue-36-v1` snapshot such a row exists, and its rating is **−0.375704**: the locked SPM fit's no-history prior, with zero deviation.
+  - **Why v2 differs.** With row seasons 2023 and 2024 only, early v2 snapshots may have no such row, so the rule would silently give 0.0.
+  - **v2 rule.** v2 therefore fixes the cold rating at −0.375704 for every snapshot. The runner passes it explicitly, and it checks equality against any cold row present. `load_ratings` stays unchanged for the #39 reproduction.
+  - **Reported.** The cold rating and the share of predicted minutes it covers, by block.
 - **Prior results.** These are context only, not a decision input. With in-season possession rows, #39's 2023–25 margin RMSE delta against `team_rating` was +0.142 (game [+0.018, +0.262], week [−0.021, +0.298]). That would be `inconclusive` under this rule.
 
 ### 3.2 Team and game (C1, C2, T2)
@@ -109,6 +114,7 @@ The registration freezes in two stages. No 2025–26 byte is fetched before stag
   - Games without a single home team are excluded and counted.
 - **Seed.** 2,000 resamples with seed 39.
 - **Oracle minutes** are reported only, as a diagnostic.
+- **Early-season slice.** C1 and C2 deltas over the R1 and R2 blocks are reported, not adjudicated. That is where a result-based team rating has the least 2025–26 evidence.
 
 ### 3.3 External agreement (D1)
 
@@ -134,17 +140,21 @@ The registration freezes in two stages. No 2025–26 byte is fetched before stag
 ### 4.0 Holdout-ready code (between stages A and B)
 
 - **What changes.**
-  - Parametrize the #35/#36 EI runner and the #39 runner by season, cutoffs, row seasons and run inputs.
+  - Parametrize the #35/#36 EI runner and the #39 runner by season, cutoffs, row seasons and run inputs. That covers the hard-coded `expected_impact_outer` `OUTER_SEASONS`, `ROW_SEASONS`, `FINAL_CUTOFF`, the `outer_logs` date check and `parse_config`'s season checks, and `team_outcomes`' season constants, `RATING_RUNS` and target.
+  - Build the R1–R4 and P blocks from the fixed cutoffs and the team log. They cannot come from `season_blocks`, which needs rows of the scored season.
+  - Pass the fixed cold rating of §3.1.
   - Implement §3's verdict rule.
   - Add the guard mechanism of §0.
   - No modelling function changes.
 - **Guards.** The pilot, row and V3-event guards never lift for R1 v2. Only the box, EI, team-outcome and EPM guards lift.
-- **Reproduction proof, before freeze.** Run on 2024–25 as if it were the holdout, the parametrized code must reproduce two things exactly (maximum absolute difference 0):
-  - #36's 2024–25 EI ratings snapshots, with row seasons 2023 and 2024;
+- **Reproduction proof, before freeze.** The parametrized code, run with #36's and #39's own inputs (row seasons 2021–2024), must reproduce:
+  - #36's 2024–25 ratings snapshots;
   - #39's 2024–25 game predictions.
+
+  Identical file digests are required. If they differ, the maximum absolute difference must be at most 1e-9, and the difference is reported. This proves the parametrization. The v2 configuration itself is exercised by the dry run.
 - **Dry run, before freeze.** Run the R1 v2 configuration on 2024–25 as if it were the holdout: rows 2022–23 and 2023–24 only, and 2024–25 box logs. Run it twice and require identical digests.
-  - **Exposure.** The dry run's scores are 2024–25 development evidence, which is already exposed.
-  - **Not an input.** C1, C2, the verdict rule and every configuration above are fixed in stage A, before the dry run.
+  - **What is read before freeze.** Only digests, coverage counts, the cold minute share and runtime. The scores file is written and its digest recorded, but it is not opened until the freeze commit exists.
+  - **Not an input.** C1, C2, the verdict rule, the gate and every configuration above are fixed in stage A, before the dry run. If any of them changes after the dry-run scores are opened, the registration is relabelled as development evidence.
 - **Digests.** The digests of the reproduction and dry runs are recorded in the frozen block.
 - **Review.** Independent code review of this diff. CI is green on the code commit.
 
@@ -165,7 +175,11 @@ Run the unchanged #29 box-feature build (`bil.features.box_build`) on the 2025�
 - **Box reconciliation.** The box-feature build completes. It refuses any player or team row that violates the [box-score feature contract](box-score-feature-contract.md): unique keys, reciprocal team rows, agreeing dates and home flags, and count identities.
 - **Game coverage.** The pinned team log holds at least 97% of the 1,230 scheduled regular-season games (30 teams × 82 ÷ 2), each with two reciprocal team rows and player rows for both sides.
 
-Warnings are reported and not acted on. The limits and rules cannot change after capture. If either fails, the confirmatory attempt ends and is reported failed. A repaired attempt needs a new registration and is labelled development evidence.
+- **Warnings, reported only:**
+  - team-games whose summed player minutes differ from 240 plus 25 per overtime by more than one minute;
+  - the count of games excluded for lacking a single home team.
+
+Warnings are not acted on. The limits and rules cannot change after capture. If either fails, the confirmatory attempt ends and is reported failed. A repaired attempt needs a new registration and is labelled development evidence.
 
 ### 4.4 Order of operations
 
@@ -243,7 +257,8 @@ It also records unresolved fidelity gaps and the status of Actual impact. Result
     "row_seasons": [2023, 2024],
     "cutoffs": {"R1": "2025-10-01", "R2": "2025-12-01", "R3": "2026-02-01", "R4": "2026-04-01", "P": "first 004 played date in the team log"},
     "final_snapshot": "2026-07-01",
-    "possession_scoring": "unavailable (ADR-0033)"
+    "possession_scoring": "unavailable (ADR-0033)",
+    "cold_rating": -0.375704
   },
   "team": {
     "run_manifest_sha256": "8486bf8c42a30c708b12717c4955617d43aef044c4cf0cbc5b6da5fa8b1b1cee",
