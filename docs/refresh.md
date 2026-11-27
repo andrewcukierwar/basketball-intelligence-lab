@@ -148,3 +148,35 @@ It also runs one **cold daily job**: a fresh process running `bil.refresh build`
 | Late-revision drill | Refused, recorded with the altered game, and the original artifact untouched. |
 
 **Supported cadence.** Daily if every row passes. The weekly cadence is reported for comparison. Replay measures only compute freshness. Live freshness adds the wait for source captures after the last game, which replay cannot measure.
+
+### Capacity results (`refresh-capacity-issue-144-v1`, 2026-11-27)
+
+Run once from a clean tree at `3d645b8`, after the budget above was committed. The total was 45 s wall. Outputs are under `data/interim/refresh-capacity-issue-144-v1`.
+
+**Workload.** 65 distinct origins:
+
+- 31 daily origins in January 2025;
+- 38 weekly origins, 2024-10-01 to 2025-06-16;
+- 4 Mondays shared between the two.
+
+| Check | Budget | Measured | Pass |
+| --- | --- | --- | --- |
+| Warm/cold equality | All origins identical | 65 of 65 with the same artifact ID and byte-identical ratings | yes |
+| Peak resident memory | ≤ 4 GiB | 1.98 GiB (capacity process); 1.88 GiB (daily job) | yes |
+| Per-origin refresh, maximum | ≤ 5 s | 0.56 s | yes |
+| Cold daily job, wall clock | ≤ 120 s | 3.8 s | yes |
+| Checkpoint store at retention 14 | ≤ 500 MB | 9.8 MB (0.70 MB per checkpoint) | yes |
+| Late-revision drill | Refused and recorded | Refused. Recorded one changed game (`box_logs/2024:0022400001`, input `source_resolution`). The original artifact was untouched | yes |
+
+**Supported cadence: daily.**
+
+**Per-origin cost.**
+
+| Pass | Mean | Maximum | Includes |
+| --- | --- | --- | --- |
+| Cold | 0.52 s | 0.56 s | Prepare, fit and checkpoint save |
+| Warm | 0.06 s | 0.07 s | Checkpoint load and publish |
+
+The daily job (3.8 s) is about 70% input loading (2.7 s). A weekly cadence costs the same per refresh with 7 times fewer refreshes. Neither is near the budget.
+
+**Freshness.** Replay measures compute freshness only: seconds from job start to publish. Live freshness adds the wait for final captures after the night's last game, which replay cannot measure.
