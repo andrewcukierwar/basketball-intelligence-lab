@@ -561,6 +561,41 @@ V2 remains the event source of record.
   - **Earlier origins.** Origins before 2024-07-01 have no eligible calibration under this construction.
 - **Links:** [#136](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/136), [#129](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/129), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43)
 
+## ADR-0037 — Keep the raw-box SPM input; chronological Skills prior is inconclusive
+
+- **Date:** 2026-11-27
+- **Status:** Accepted (registered outcome of #125).
+- **Evidence class:**
+  - **Original:** the chronological Skills bundle and its consumer checks.
+  - **Experimental:** the development evidence. See the [protocol](research/skill-prior-protocol.md) and [results](research/skill-prior.md).
+- **Decision:**
+  - **Bundle.** Estimated Skills for scoring season `S` come from a versioned bundle (`skills-bundle-issue-125-v1`). It is fit on seasons `S-3` to `S-1`, with inner clock choice, and refused at both the snapshot and SPM consumers when it is late, misdated, for another season, or inconsistent with its source rows.
+  - **EI v1 prior input.** The raw dated box snapshot is kept. Applying the #30 SPM unchanged to as-of Skills is not adopted.
+- **Evidence:**
+  - **Primary contrast.** Skills-prior minus raw-prior EI on the outer pooled regular season is +0.38 [−0.52, +1.23] possession MSE, which is inconclusive. The sign favors the raw prior in both seasons.
+  - **Mechanism.** The applied Skills prior has about half the spread of the raw prior. The registered recent-history ablation puts the loss on shrunk inputs to an SPM trained on raw rates, not on history length.
+- **Consequences:**
+  - **R1.** The R1 Skills link exists and is chronological.
+  - **Retraining.** An SPM retrained on as-of Skills inputs is the open follow-up and needs its own registration.
+  - **Frozen results.** #35, #36, #39 and #42 results stand.
+- **Links:** [#125](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/125), ADR-0018, ADR-0030
+
+## ADR-0038 — Refresh EI at least weekly; on-court refresh removes the detectable team-level gap
+
+- **Date:** 2026-11-27
+- **Status:** Accepted (registered outcome of #129). This is development evidence, not a confirmatory claim.
+- **Evidence class:** Experimental. See the [protocol](research/refresh-cadence-protocol.md) and [results](research/refresh-cadence.md).
+- **Decision:** Operational EI refreshes the full model (window, context, prior and on-court ridge) at least weekly. Daily refresh is preferred. #43 should target a daily cadence.
+- **Evidence:**
+  - **Cadence effect.** With minutes and calibration matched on 2023–25, daily refresh improves pooled regular-season margin RMSE by −0.142 [−0.191, −0.091] against block refresh. Weekly refresh improves it by −0.127.
+  - **Gap to the team rating.** The gap to the daily team rating moves from +0.142 to −0.000 [−0.104, +0.098]. That is no longer detectably worse, but equivalence is not shown.
+  - **Box versus on-court refresh.** Box-only refresh of the prior contributes 0.000 at game level.
+  - **Strict calibration.** The #136 post-freeze calibrations on 2024–25 agree.
+- **Consequences:**
+  - **#39 and #42.** #39's EI-versus-team gap is attributed to cadence. #42's 2025–26 result stands as recorded: its on-court input ended with 2024–25.
+  - **Confirmatory evidence.** It needs an eligible holdout or prospective test (#44), and a validated in-season possession source (#133).
+- **Links:** [#129](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/129), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), ADR-0036
+
 ## ADR-0039 — Content-addressed, atomically published origin refresh artifacts
 
 - **Date:** 2026-11-27
