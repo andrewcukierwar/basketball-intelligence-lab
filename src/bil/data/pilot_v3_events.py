@@ -286,6 +286,9 @@ DOUBLE_FOULS = {(6, 10), (6, 16)}  # double personal, double technical
 # then a class-preserving fallback that quarantines whenever the class is unclear.
 RULE_TYPES = {
     # NBA rule from 2023–24: in-game flopping is a non-unsportsmanlike technical foul.
+    # The registered validation found V2 codes it as foul action 32, not a technical, so this
+    # entry fails its class check (docs/research/v3-event-path-validation.md, ADR-0033). The
+    # path is not adopted; the entry stays as registered and must not be tuned on 2023–25.
     ("Foul", "Flopping"): (6, 12),
 }
 TECHNICAL_FOUL = (6, 11)

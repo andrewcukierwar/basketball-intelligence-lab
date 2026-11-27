@@ -501,7 +501,7 @@ V2 remains the event source of record.
 - **Date:** 2026-11-26
 - **Status:** Accepted (registered outcome rule of #133).
 - **Evidence class:** Inferred ([validation](research/v3-event-path-validation.md), [protocol](research/v3-event-path-protocol.md)).
-- **Decision:** `pilot build --event-source v3` (`v3-live-events-1`) is not adopted for seasons without V2. The code stays opt-in and unused by any canonical build.
+- **Decision:** `pilot build --event-source v3` is not adopted for seasons without V2, in either version. The opt-in code on main is revision 2 (`v3-live-events-2`, with the flopping rule and the fallback), and no canonical build uses it.
 - **Evidence:**
   - **Coverage.** Regular-season V3 coverage is 93.2% (2023–24) and 96.0% (2024–25), below the ADR-0022 97% floor.
   - **Cause.** The NBA's new flopping technical, `('Foul', 'Flopping')`, is unmapped by the 2020–23 type table. It quarantines 74 and 17 games.
