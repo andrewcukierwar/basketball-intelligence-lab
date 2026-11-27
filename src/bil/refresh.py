@@ -263,7 +263,6 @@ def save_checkpoint(
     try:
         np.savez_compressed(
             stage / "state.npz",
-            allow_pickle=False,
             index=prepared.index,
             weights=prepared.weights,
             gamma=prepared.gamma,
@@ -292,7 +291,11 @@ def save_checkpoint(
         _fsync_dir(store)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
-    prune_checkpoints(store, retention)
+    # A superseded identity of the same origin is never reused again.
+    for old in store.glob(f"{origin.isoformat()}-*"):
+        if old.stem != npz.stem:
+            old.unlink(missing_ok=True)
+    prune_checkpoints(store, retention, protect=origin)
 
 
 def load_checkpoint(
@@ -339,11 +342,21 @@ def load_checkpoint(
     return prepared, fit
 
 
-def prune_checkpoints(store: Path, keep: int = CHECKPOINT_RETENTION) -> list[str]:
-    """Remove checkpoints of all but the ``keep`` latest origins; returns removed stems."""
+def prune_checkpoints(
+    store: Path, keep: int = CHECKPOINT_RETENTION, protect: date | None = None
+) -> list[str]:
+    """Remove checkpoints of all but the ``keep`` latest origins, never ``protect`` (the origin
+    just written, so a backfill keeps its own state); returns the removed stems.
+
+    A state file without its committing sidecar is an orphan and is always removed.
+    """
+    for orphan in store.glob("*.npz"):
+        if not orphan.name.startswith(".") and not orphan.with_suffix(".json").exists():
+            orphan.unlink(missing_ok=True)
     stems = sorted({p.stem for p in store.glob("*.json") if not p.name.startswith(".")})
     origins = sorted({stem[:10] for stem in stems})
     old = set(origins[:-keep]) if keep > 0 else set(origins)
+    old.discard(protect.isoformat() if protect else "")
     removed = []
     for stem in stems:
         if stem[:10] in old:
@@ -373,6 +386,7 @@ def revision_record(
     previous: str,
     aid: str,
     input_ids: Mapping[str, Any],
+    inputs: Inputs,
     sources: Mapping[str, Any],
 ) -> dict[str, Any]:
     """What differs between a published artifact and the one a refresh would now publish."""
@@ -396,6 +410,17 @@ def revision_record(
             for k in set(inputs_before) | set(input_ids)
             if inputs_before.get(k) != input_ids.get(k)
         ),
+        "changed_config": sorted(
+            k
+            for k in set(manifest.get("config", {})) | set(inputs.config)
+            if manifest.get("config", {}).get(k) != inputs.config.get(k)
+        ),
+        "changed_parents": sorted(
+            k
+            for k in set(manifest.get("parents", {})) | set(inputs.parents)
+            if manifest.get("parents", {}).get(k) != inputs.parents.get(k)
+        ),
+        "version_changed": manifest.get("version") != VERSION,
         "games_changed": len(changed),
         "games_recaptured_unchanged": len(recaptured),
         "games_added": len(added),
@@ -463,12 +488,36 @@ def refresh_origin(
     aid = artifact_id(origin, input_ids, inputs.parents, inputs.config)
     if existing(root, origin, aid) is not None:
         return Published(root / origin.isoformat() / aid, aid, False)
-    others = [d for d in _others(root, origin, aid) if existing(root, origin, d) is not None]
+    others, broken = [], []
+    for name in _others(root, origin, aid):
+        try:
+            existing(root, origin, name)
+            others.append(name)
+        except RefreshError as error:
+            broken.append({"artifact_id": name, "reason": str(error)})
+    log = root / origin.isoformat() / REVISIONS
+    if broken:
+        _append(
+            log,
+            {
+                "detected_at": datetime.now(UTC).isoformat(),
+                "origin": origin.isoformat(),
+                "new_artifact_id": aid,
+                "inconsistent": broken,
+                "action": "refused",
+            },
+        )
+        raise RevisionConflict(
+            f"{origin} holds inconsistent artifacts {[b['artifact_id'] for b in broken]}; "
+            f"recorded in {REVISIONS} and not published"
+        )
+    revision = None
     if others:
-        record = revision_record(root, origin, others[-1], aid, input_ids, resolution.record())
-        record["action"] = "published" if accept_revision else "refused"
-        _append(root / origin.isoformat() / REVISIONS, record)
+        revision = revision_record(
+            root, origin, others[-1], aid, input_ids, inputs, resolution.record()
+        )
         if not accept_revision:
+            _append(log, {**revision, "action": "refused"})
             raise RevisionConflict(
                 f"{origin} already holds {others}; the revision to {aid[:12]} was recorded in "
                 f"{REVISIONS} and not published"
@@ -520,6 +569,8 @@ def refresh_origin(
         }
 
     done = publish(root, origin, aid, write)
+    if revision is not None:  # recorded only once the accepted revision is actually published
+        _append(log, {**revision, "action": "published"})
     return replace(done, checkpoint=state["checkpoint"])
 
 

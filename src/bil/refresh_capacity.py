@@ -156,6 +156,12 @@ def main() -> None:
     ]
     checkpoint_files = list(store.glob("*.npz"))
     mean_mb = _dir_mb(store) / max(len(checkpoint_files), 1)
+    # The store at default retention, measured: the files of the latest retained origins.
+    latest = sorted({p.name[:10] for p in checkpoint_files})[-CHECKPOINT_RETENTION:]
+    retained_mb = (
+        sum(p.stat().st_size for p in store.iterdir() if p.is_file() and p.name[:10] in latest)
+        / 1e6
+    )
     revision = drill(args.out / "cold", inputs)
     job = daily_job(args.raw, args.processed, args.out / "daily")
     seconds = {
@@ -174,10 +180,14 @@ def main() -> None:
         "peak_rss_gib": max(peak, job["peak_rss_gib"]),
         "max_refresh_seconds": max(max(seconds["cold"]), max(seconds["warm"])),
         "daily_job_seconds": job["seconds"],
-        "checkpoint_store_mb": CHECKPOINT_RETENTION * mean_mb,
+        "checkpoint_store_mb": retained_mb,
     }
     checks = {name: measured[name] <= BUDGET[name] for name in BUDGET}
     checks["warm_cold_equality"] = not mismatched
+    # The warm pass must really reuse every checkpoint, and the cold pass compute every one.
+    checks["warm_reused_cold_computed"] = {p["checkpoint"] for p in warm.values()} == {
+        "reused"
+    } and {p["checkpoint"] for p in cold.values()} == {"computed"}
     checks["late_revision_drill"] = revision["passed"] and revision["artifacts_unchanged"]
     results = {
         "code_commit": head,

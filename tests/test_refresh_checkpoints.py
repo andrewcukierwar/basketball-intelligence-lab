@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -76,3 +77,56 @@ def test_a_late_revision_of_an_eligible_game_is_recorded_not_republished(tmp_pat
     assert [p.name for p in (tmp_path / CUTOFF.isoformat()).iterdir() if p.is_dir()] == [
         first.artifact_id
     ]
+
+
+def test_an_accepted_revision_is_logged_only_after_it_is_published(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import bil.refresh as refresh
+
+    refresh_origin(tmp_path, CUTOFF, inputs())
+    other = replace(inputs(), config={**inputs().config, "offense_ridge": 31.0})
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(refresh, "publish", broken)
+    with pytest.raises(OSError, match="disk full"):
+        refresh_origin(tmp_path, CUTOFF, other, accept_revision=True)
+    log = tmp_path / CUTOFF.isoformat() / REVISIONS
+    assert not log.exists()  # nothing claims a publication that did not happen
+    monkeypatch.undo()
+    refresh_origin(tmp_path, CUTOFF, other, accept_revision=True)
+    [record] = [json.loads(line) for line in log.open()]
+    assert record["action"] == "published" and record["changed_config"] == ["offense_ridge"]
+    assert record["changed_inputs"] == [] and not record["version_changed"]
+
+
+def test_inconsistent_siblings_are_recorded_and_refused(tmp_path: Path) -> None:
+    first = refresh_origin(tmp_path, CUTOFF, inputs())
+    (first.path / RATINGS).write_text("tampered", encoding="utf-8")
+    other = replace(inputs(), config={**inputs().config, "offense_ridge": 31.0})
+    with pytest.raises(RevisionConflict, match="inconsistent"):
+        refresh_origin(tmp_path, CUTOFF, other, accept_revision=True)
+    [record] = [json.loads(line) for line in (tmp_path / CUTOFF.isoformat() / REVISIONS).open()]
+    assert record["inconsistent"][0]["artifact_id"] == first.artifact_id
+
+
+def test_pruning_protects_the_origin_just_written_and_removes_orphans(tmp_path: Path) -> None:
+    for day in range(10, 25):
+        for suffix in (".json", ".npz"):
+            (tmp_path / f"2024-01-{day:02d}-{'a' * 64}{suffix}").write_text("x")
+    (tmp_path / f"2024-01-01-{'a' * 64}.json").write_text("x")
+    (tmp_path / f"2024-01-01-{'a' * 64}.npz").write_text("x")
+    (tmp_path / f"2024-01-30-{'b' * 64}.npz").write_text("orphan")
+    removed = prune_checkpoints(tmp_path, keep=14, protect=date(2024, 1, 1))
+    assert all(not r.startswith("2024-01-01") for r in removed) and len(removed) == 1
+    assert not (tmp_path / f"2024-01-30-{'b' * 64}.npz").exists()
+
+
+def test_a_new_identity_replaces_the_origins_older_checkpoint(tmp_path: Path) -> None:
+    store = tmp_path / "checkpoints"
+    refresh_origin(tmp_path / "a", CUTOFF, inputs(), checkpoints=store)
+    other = replace(inputs(), config={**inputs().config, "offense_ridge": 31.0})
+    refresh_origin(tmp_path / "b", CUTOFF, other, checkpoints=store)
+    assert len(list(store.glob("*.npz"))) == 1 == len(list(store.glob("*.json")))
