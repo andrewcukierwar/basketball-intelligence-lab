@@ -1,0 +1,39 @@
+{
+  "attribution": "EPM data: dunksandthrees.com (archived public page), used with written permission",
+  "generated_at": "2026-11-27T03:38:00.671397+00:00",
+  "inputs": {
+    "epm_capture": {
+      "attribution": "EPM data: dunksandthrees.com (archived public page), used with written permission; non-commercial",
+      "capture": "20260702010514",
+      "data_date": "2026-06-13",
+      "form": "expected",
+      "season": 2026,
+      "selection": "rule 3: no json or columnar capture in 2026-06-15..2026-09-30; first expected-form capture with season 2026 and data date from 2026-06-01",
+      "sha256": "cb94230a5f6d154532fee05b59eb845279e8e72e2a8722fc5733f67174d4e3a0",
+      "uri": "https://web.archive.org/web/20260702010514id_/https://dunksandthrees.com/epm"
+    },
+    "pre_score_manifest": "7d49a867d40f73dea1810d75c91950a63ace9bf8b51e4cce0c2f27bd70704b0e"
+  },
+  "method_protocol": {
+    "path": "epm-agreement-protocol.md",
+    "sha256": "0152e248ff95965284dbdeadb1ca888d91c3915db40435ae86aaa55ed9ed6bf5"
+  },
+  "outputs": {
+    "matched.csv": "23bb1876d12ecc340815a3dfb2f595e40137cf71f66ffdb66c59df7f4426df1f",
+    "results.json": "31e38d2f10844071a16c13298e64fade304c4b5112cd0839f3bc13a1a5f4fd29"
+  },
+  "r1_protocol": {
+    "addendum_commit": "470df09de0679888cdf72c094bc744a9eb4b916e",
+    "committed": true,
+    "head_commit": "d9eb777eb353cc6e6cff02083b2c176aed6482ba",
+    "path": "docs/research/r1-confirmatory-protocol.md",
+    "sha256": "2159cc24344ffe30344fe04992cdfd8d52bbc5097abeb5c64839653422ddd045",
+    "working_tree_clean": true
+  },
+  "runtime_seconds": 0.23010354209691286,
+  "version": "r1-v2-d1",
+  "versions": {
+    "numpy": "2.5.5",
+    "python": "3.14.3"
+  }
+}
