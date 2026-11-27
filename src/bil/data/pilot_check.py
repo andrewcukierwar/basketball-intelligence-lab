@@ -15,6 +15,7 @@ import duckdb
 
 from bil.data.pilot_inputs import archive_rows, nba_game_id
 from bil.data.pilot_sources import pinned_season
+from bil.data.pilot_v3_events import flagrant_events
 
 TABLES = (
     "game",
@@ -211,9 +212,16 @@ def _prepare(connection: duckdb.DuckDBPyConnection, output: Path, snapshot: Path
 
 
 def _same_offense_violations(
-    connection: duckdb.DuckDBPyConnection, snapshot: Path, season_start_year: int = 2022
+    connection: duckdb.DuckDBPyConnection,
+    snapshot: Path,
+    season_start_year: int = 2022,
+    event_source: str | None = None,
 ) -> int:
-    """Check within-period pairs against unresolved status and original V2 foul codes."""
+    """Check within-period pairs against unresolved status and the source's flagrant fouls.
+
+    A V2-event build reads the original V2 foul codes. A V3-event build (#133) reads the V3
+    actions it was built from, through the same type table, so V2 is never opened.
+    """
     pairs = connection.execute(
         """
         with neighbors as (
@@ -240,10 +248,14 @@ def _same_offense_violations(
     candidate_games = {game_id for game_id, events in pairs if events}
     flagrant_fouls: set[tuple[str, str]] = set()
     year = season_start_year
-    for prefix, filename in (("002", f"nbastats_{year}"), ("004", f"nbastats_po_{year}")):
+    for prefix, suffix in (("002", ""), ("004", "_po")):
         if not any(game_id.startswith(prefix) for game_id in candidate_games):
             continue
-        for row in archive_rows(snapshot / f"{filename}.tar.xz"):
+        if event_source is not None:
+            v3 = snapshot / f"nbastatsv3{suffix}_{year}.tar.xz"
+            flagrant_fouls |= flagrant_events(v3, candidate_games)
+            continue
+        for row in archive_rows(snapshot / f"nbastats{suffix}_{year}.tar.xz"):
             if row["EVENTMSGTYPE"] != "6" or row["EVENTMSGACTIONTYPE"] not in {"14", "15"}:
                 continue
             game_id = nba_game_id(row["GAME_ID"])
@@ -281,7 +293,7 @@ def check_build(output: Path, snapshot: Path) -> dict[str, int]:
             ).fetchone()
             results[f"no_quarantined_rows_in_{table}"] = row[0] if row else -1
         results["consecutive_offenses_accounted_for"] = _same_offense_violations(
-            connection, snapshot, year
+            connection, snapshot, year, manifest.get("event_source")
         )
         for name, sql in CHECKS.items():
             row = connection.execute(sql).fetchone()

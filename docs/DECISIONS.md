@@ -495,3 +495,20 @@ V2 remains the event source of record.
   - **Reopening.** This needs a registered capture of later-season matchup data, plus an exposure-aware tracking specification registered before any fit.
   - **#40.** It reads #38 as "tracking unavailable for M7".
 - **Links:** [#38](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/38), [#37](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/37), [ADR-0031](#adr-0031--expected-impact-v1-as-the-m5-integrated-reference)
+
+## ADR-0033 — Do not adopt the V3-event path after its registered validations failed
+
+- **Date:** 2026-11-26
+- **Status:** Accepted (registered outcome rule of #133).
+- **Evidence class:** Inferred ([validation](research/v3-event-path-validation.md), [protocol](research/v3-event-path-protocol.md)).
+- **Decision:** `pilot build --event-source v3` is not adopted for seasons without V2, in either version. The opt-in code on main is revision 2 (`v3-live-events-2`, with the flopping rule and the fallback), and no canonical build uses it.
+- **Evidence:**
+  - **Coverage.** Regular-season V3 coverage is 93.2% (2023–24) and 96.0% (2024–25), below the ADR-0022 97% floor.
+  - **Cause.** The NBA's new flopping technical, `('Foul', 'Flopping')`, is unmapped by the 2020–23 type table. It quarantines 74 and 17 games.
+  - **Fidelity.** In accepted games every fidelity limit and the #36 rerun pass.
+  - **Revision 2.** The maintainer-approved revision, `v3-live-events-2`, adds a documented flopping rule and a class-preserving fallback. It restores coverage and passes L1–L7, but fails its registered L8: V2 codes flopping as foul action 32, which pbpstats does not classify, while revision 2 coded it as a technical. Neither version is adopted.
+- **Consequences:**
+  - **#42.** Still blocked: R1 has no registered way to build 2025–26 events. Revision 2's outcome rule allows no further revision on 2023–25.
+  - **Reuse.** Any revised adapter would be developed with 2023–25 exposed, so it could not be validated independently on V2-paired seasons.
+- **Links:** [#133](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/133), [#42](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/42), [ADR-0022](#adr-0022--revise-the-m1-quality-policy-hard-correctness-dataset-eligibility-and-representativeness)
+

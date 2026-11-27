@@ -7,7 +7,7 @@ import json
 import re
 import shutil
 from collections import Counter, defaultdict
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import version
@@ -68,6 +68,7 @@ from bil.data.pilot_sources import (
     write_json,
 )
 from bil.data.pilot_starters import StarterChoice, choose_starters
+from bil.data.pilot_v3_events import EVENT_SOURCE_VERSION, rebuilt_games
 
 SUFFIXES = {"regular": "", "playoffs": "_po"}
 
@@ -269,6 +270,8 @@ def _build_game(
     same_clock_rule: bool = False,
     order_repair_v2: bool = False,
     free_throw_miss_rule: bool = False,
+    missing: GameIssue | None = None,
+    parser_version: str = PARSER_VERSION,
 ) -> Rows:
     kind = GAME_PREFIXES[game.game_id[:3]]
     cross = cross or CrossFeed()
@@ -312,7 +315,7 @@ def _build_game(
     final_match = periods[max(periods)] == (game.home_points, game.away_points) if periods else None
     try:
         if not events:
-            raise GameIssue("missing_v2_game", "Expected game is absent from V2 events")
+            raise missing or GameIssue("missing_v2_game", "Expected game is absent from V2 events")
         if not game.home_designated:
             raise GameIssue(
                 "unresolved_home_designation",
@@ -671,7 +674,7 @@ def _build_game(
                 "game_id": game.game_id,
                 **_version(when, sources, refs),
                 "official_game_revision": 1,
-                "parser_version": PARSER_VERSION,
+                "parser_version": parser_version,
                 "reconciliation_view_id": f"pinned-pilot:{snapshot_hash}:{game.game_id}"
                 + (f":{FREE_THROW_RULE_VERSION}" if missed_free_throws is not None else ""),
                 "observed_date": game.played_date.isoformat(),
@@ -711,6 +714,7 @@ def _season_games(
     same_clock_rule: bool = False,
     order_repair_v2: bool = False,
     free_throw_miss_rule: bool = False,
+    event_source: str = "v2",
 ) -> Iterator[Rows]:
     games, players = box_scores(connection, snapshot_dir, include_free_throws=free_throw_miss_rule)
     expected = chosen or set(games)
@@ -736,21 +740,48 @@ def _season_games(
             snapshot_dir / datanba_name if datanba_name else None,
             datanba_has_order(year),
         )
+        parser_version = PARSER_VERSION
+        rebuild_issues: dict[str, GameIssue] = {}
+        stream: Iterable[tuple[str, list[RawEvent] | GameIssue]]
+        if event_source == "v3":
+            # #133: V2-schema rows rebuilt from V3 actions and liveData; V2 is never read.
+            if live_name is None:
+                raise ValueError("The V3 event source needs the season's liveData archive")
+            raw_name = v3_name
+            parser_version = f"{PARSER_VERSION}+{EVENT_SOURCE_VERSION}"
+            boxes = {
+                game_id: (
+                    (games[game_id].home_id, games[game_id].away_id),
+                    games[game_id].home_id if games[game_id].home_designated else None,
+                    {player: box.team_id for player, box in players[game_id].items()},
+                )
+                for game_id in wanted
+            }
+            stream = rebuilt_games(snapshot_dir / v3_name, snapshot_dir / live_name, boxes)
+        elif event_source == "v2":
+            stream = event_games(snapshot_dir / raw_name)
+        else:
+            raise ValueError(f"Unknown event source {event_source!r}")
         refs = [
             sources[key]
-            for key in (
-                "team_game_logs.parquet",
-                "player_game_logs.parquet",
-                raw_name,
-                shot_name,
-                v3_name,
-                live_name,
-                datanba_name,
+            for key in dict.fromkeys(
+                (
+                    "team_game_logs.parquet",
+                    "player_game_logs.parquet",
+                    raw_name,
+                    shot_name,
+                    v3_name,
+                    live_name,
+                    datanba_name,
+                )
             )
             if key is not None
         ]
         remaining = set(wanted)
-        for game_id, events in event_games(snapshot_dir / raw_name):
+        for game_id, events in stream:
+            if isinstance(events, GameIssue):
+                rebuild_issues[game_id] = events
+                continue
             if game_id not in games or GAME_PREFIXES[game_id[:3]] != season_type:
                 raise ValueError(f"Unexpected V2 game for {season_type}: {game_id}")
             if game_id in wanted:
@@ -770,6 +801,7 @@ def _season_games(
                     same_clock_rule,
                     order_repair_v2,
                     free_throw_miss_rule,
+                    parser_version=parser_version,
                 )
                 remaining.remove(game_id)
         for game_id in sorted(remaining):
@@ -789,6 +821,8 @@ def _season_games(
                 same_clock_rule,
                 order_repair_v2,
                 free_throw_miss_rule,
+                missing=rebuild_issues.get(game_id),
+                parser_version=parser_version,
             )
 
 
@@ -851,6 +885,7 @@ def build_pilot(
     same_clock_rule: bool = False,
     order_repair_v2: bool = False,
     free_throw_miss_rule: bool = False,
+    event_source: str = "v2",
 ) -> dict[str, object]:
     if re.fullmatch(r"[0-9a-f]{40}", code_commit) is None:
         raise ValueError("Record a full Git commit for the pilot build")
@@ -878,6 +913,7 @@ def build_pilot(
                 same_clock_rule=same_clock_rule,
                 order_repair_v2=order_repair_v2,
                 free_throw_miss_rule=free_throw_miss_rule,
+                event_source=event_source,
             )
             artifacts = write_tables(connection, games, staging, output)
             results = summarize_reviews(read_game_reviews(connection, output))
@@ -903,7 +939,10 @@ def build_pilot(
             "selected_game_ids": sorted(chosen) if chosen else None,
             "code_commit": code_commit,
             "generated_at": when,
-            "parser": PARSER_VERSION,
+            "parser": PARSER_VERSION
+            if event_source == "v2"
+            else f"{PARSER_VERSION}+{EVENT_SOURCE_VERSION}",
+            **({"event_source": EVENT_SOURCE_VERSION} if event_source == "v3" else {}),
             "duckdb_version": version("duckdb"),
             **({"order_repair": True} if order_repair else {}),
             **({"order_repair_v2": repair_log} if repair_log is not None else {}),
@@ -964,6 +1003,12 @@ def main() -> None:
         "--free-throw-miss-rule",
         action="store_true",
         help="retry failed rebounds with a missing free-throw miss marker and matching box evidence",
+    )
+    build.add_argument(
+        "--event-source",
+        choices=("v2", "v3"),
+        default="v2",
+        help="v3: rebuild V2-schema events from V3 actions and liveData, never reading V2 (#133)",
     )
     build.add_argument(
         "--order-repair",
@@ -1053,6 +1098,7 @@ def main() -> None:
             args.same_clock_rule,
             args.order_repair_v2,
             args.free_throw_miss_rule,
+            args.event_source,
         )
         print(json.dumps(manifest["coverage"], sort_keys=True))
 
