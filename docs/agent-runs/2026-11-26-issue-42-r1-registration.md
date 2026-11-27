@@ -65,5 +65,9 @@
 
 - **Freeze.** `470df09`, after CI passed on `fd9352a`. The protocol SHA-256 is `2159cc24344ffe30344fe04992cdfd8d52bbc5097abeb5c64839653422ddd045`. The guard lifts on a clean tree. Locally, `.claude/` is listed in `.git/info/exclude`, so agent worktrees do not count as untracked files.
 - **Capture.** One run at 2026-11-27T01:35:44Z, pinned at `7814213` (`docs/research/r1-holdout-pins.json`, snapshot `af41b22a…2d1b`). The access log was started at the same commit. Raw bytes only; nothing parsed.
-- **Blocked at the gate, before any parse.** `bil.features.box_build` is hard-wired to 2022–23: the season check defaults to 2022, `EXPECTED` holds 2022–23 counts, and the window IDs end `-2022-23`. The "unchanged #29 build" of §4.2 and §4.3 therefore cannot complete on 2025–26. Options A, B and C are in the #42 issue comment. Do not run the box build or `predict` until the user chooses.
+- **Gate (user chose option A, 2026-11-27).** The clarification was logged before any parse. `scripts/r1_gate.py` passed: 1,230 of 1,230 regular-season games, 0 minutes warnings, 5 games with no single home team.
+- **Predict and score.** Predict ran at `107accb`; the pre-score manifest is `7d49a867…b0e`. The first score attempt was refused before reading outcomes (the digest sat mid-row in the log), then scoring ran once at `755c1e9`. **C1 and C2 are both `ei_worse`.** Aggregates are in `docs/research/r1-holdout/`.
+- **D1.** The capture is 20260702010514 (expected form, rule 3). Primary total r 0.779 (#40's 2024–25: 0.874). Run by `scripts/r1_d1.py`.
+- **Report.** `docs/research/r1-report.md`.
+- **Next.** Independent review of the post-freeze diff, CI, merge #132, close #42. Candidate follow-ups: #129 (refresh cadence) and a 2025–26 possession path, which would test the stale on-court explanation in report §3.3.
 - **#133.** PR #134 merged as `1cc1ea4`. ADR-0033: the V3 path is not adopted, and #133 stays blocked.
