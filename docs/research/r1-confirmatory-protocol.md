@@ -96,7 +96,7 @@ The registration freezes in two stages. No 2025–26 byte is fetched before stag
 - **Cold rating.** A player absent from a snapshot (a rookie or call-up, for example) gets the snapshot's cold rating (#39 §1).
   - **The #36 rule.** `team_outcomes.load_ratings` reads the cold rating from a ratings row with no box history and no window possessions, and uses 0.0 if there is none. In every `issue-36-v1` snapshot such a row exists, and its rating is **−0.375704**: the locked SPM fit's no-history prior, with zero deviation.
   - **Why v2 differs.** With row seasons 2023 and 2024 only, early v2 snapshots may have no such row, so the rule would silently give 0.0.
-  - **v2 rule.** v2 therefore fixes the cold rating at −0.375704 for every snapshot. The runner passes it explicitly, and it checks equality against any cold row present. `load_ratings` stays unchanged for the #39 reproduction.
+  - **v2 rule.** v2 therefore fixes the cold rating at −0.375704 for every snapshot. The runner passes it explicitly, and it checks agreement to 1e-6 against any cold row present, since ratings are written to six decimals. `load_ratings` stays unchanged for the #39 reproduction.
   - **Reported.** The cold rating and the share of predicted minutes it covers, by block.
 - **Prior results.** These are context only, not a decision input. With in-season possession rows, #39's 2023–25 margin RMSE delta against `team_rating` was +0.142 (game [+0.018, +0.262], week [−0.021, +0.298]). That would be `inconclusive` under this rule.
 
@@ -151,9 +151,10 @@ The registration freezes in two stages. No 2025–26 byte is fetched before stag
   - #36's 2024–25 ratings snapshots;
   - #39's 2024–25 game predictions.
 
-  Identical file digests are required. If they differ, the maximum absolute difference must be at most 1e-9, and the difference is reported. This proves the parametrization. The v2 configuration itself is exercised by the dry run.
+  Identical file digests are required. If they differ, the maximum absolute difference must be at most 1e-9, and the difference is reported. This proves the parametrization. The reproduction uses the unchanged cold rule, read from the ratings file, never the v2 explicit value. The v2 configuration itself is exercised by the dry run.
 - **Dry run, before freeze.** Run the R1 v2 configuration on 2024–25 as if it were the holdout: rows 2022–23 and 2023–24 only, and 2024–25 box logs. Run it twice and require identical digests.
-  - **What is read before freeze.** Only digests, coverage counts, the cold minute share and runtime. The scores file is written and its digest recorded, but it is not opened until the freeze commit exists.
+  - **What is read before freeze.** Only digests, coverage counts, the cold minute share and runtime. The cold minute share comes from predicted minutes and ratings only, with no outcomes.
+  - **Sealed scores.** The runner writes the scores file with mode 000 and prints only its digest. The freeze commit records the digest and the file's access time, which must predate the freeze.
   - **Not an input.** C1, C2, the verdict rule, the gate and every configuration above are fixed in stage A, before the dry run. If any of them changes after the dry-run scores are opened, the registration is relabelled as development evidence.
 - **Digests.** The digests of the reproduction and dry runs are recorded in the frozen block.
 - **Review.** Independent code review of this diff. CI is green on the code commit.
@@ -267,14 +268,15 @@ It also records unresolved fidelity gaps and the status of Actual impact. Result
     "team_config": {"half_life": 60.0, "ridge": 4.0},
     "bootstrap": {"resamples": 2000, "seed": 39},
     "primary": {"metric": "regular_season_margin_rmse", "model": "ei", "comparator": "team_rating"},
-    "secondary": [{"metric": "regular_season_win_log_loss", "model": "ei", "comparator": "team_rating"}]
+    "secondary": [{"metric": "regular_season_win_log_loss", "model": "ei", "comparator": "team_rating"}],
+    "reported": ["hca", "ei_oracle_minutes", "ei_preseason", "early_season_slice: blocks R1 and R2", "cold_minute_share by block"]
   },
   "verdict": "two-sided 95% percentile; ei_better/ei_worse need game and week intervals both excluding 0; regular season only",
   "box_logs": {
     "2024": {"snapshot": "issue-52-v1", "sha256": "e34398e754233203759f1e6ab8866dc6b61a11afcc3166b6ac9c099feca8b9bd"},
     "2025": "pinned at capture"
   },
-  "quality_gate": {"box_feature_build": "completes (contract reconciliation)", "min_regular_game_coverage": 0.97, "scheduled_regular_games": 1230},
+  "quality_gate": {"box_feature_build": "completes (contract reconciliation)", "min_regular_game_coverage": 0.97, "scheduled_regular_games": 1230, "manifest_warnings": ["minutes_off_by_more_than_1", "excluded_no_single_home_team"]},
   "d1": {"capture_window": ["2026-06-15", "2026-09-30"], "selection": "first season-EPM capture, else first expected capture, else unavailable"}
 }
 ```
