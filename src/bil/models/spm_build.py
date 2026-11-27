@@ -107,6 +107,13 @@ def checked_logs(raw: Path, season: int) -> tuple[list[Appearance], dict[str, An
         raise ValueError(f"SPM season is outside the authorized scope: {season}")
     snapshot, digest = LOG_PINS[season]
     directory = raw / TARGET_PINS[season].label / snapshot
+    return checked_log_snapshot(directory, season, digest)
+
+
+def checked_log_snapshot(
+    directory: Path, season: int, digest: str
+) -> tuple[list[Appearance], dict[str, Any]]:
+    """Verify a caller-registered historical box snapshot and load its appearances."""
     record = read_json(checked_file(directory / "snapshot.json", digest))
     if record["season_start_year"] != season or record["attribution"] != ATTRIBUTION:
         raise ValueError("box log snapshot season or attribution mismatch")
@@ -120,7 +127,7 @@ def checked_logs(raw: Path, season: int) -> tuple[list[Appearance], dict[str, An
     if not rows or any(row.game_date >= DATA_END for row in rows):
         raise ValueError("box log rows fall outside the registered dates")
     return rows, {
-        "snapshot": snapshot,
+        "snapshot": directory.name,
         "snapshot_sha256": digest,
         **profile,
         "assets": {name: assets[name]["sha256"] for name in (PLAYER_LOG, TEAM_LOG)},
