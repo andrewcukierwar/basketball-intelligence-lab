@@ -149,14 +149,24 @@ def _normal(column: str, value: str) -> object:
 
 
 def revised_events(v3_path: Path) -> dict[tuple[str, int], tuple[str, str]]:
-    """Typed V3 rows coded by revision 2 (rule pairs and fallback), by game and number."""
-    found: dict[tuple[str, int], tuple[str, str]] = {}
+    """Events whose primary typed V3 row is coded by revision 2, by game and number.
+
+    The primary row is the first typed row in action order, as in ``rebuild_game``.
+    """
+    primary: dict[tuple[str, int], tuple[float, tuple[str, str]]] = {}
     for row in archive_rows(v3_path):
         key = (row["actionType"].strip(), row["subType"].strip())
-        if key[0] and key not in ACTION_TYPES and key[0] not in SHOT_TYPES:
-            number = int(float(row["actionNumber"]))
-            found.setdefault((nba_game_id(row["gameId"]), number), key)
-    return found
+        if not key[0]:
+            continue
+        event = (nba_game_id(row["gameId"]), int(float(row["actionNumber"])))
+        order = float(row["actionId"])
+        if event not in primary or order < primary[event][0]:
+            primary[event] = (order, key)
+    return {
+        event: key
+        for event, (_, key) in primary.items()
+        if key not in ACTION_TYPES and key[0] not in SHOT_TYPES
+    }
 
 
 def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
