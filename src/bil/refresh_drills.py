@@ -68,6 +68,7 @@ def _addendum(out: Path, change: Callable[[dict[str, Any]], None]) -> Path:
 
 def _loader(raw: Path, processed: Path, root: Path, **options: Any) -> Callable[[], Inputs]:
     def load() -> Inputs:
+        root.mkdir(parents=True, exist_ok=True)
         scratch = Path(mkdtemp(prefix=".inputs-", dir=root))
         try:
             return load_inputs(raw, processed, scratch, **options)
