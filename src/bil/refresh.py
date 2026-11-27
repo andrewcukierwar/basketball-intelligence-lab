@@ -516,7 +516,7 @@ def refresh_origin(
         return _refresh_origin(
             root, origin, inputs, stage, checkpoints, reuse, accept_revision, retention
         )
-    except Exception as error:
+    except BaseException as error:
         if not hasattr(error, "refresh_stage"):
             with contextlib.suppress(AttributeError):
                 error.refresh_stage = stage[0]  # type: ignore[attr-defined]
@@ -554,9 +554,9 @@ def _refresh_origin(
     resolution = resolution_for(origin, inputs)
     input_ids = {**inputs.input_ids, "source_resolution": resolution.digest()}
     aid = artifact_id(origin, input_ids, inputs.parents, inputs.config)
+    stage[0] = "revision"
     if existing(root, origin, aid) is not None:
         return Published(root / origin.isoformat() / aid, aid, False)
-    stage[0] = "revision"
     others, broken = [], []
     for name in _others(root, origin, aid):
         try:
@@ -640,6 +640,7 @@ def _refresh_origin(
 
     stage[0] = "publish"
     done = publish(root, origin, aid, write)
+    stage[0] = "revision_log"  # the artifact is published; only its revision record failed
     if revision is not None:  # recorded only once the accepted revision is actually published
         _append(log, {**revision, "action": "published"})
     return replace(done, checkpoint=state["checkpoint"])
@@ -697,17 +698,31 @@ def build(
     describes the inputs for the record of a refused load."""
     try:
         inputs = load()
-    except Exception as error:
+    except BaseException as error:
         records = [record_outcome(root, _failure(o, "load", error, requested)) for o in origins]
+        if not isinstance(error, Exception):
+            raise  # an interrupt is recorded, then still stops the run
         return records, len(records)
     outcomes, failures = [], 0
-    for origin in origins:
+    for position, origin in enumerate(origins):
         try:
             done = refresh_origin(root, origin, inputs, **options)
-        except Exception as error:
+        except BaseException as error:
             failures += 1
             failed = _failure(origin, stage_of(error), error, inputs.input_ids)
             outcomes.append(record_outcome(root, failed))
+            if not isinstance(error, Exception):
+                for skipped in origins[position + 1 :]:
+                    record_outcome(
+                        root,
+                        {
+                            "origin": skipped.isoformat(),
+                            "outcome": "skipped",
+                            "reason": f"run interrupted by {type(error).__name__}",
+                            "inputs": inputs.input_ids,
+                        },
+                    )
+                raise
             continue
         outcomes.append(
             record_outcome(
@@ -718,6 +733,7 @@ def build(
                     "artifact_id": done.artifact_id,
                     "checkpoint": done.checkpoint,
                     "path": str(done.path),
+                    "inputs": inputs.input_ids,
                 },
             )
         )
@@ -730,27 +746,39 @@ def current(root: Path, origin: date) -> Path | None:
     It is the single valid artifact. If an accepted revision left several, it is the latest
     one ``revisions.jsonl`` records as published. Retired artifacts are not candidates.
     """
-    valid = []
+    found: dict[str, Path] = {}
     for name in _others(root, origin, ""):
-        with contextlib.suppress(RefreshError):
-            valid.append(existing(root, origin, name))
-    found = [p for p in valid if p is not None]
+        try:
+            path = existing(root, origin, name)
+        except RefreshError as error:  # fail closed: an inconsistent artifact must be retired
+            raise RefreshError(
+                f"{origin}: {error}; retire it before reading this origin"
+            ) from error
+        if path is not None:
+            found[name] = path
     if len(found) <= 1:
-        return found[0] if found else None
+        return next(iter(found.values()), None)
     log = root / origin.isoformat() / REVISIONS
-    names = {p.name: p for p in found}
-    if log.is_file():
-        for line in reversed(log.read_text(encoding="utf-8").splitlines()):
-            entry = json.loads(line)
-            if entry.get("action") == "published" and entry.get("new_artifact_id") in names:
-                return names[entry["new_artifact_id"]]
-    raise RefreshError(f"{origin} holds {sorted(names)} and no record says which is current")
+    entries = (
+        [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+        if log.is_file()
+        else []
+    )
+    accepted = [e["new_artifact_id"] for e in entries if e.get("action") == "published"]
+    # Only the original publication may lack a "published" record; anything else is unexplained.
+    unrecorded = sorted(set(found) - set(accepted))
+    if len(unrecorded) > 1:
+        raise RefreshError(f"{origin} holds unrecorded artifacts {unrecorded}")
+    for name in reversed(accepted):
+        if name in found:
+            return found[name]
+    raise RefreshError(f"{origin} holds {sorted(found)} and no record says which is current")
 
 
 def retire(root: Path, origin: date, aid: str, reason: str) -> Path:
     """Roll back by moving an artifact to ``ROOT/_retired/<origin>/``; recorded, never deleted."""
     source = root / origin.isoformat() / aid
-    if existing(root, origin, aid) is None:
+    if aid.startswith(".") or not source.is_dir():  # an inconsistent artifact can be retired
         raise RefreshError(f"{source} is not a published artifact")
     target = root / RETIRED / origin.isoformat() / aid
     target.parent.mkdir(parents=True, exist_ok=True)

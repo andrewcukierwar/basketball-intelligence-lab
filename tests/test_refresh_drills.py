@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -115,3 +116,40 @@ def test_rollback_retires_an_accepted_revision_and_restores_the_current_artifact
     with pytest.raises(RefreshError, match="not a published artifact"):
         retire(tmp_path, CUTOFF, second.artifact_id, "again")
     assert current(tmp_path, date(2021, 12, 1)) is None
+
+
+def test_inconsistent_artifacts_fail_closed_and_can_be_retired(tmp_path: Path) -> None:
+    first = refresh_origin(tmp_path, CUTOFF, inputs())
+    other = replace(inputs(), config={**inputs().config, "offense_ridge": 31.0})
+    second = refresh_origin(tmp_path, CUTOFF, other, accept_revision=True)
+    (second.path / RATINGS).write_text("tampered", encoding="utf-8")
+    with pytest.raises(RefreshError, match="retire it"):
+        current(tmp_path, CUTOFF)
+    retire(tmp_path, CUTOFF, second.artifact_id, "drill: corrupted")
+    assert current(tmp_path, CUTOFF) == first.path
+    # An unrecorded extra artifact is never silently ignored.
+    stray = tmp_path / CUTOFF.isoformat() / ("f" * 64)
+    third = refresh_origin(tmp_path / "x", CUTOFF, other)
+    shutil.copytree(third.path, stray)
+    manifest = json.loads((stray / "manifest.json").read_text(encoding="utf-8"))
+    manifest["artifact_id"] = "f" * 64
+    (stray / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(RefreshError, match="unrecorded"):
+        current(tmp_path, CUTOFF)
+
+
+def test_an_interrupt_is_recorded_and_still_stops_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def interrupt(*args: object, **kwargs: object) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(refresh, "write_ratings", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        build(tmp_path, [CUTOFF, date(2021, 12, 1)], inputs)
+    records = outcomes(tmp_path)
+    assert [(r["outcome"], r.get("stage")) for r in records] == [
+        ("refused", "publish"),
+        ("skipped", None),
+    ]
+    assert artifacts(tmp_path) == []

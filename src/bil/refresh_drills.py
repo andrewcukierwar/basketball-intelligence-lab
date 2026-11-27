@@ -135,7 +135,7 @@ def run(raw: Path, processed: Path, out: Path) -> dict[str, Any]:
         _loader(raw, processed, root, addendum=bad),
         requested_inputs(raw, processed, bad),
     )
-    results["pin_digest_mismatch"] = _refusal(root, "load", "")
+    results["pin_digest_mismatch"] = _refusal(root, "load", "unexpected input digest")
 
     # 2. A missing pinned snapshot refuses at load.
     def missing(config: dict[str, Any]) -> None:
@@ -169,7 +169,7 @@ def run(raw: Path, processed: Path, out: Path) -> dict[str, Any]:
         _loader(raw, processed, root, pins=pins),
         requested_inputs(raw, processed, pins=pins),
     )
-    results["row_set_check"] = _refusal(root, "load", "")
+    results["row_set_check"] = _refusal(root, "load", "differs from the pin")
 
     # 5. The #136 calibration is ineligible before its fit cutoff; load_calibration refuses.
     root = out / "ineligible_calibration"

@@ -186,16 +186,16 @@ The daily job (3.9 s) is about 70% input loading (2.7 s). A weekly cadence costs
 
 ### Outcome log
 
-`build` loads the inputs once, then refreshes each origin. It writes one record per origin to `ROOT/_outcomes.jsonl` and never stops at a failed origin. It exits nonzero if any origin was refused.
+`build` loads the inputs once, then refreshes each origin. It writes one record per origin to `ROOT/_outcomes.jsonl` and never stops at a failed origin. It exits nonzero if any origin was refused. On an interrupt (`KeyboardInterrupt`, or `SystemExit` from a signal handler), it records the interrupted origin as refused and the remaining origins as `skipped`, then stops.
 
 | Field | Content |
 | --- | --- |
 | `at` | UTC time of the record |
 | `origin` | The requested origin |
-| `outcome` | `published`, `unchanged`, `refused` or `retired` |
-| `stage` | For refusals: `load`, `origin`, `parent`, `calibration`, `sources`, `revision` or `publish` |
+| `outcome` | `published`, `unchanged`, `refused`, `skipped` (after an interrupt) or `retired` |
+| `stage` | For refusals: `load`, `origin`, `parent`, `calibration`, `sources`, `revision`, `publish` or `revision_log` (the artifact was published, but its revision record failed) |
 | `error`, `reason` | The exception class and message |
-| `inputs` | The loaded input digests. For a refused load, the requested sources: raw and processed roots, addendum path and SHA-256, row-set pins and calibration |
+| `inputs` | The loaded input digests, on refusals and publications. For a refused load, the requested sources: raw and processed roots, addendum path and SHA-256, row-set pins and calibration |
 | `artifact_id`, `checkpoint`, `path` | For publications |
 
 **Pre-fit checks.** Every refresh checks before fitting that:
@@ -205,9 +205,16 @@ The daily job (3.9 s) is about 70% input loading (2.7 s). A weekly cadence costs
 
 **Calibration as a parent.** An eligible calibration becomes a parent: its SHA-256 is in the artifact identity and its fit cutoff is in the manifest. Refreshes with and without a calibration are therefore different artifacts.
 
-### Drills (`refresh-drills-issue-145-v2`, 2026-11-27)
+### Drills (`refresh-drills-issue-145-v3`, 2026-11-27)
 
-`python -m bil.refresh_drills RAW PROCESSED OUT` was run once from a clean tree at `e27e0fb`, in 7.3 s. Each drill uses its own root. A refusal drill passes only if the last outcome record is a refusal at the expected stage, with the origin, reason and inputs, and no artifact or staging directory remains.
+`python -m bil.refresh_drills RAW PROCESSED OUT` was run once from a clean tree after the review fixes. Each drill uses its own root. A refusal drill passes only if all of these hold:
+
+- the last outcome record is a refusal at the expected stage;
+- the reason contains the expected cause (for example "unexpected input digest" or "differs from the pin");
+- the record carries the origin and inputs;
+- no artifact or staging directory remains.
+
+Earlier runs: `-v1` recorded no inputs for load refusals, and `-v2` accepted any load failure for two drills. Both were superseded.
 
 | Drill | Injected failure | Outcome | Pass |
 | --- | --- | --- | --- |
@@ -248,9 +255,16 @@ Check the exit code, then read the new lines of `ROOT/_outcomes.jsonl`.
 uv run python -m bil.refresh retire ROOT --origin YYYY-MM-DD --artifact ID --reason "..."
 ```
 
-This moves the artifact to `ROOT/_retired/<origin>/`. It is recorded in both `revisions.jsonl` and `_outcomes.jsonl`, and nothing is deleted. Consumers read `bil.refresh.current(ROOT, origin)`. That is the single valid artifact, or else the last accepted one in `revisions.jsonl`; if neither applies it refuses.
+This moves the artifact to `ROOT/_retired/<origin>/`. It is recorded in both `revisions.jsonl` and `_outcomes.jsonl`, and nothing is deleted. Inconsistent artifacts can be retired too.
 
-**Rebuild cold.** Build into a new root with `--no-checkpoints` and compare artifact IDs with the old root: identical inputs give identical IDs. For the #36 block cutoffs, `verify-frozen` checks values against the published export.
+Consumers read `bil.refresh.current(ROOT, origin)`:
+
+- **No artifact.** It returns `None`.
+- **One artifact.** It returns the single valid artifact.
+- **Several artifacts.** It returns the last one `revisions.jsonl` records as published.
+- **Refusals.** It **refuses** if any artifact at the origin is inconsistent (retire it first), if more than one artifact lacks a `published` record, or if no record names a current one.
+
+**Rebuild cold.** Build into a new root with `--no-checkpoints` and compare artifact IDs with the old root: identical inputs and code version give identical IDs. A `VERSION` change, such as v3 (#144) to v4 (#145), gives every origin a new identity. Rebuild it into a new root: in an existing root, the guard refuses it as a revision. For the #36 block cutoffs, `verify-frozen` checks values against the published export.
 
 **Measured capacity (#144, `-v2`).**
 
