@@ -17,8 +17,8 @@ from typing import Any
 
 import duckdb
 
-from bil.data.pilot_inputs import GameIssue, _v2_field, box_scores, event_games
-from bil.data.pilot_v3_events import rebuilt_games
+from bil.data.pilot_inputs import GameIssue, _v2_field, archive_rows, box_scores, event_games
+from bil.data.pilot_v3_events import ACTION_TYPES, SHOT_TYPES, fallback_code, rebuilt_games
 
 ROW_KEY = (
     "period, offense_team_id, list_sort(offense_player_ids) AS offense, "
@@ -141,6 +141,16 @@ def _normal(column: str, value: str) -> object:
     return None if parsed in (None, 0, "") else parsed
 
 
+def fallback_events(v3_path: Path) -> dict[str, int]:
+    """V3 rows whose (actionType, subType) the table lacks, by pair and fallback code."""
+    found: Counter[str] = Counter()
+    for row in archive_rows(v3_path):
+        key = (row["actionType"].strip(), row["subType"].strip())
+        if key[0] and key not in ACTION_TYPES and key[0] not in SHOT_TYPES:
+            found[f"{key} -> {fallback_code(*key, row['description'])}"] += 1
+    return dict(sorted(found.items()))
+
+
 def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
     """Event-level agreement of rebuilt rows with archived V2 rows of the same snapshot."""
     with duckdb.connect() as connection:
@@ -159,7 +169,11 @@ def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
     # Player slots by V2 event type, over events where either side names a player.
     slot_events: Counter[tuple[str, str]] = Counter()
     slot_mismatches: Counter[tuple[str, str]] = Counter()
+    fallbacks: dict[str, dict[str, int]] = {}
     for suffix in ("", "_po"):
+        fallbacks[suffix or "_regular"] = fallback_events(
+            snapshot / f"nbastatsv3{suffix}_{season}.tar.xz"
+        )
         real = dict(event_games(snapshot / f"nbastats{suffix}_{season}.tar.xz"))
         rebuilt = rebuilt_games(
             snapshot / f"nbastatsv3{suffix}_{season}.tar.xz",
@@ -211,6 +225,7 @@ def field_agreement(snapshot: Path, season: int) -> dict[str, Any]:
         "events_v3_only_share": events["v3_only"] / events["v3"] if events["v3"] else None,
         "field_agreement": {c: 1 - mismatches[c] / matched if matched else None for c in FIELDS},
         "player_agreement_by_type": by_type,
+        "fallback_events": fallbacks,
     }
 
 

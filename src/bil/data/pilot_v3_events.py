@@ -20,7 +20,7 @@ from pathlib import Path
 
 from bil.data.pilot_inputs import GameIssue, RawEvent, archive_rows, nba_game_id
 
-EVENT_SOURCE_VERSION = "v3-live-events-1"
+EVENT_SOURCE_VERSION = "v3-live-events-2"
 V2_HEADERS = (
     "GAME_ID",
     "EVENTNUM",
@@ -282,6 +282,33 @@ SHOT_TYPES = {"Made Shot": 1, "Missed Shot": 2}
 HOME_VOTE_SHARE = 0.9
 MIN_HOME_VOTES = 5
 DOUBLE_FOULS = {(6, 10), (6, 16)}  # double personal, double technical
+# Fallback codes for V3 subtypes missing from the table (#133 revision). The parser reads a
+# foul's class (technical, double, flagrant), not its exact code, and a turnover's code only
+# as zero ("no turnover") or not.
+TECHNICAL_FOUL = (6, 11)
+PERSONAL_FOUL = (6, 1)
+TURNOVER = (5, 1)
+TECHNICAL_TEXT = re.compile(r"T\.FOUL", re.IGNORECASE)
+UNSAFE_FOUL = re.compile(r"FLAGRANT|DOUBLE", re.IGNORECASE)
+
+
+def fallback_code(action_type: str, sub_type: str, text: str) -> tuple[int, int] | None:
+    """A class-preserving code for an unknown foul or turnover subtype, or None.
+
+    Fouls: technical when the subtype names a technical or the text carries ``T.FOUL``;
+    flagrant and double fouls have no safe class and stay unmapped; any other is personal.
+    Turnovers: any named subtype is a real turnover. An unnamed turnover maps to "no
+    turnover" in the table, so it never reaches here.
+    """
+    if action_type == "Foul":
+        if UNSAFE_FOUL.search(sub_type) or UNSAFE_FOUL.search(text):
+            return None
+        if "technical" in sub_type.lower() or TECHNICAL_TEXT.search(text):
+            return TECHNICAL_FOUL
+        return PERSONAL_FOUL
+    if action_type == "Turnover" and sub_type:
+        return TURNOVER
+    return None
 
 
 @dataclass(frozen=True)
@@ -506,6 +533,8 @@ def rebuild_game(
             # Shot action codes are read by neither pbpstats nor the build, so a new shot
             # subtype becomes a plain made or missed field goal. Any other unknown pair is not.
             event_type, action_type = SHOT_TYPES[key[0]], 0
+        elif fallback := fallback_code(*key, primary.fields["description"]):
+            event_type, action_type = fallback
         else:
             raise GameIssue("v3_unmapped_action", f"Unmapped V3 action {key}", number)
         row = dict.fromkeys(V2_HEADERS, "")

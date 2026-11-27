@@ -18,6 +18,7 @@ from bil.data.pilot_v3_events import (
     V3_FIELDS,
     Action,
     derive_home,
+    fallback_code,
     flagrant_events,
     rebuild_game,
     rebuilt_games,
@@ -264,3 +265,17 @@ def test_flagrant_events_and_games_without_livedata(tmp_path: Path) -> None:
     other = _archive(tmp_path / "cdnnba_other.tar.xz", LIVE, game_id="22200002")
     [(_, missing)] = rebuilt_games(v3_path, other, boxes)
     assert isinstance(missing, GameIssue) and missing.code == "v3_livedata_missing"
+
+
+def test_unknown_foul_and_turnover_subtypes_keep_their_class() -> None:
+    assert fallback_code("Foul", "Novel", "X Novel T.FOUL (P1.PN)") == (6, 11)
+    assert fallback_code("Foul", "Novel Technical", "X") == (6, 11)
+    assert fallback_code("Foul", "Novel", "X NOVEL.FOUL (P2.T1)") == (6, 1)
+    assert fallback_code("Foul", "Novel", "X FLAGRANT.FOUL.TYPE1") is None
+    assert fallback_code("Foul", "Double Novel", "X") is None
+    assert fallback_code("Turnover", "Novel Turnover", "X") == (5, 1)
+    assert fallback_code("Violation", "Novel", "X") is None
+    game = [*GAME, v3(15, 23, "Foul", "Novel", A1, AWAY, "A1 Novel T.FOUL (P1.PN)")]
+    events = rebuild_game("0022200001", game, LIVE, (HOME, AWAY), HOME, ROSTER)
+    foul = next(e.fields for e in events if e.fields["EVENTNUM"] == "23")
+    assert (foul["EVENTMSGTYPE"], foul["EVENTMSGACTIONTYPE"]) == ("6", "11")
