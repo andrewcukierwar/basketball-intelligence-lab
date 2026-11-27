@@ -108,7 +108,7 @@ All were recorded in the access log at the time.
 - **Not part of R1:**
   - Estimated Skills feeding the SPM prior (#125);
   - refresh cadence (#129).
-- **Actual impact (#41):** optional and not implemented. There is no Actual-impact result.
+- **Actual impact (#41):** outside this R1 report. A subsequent [retrospective experiment](actual-impact.md) evaluates preseason anchoring and playoff weights separately from pregame EI.
 
 ## 7. Reproducibility
 
