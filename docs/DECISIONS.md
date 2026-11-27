@@ -560,3 +560,16 @@ V2 remains the event source of record.
   - **Frozen results.** #39 and #42 results stand as recorded. Their calibration is not chronologically eligible.
   - **Earlier origins.** Origins before 2024-07-01 have no eligible calibration under this construction.
 - **Links:** [#136](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/136), [#129](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/129), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43)
+
+## ADR-0039 — Content-addressed, atomically published origin refresh artifacts
+
+- **Date:** 2026-11-27
+- **Status:** Accepted (#142, part of #43).
+- **Evidence class:** Original engineering. See the [refresh guide](refresh.md).
+- **Decision:**
+  - **Identity.** A local refresh artifact is identified by the SHA-256 of its origin, input digests, parent fit and selection IDs, and configuration. The code commit is recorded but is not part of the identity.
+  - **Publication.** Artifacts are published by renaming a staging directory into `ROOT/<origin>/<id>/`.
+  - **Existing artifacts.** A consistent existing artifact makes a rerun a no-op. An inconsistent one is refused, never overwritten.
+- **Evidence:** The #36 block snapshots rebuild with zero rating gap.
+- **Consequences:** #143 to #145 extend this artifact rather than replace it: per-origin revisions, checkpoints and failure drills.
+- **Links:** [#142](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/142), [#43](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/43), ADR-0035

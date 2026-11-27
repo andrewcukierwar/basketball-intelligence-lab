@@ -1,0 +1,47 @@
+# Agent run: replayable origin refresh
+
+- **Date:** 2026-11-27
+- **Status:** Awaiting review
+- **Related issues:** #142 (part of #43), #135, #129
+- **Branch / commit / PR:** `claude/issue-142-origin-refresh`
+
+## Objective and authorized scope
+
+Build one origin's EI snapshot from pinned inputs, with cutoff enforcement, content-addressed idempotent artifacts, atomic publication and a frozen-rebuild check. Scope is replay only: no live capture and no 2025–26 date.
+
+## Work completed
+
+- **`src/bil/refresh.py`:**
+  - `Inputs`, `artifact_id`, `check_origin` (replay seasons, holdout guard), `existing` (consistency check), `publish` (staging plus rename) and `refresh_origin`;
+  - `load_inputs`, using the pinned #36 inputs;
+  - `verify_frozen`;
+  - the `build` and `verify-frozen` CLI.
+- **`tests/test_refresh.py`.** Four synthetic tests:
+  - later rows and box lines cannot change the published bytes;
+  - a rerun is a no-op and changed inputs get a new artifact;
+  - an interrupted publish leaves nothing;
+  - tampered or incomplete artifacts and out-of-scope origins are refused.
+- **Docs.** `docs/refresh.md` and ADR-0039.
+
+## Key decisions and discoveries
+
+- **Identity.** The artifact identity excludes the code commit, which is recorded only. Identity is the inputs, parents and configuration. This is what lets warm and cold rebuilds (#144) be compared by ID.
+- **Inconsistent artifacts.** An existing directory that fails its own manifest check is refused, not repaired.
+
+## Verification performed
+
+| Check | Actual result |
+| --- | --- |
+| `uv run pytest -q tests/test_refresh.py` | 4 passed |
+| Full `pytest`, `ruff`, `ruff format`, `mypy src` | See PR |
+| `verify-frozen` on real pins | 10 of 10 #36 block snapshots, maximum rating gap 0.0, none missing. 6.4 s |
+| Rerun `build --origin 2023-12-01` | `created: false`, same ID, nothing rewritten |
+
+## Blockers and remaining risks
+
+- The row-set pins cover whole seasons, so the identity changes if a pinned row set is re-versioned, even for rows after the origin. Per-origin revision resolution is #143.
+- The refresh fits from scratch. Checkpoints and warm/cold comparison are #144.
+
+## Next actions
+
+Review and merge. Then #143.
