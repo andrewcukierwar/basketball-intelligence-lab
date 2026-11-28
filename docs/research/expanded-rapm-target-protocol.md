@@ -1,0 +1,48 @@
+# Expanded historical RAPM target experiment
+
+Proposed protocol for [#168](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/168). This is an exposed-season retrospective development experiment. Freeze the exact protocol and runner before any new target fit or outcome score. Inputs are restricted to [#161's pinned registration](expanded-rapm-cohort.md) and [#178's executable loader](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/178). The [frozen #28 targets](rapm-targets.md) and the #30 SPM results remain published references.
+
+## Interventions, fitting and origins
+
+Compare four nested training cohorts using the same selection, unit possession exposure and score/clock context. Use `matched_5` and `matched_10` as controls, `expanded_15` as primary and `conditional_16` as the 2012–13 sensitivity only. Every arm applies the exact #161 ownership exclusions. Select the eligible registered prefix before opening row archives, so an earlier origin never loads later seasons. Preserve all evidence strata and the weak-stratum results. Use the stable-lineup representation throughout. Partial seasons from #162, 2017–18 and multi-lineup representations require new versions, outside this registration.
+
+Reuse #28's season-centred, jointly fitted offense/defense estimand. The response is 100 × modeled possession points. Use signed offense and defense player terms and the same unpenalized home, pre-possession score and clock context with season-and-game-type scoring levels. The routine centres labels within the target season by possession exposure. Use fixed ridge penalties 2,000 on offense and 4,000 on defense, the final #28 settings, in every arm and origin. This avoids retuning a change in historical breadth. Use `K365` with a 365-day half-life and 730-day cap as primary. Fit `K730` with a 730-day half-life and 1,460-day cap at the final origin as one sensitivity. Keep the same penalty for that comparison. Report how much historical exposure actually enters each label kernel.
+
+Freeze the shared origins closing 2018–19 through 2022–23 (2019-06-14, 2020-10-12, 2021-07-21, 2022-06-17 and 2023-06-13). These are the registered dates after the final expected game of each shared season. Each origin supplies targets for all eligible target seasons within that arm as of that date. Register three additional historical origins listed below to test actual positive kernel support for the additions. Use even the latest input only when its official played date is strictly before the origin and 2023-07-01. Record each source visibility tier and carry retrospective source-capture bounds. The published #28 sets retain their original per-origin labels and penalties. Compare the original and ownership-filtered references descriptively, outside the expanded-history contrast.
+
+## Matched held-out development outcomes
+
+The modern sequence is a negative control for the historical additions. The 2014–15 recovery ended more than 730 days before the 2018–19 target began, and every later target is farther away. Require the relevant label tables and predictions to agree within `1e-9` when two arms have the same nonzero inputs. Report any difference and explain its lineage before drawing conclusions.
+
+Register the following three exposure-positive historical contrasts. Each arm's training uses only its registered seasons through the specified close. Use the listed reference arm's latest-target context and fixed outcome-free prediction procedure. All model rows from the evaluation season are chronologically separate from the fitted data.
+
+| Closing target | Cutoff, exclusive | Identical evaluation season | Reference | Candidate | Addition with possible kernel support |
+| --- | --- | --- | --- | --- | --- |
+| 2005–06 | 2006-06-21 | 2006–07 | `matched_10` | `expanded_15` | 2004–05 |
+| 2014–15 | 2015-06-17 | 2015–16 | `expanded_15` | `conditional_16` | 2012–13 |
+| 2015–16 | 2016-06-20 | 2016–17 | `matched_10` | `expanded_15` | 2014–15 |
+
+Verify positive added-year kernel weights for the target across these contrasts before using the outcome, with the input digests and counts in the report. When a registered addition has no nonzero weights, report that contrast as unavailable for its effect. The 2008–11 additions can contribute label and reliability diagnostics in their own target seasons. These frozen historical contrasts do not separately isolate them against the ten-season control. Do not use final-origin K730 fits as forward predictions for outcomes already within their input periods.
+
+Score realized-lineup possessions in 2019–20 through 2022–23 and the three tabled seasons using only the specified earlier registered origin. Use that origin's latest closed-season label for each on-court player. Players with fewer than 250 possessions on either side in that target season receive the common zero prior in every arm. Use the same paired five-on-five sample across arms. For the modern sequence, use `matched_5`'s preceding-origin, latest-target fit for the common nonplayer terms. Use the tabled reference in each historic test. Apply its context and latest closed target season’s level to all arms, using the level code `2 * closes_season + is_playoff` for every scoring row. Shift its raw intercept by `5 * (mean_offense_raw - mean_defense_raw)`, using the reference's target-season exposure weights, so it is measured on the centred player scale. Thus the compared predictions move only through prior player coefficients. Treat realized lineup and pre-possession context as scorer inputs in a conditional possession diagnostic. Do not label this a pregame result or a fresh confirmatory score.
+
+Process evaluation seasons in order. For each season, first fit the preceding origin, then predict and freeze by sorted exact game, stream and possession keys before the scoring command reads that season’s outcome vector. Use a prediction input view that projects away model points. Only then advance to fitting the origin that closes that evaluation season. Compare candidate RMSE and MAE to the common controls on identical games and exposure. Use paired full-game cluster bootstrap differences with 2,000 replicates, seed 168, overall and by evaluation season. Report wins/losses by season, player and possession support and the data/score/prediction digests. Forecasts from the preceding origin cannot train on the evaluation games. Existing outcomes from these seasons remain exposed. No outcome, EPM rating, downstream result or bootstrap comparison guides the chosen penalties, kernel or cohort.
+
+## Target diagnostics and artifact gates
+
+- Verify the archival five-season scope and original counts separately against the frozen #28-contiguous inputs. Report target digests where numerical versions permit. For the new fit, rerun the final primary origin's latest-season target with identical pins and require the same input digest and label arrays within a predeclared absolute tolerance of `1e-9`; record whether full digests match. Preserve code, protocol, row exclusions, source inputs, solver versions, predictions and all per-origin label digests.
+- Use #28's alternating disjoint game halves at the final origin and require 250 possessions in the relevant role in each half. Report corrected split-half reliability by target season, era, origin, role, exposure and verified/inferred source strata. Exclude any target season with an unavailable or nonfinite fit from dependent uses and report the failure. Use separate disjoint-game residual tests or intervals for individual changes. Per [#137](https://github.com/andrewcukierwar/basketball-intelligence-lab/issues/137), a correlation to a K0 fit sharing games does not establish the validity of individual rankings or contrasts.
+- Keep 2012–13 and the weak historical feed strata explicit. Report the conditional inclusion alongside the primary and include an analysis removing the retry-game strata from the new history at the final origin. Report minutes and game-type coverage, box-feature availability, forward support, first/last source dates and exposure counts for each handed-off label set. Apply the #161 feature clocks and show late-parent append/replay invariance.
+- Use checkpointed per-arm/per-origin artifacts with the exact registration, code and input hashes; resume only from matching receipts. Keep private artifacts under a new output version. Record wall time, process peak RSS, per-stage fit/runtime, convergence and omissions. Run first an input-only pass and then a bounded real-data replay of a single origin before scaling. An incomplete or failed stage remains unavailable.
+- Treat the result as a research candidate. Continue to #169 only with exact, convergent, chronologically eligible label artifacts and a separate downstream protocol. Any model or canonical policy change requires separate approval.
+
+No target fit, label comparison or outcome score was conducted during this protocol draft. The input dry run verified the archived source and eligibility accounting.
+
+## First-origin implementation
+
+The fit-only runner publishes one immutable checkpoint for the chosen arm, kernel and registered origin. Review this protocol and runner before fitting. Execute from a clean verified tree and store artifacts privately. A retry may reuse a verified complete checkpoint or write a new output path. The later scoring stage must verify checkpoint pins and label digests before consuming it.
+
+```sh
+uv run python -m bil.models.rapm.expanded_targets data data/processed/rapm_targets/issue-168-pilot \
+  --cohort expanded_15 --closes-season 2005 --protocol-sha256 "$reviewed_protocol_sha"
+```
