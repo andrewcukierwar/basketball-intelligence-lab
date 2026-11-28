@@ -753,6 +753,9 @@ def test_expanded_fit_checkpoint_pins_origin_and_publishes_immutable_outputs(tmp
     with pytest.raises(ValueError, match="unregistered target origin"):
         xt.fit_origin(tmp_path, unreachable, "matched_5", 2023, "K365", "test-pin", tmp_path)
     assert not unreachable.exists()
+    with pytest.raises(ValueError, match="unregistered cohort"):
+        xt.fit_origin(tmp_path, unreachable, "matched_5", 2005, "K365", "test-pin", tmp_path)
+    assert not unreachable.exists()
 
     monkeypatch.setattr(xt, "assemble", lambda _: replace(rows, day=rows.day + 365))
     with pytest.raises(ValueError, match="cross the registered origin cutoff"):

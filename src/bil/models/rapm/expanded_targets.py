@@ -28,11 +28,19 @@ from bil.models.rapm.targets import (
 )
 
 ORIGIN_CUTOFFS = {
+    2005: date(2006, 6, 21),
+    2014: date(2015, 6, 17),
+    2015: date(2016, 6, 20),
     2018: date(2019, 6, 14),
     2019: date(2020, 10, 12),
     2020: date(2021, 7, 21),
     2021: date(2022, 6, 17),
     2022: date(2023, 6, 13),
+}
+HISTORICAL_ARMS = {
+    2005: ("matched_10", "expanded_15"),
+    2014: ("expanded_15", "conditional_16"),
+    2015: ("matched_10", "expanded_15"),
 }
 PENALTIES = (2000.0, 4000.0)
 KERNELS = {kernel.name: kernel for kernel in (PRIMARY_KERNEL, WIDE_KERNEL)}
@@ -51,6 +59,8 @@ def fit_origin(
     """Bind the fit to an approved protocol and publish all its files together."""
     if closes_season not in ORIGIN_CUTOFFS:
         raise ValueError(f"unregistered target origin: {closes_season}")
+    if cohort not in HISTORICAL_ARMS.get(closes_season, COHORTS):
+        raise ValueError(f"unregistered cohort for the selected origin: {cohort}")
     if kernel_name not in KERNELS or (kernel_name == WIDE_KERNEL.name and closes_season != 2022):
         raise ValueError(f"unregistered kernel for the selected origin: {kernel_name}")
     start = perf_counter()
