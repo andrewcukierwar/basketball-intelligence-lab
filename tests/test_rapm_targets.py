@@ -717,3 +717,44 @@ def test_resumed_checkpoints_reproduce_the_run_exactly(tmp_path, monkeypatch):
         checkpoints=tg.Checkpoints(tmp_path / "checkpoints", again_log),
     )
     assert _dump(again) == _dump(first)
+
+
+def test_expanded_fit_checkpoint_pins_origin_and_publishes_immutable_outputs(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from bil.models.rapm import expanded_targets as xt
+
+    rows, clubs, _ = synthetic((2018,), step=11, possessions=20)
+    requested = []
+
+    def load_registered(_root, _manifest, cohort, _temp, *, closes_season):
+        requested.append((cohort, closes_season))
+        return [SimpleNamespace(data={"offense_team_id": clubs[:, 0] + 1})]
+
+    monkeypatch.setattr(xt, "load_inputs", load_registered)
+    monkeypatch.setattr(xt, "assemble", lambda _: rows)
+    monkeypatch.setattr(
+        xt, "verify_protocol", lambda _path, digest, _repo: {"sha256": digest, "head_commit": "abc"}
+    )
+    output = tmp_path / "checkpoint"
+    run = xt.fit_origin(tmp_path, output, "matched_5", 2018, "K365", "test-pin", tmp_path)
+    assert requested == [("matched_5", 2018)]
+    assert run["input_rows"] == len(rows)
+    assert run["cutoff_exclusive"] == "2019-06-14"
+    assert run["protocol"]["sha256"] == "test-pin"
+    manifest = json.loads((output / "manifest.json").read_text())
+    artifact = manifest["artifacts"]["2018"]
+    with np.load(output / artifact["file"], allow_pickle=False) as labels:
+        assert tg.label_digest(labels) == artifact["label_digest"]
+        assert np.all(np.isfinite(labels["offense"]))
+    with pytest.raises(FileExistsError, match="refusing to replace"):
+        xt.fit_origin(tmp_path, output, "matched_5", 2018, "K365", "test-pin", tmp_path)
+    unreachable = tmp_path / "later"
+    with pytest.raises(ValueError, match="unregistered target origin"):
+        xt.fit_origin(tmp_path, unreachable, "matched_5", 2023, "K365", "test-pin", tmp_path)
+    assert not unreachable.exists()
+
+    monkeypatch.setattr(xt, "assemble", lambda _: replace(rows, day=rows.day + 365))
+    with pytest.raises(ValueError, match="cross the registered origin cutoff"):
+        xt.fit_origin(tmp_path, unreachable, "matched_5", 2018, "K365", "test-pin", tmp_path)
+    assert not unreachable.exists()
