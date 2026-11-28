@@ -1,0 +1,6 @@
+# #161 expanded historical RAPM cohort
+
+- **Objective.** Verify the six recovered row sets and register nested historical inputs for #168. Branch `codex/issue-161-historical-cohort`, based on `7386d22`.
+- **Result.** [Registration and coverage](../research/expanded-rapm-cohort.md) and [data pins](../research/expanded-rapm-cohort-v1.json) specify a 15-season primary (3,162,069 fit-eligible rows) and 16-season sensitivity (3,368,797), with frozen and matched controls. Retain 2012–13 for sensitivity because of concentration in April and one score-margin band. The #138 diagnostic found 74 contradictions in archived accepted possessions across 16 seasons, 34 of which were model rows. Register a deterministic, pinned exclusion for new comparisons. Preserve all archived rows and accounting.
+- **Verification.** Verified source manifests, hard checks, all row artifacts, pre-possession timing and box appearance identities for each of 16 seasons. The six #53 outputs each replayed four byte-identical Parquet files at `8eac253`. All 16 box panels were available from pinned snapshots. No private data was copied into the branch and no model ran.
+- **Next.** #168 must consume the registered eligibility view and conduct matched chronological target refits. #162 and #163 may qualify separate extensions under their respective acceptance criteria.
