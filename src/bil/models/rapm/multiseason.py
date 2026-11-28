@@ -1409,7 +1409,7 @@ SELECT c.game_id, c.season_type, c.game_date, c.season_start_year, c.period,
        c.neutral_site IS NULL AS neutral_unknown, c.home_before, c.away_before,
        c.elapsed_before_ms, c.prior_seq IS NULL AS no_prior,
        len(c.offense_player_ids) AS off_n, len(c.defense_player_ids) AS def_n,
-       {players}
+       {stream_revision}{players}
 FROM context c
 ORDER BY c.game_date, c.game_id, c.possession_seq
 """
@@ -1475,6 +1475,8 @@ def load_season(
     allowed: Iterable[int],
     temp: Path,
     pins: Mapping[int, SeasonPin] = SEASON_PINS,
+    *,
+    include_stream_revision: bool = False,
 ) -> SeasonLoad:
     """Verify and read one season's rows and pre-possession context. Holdout seasons refuse."""
     import duckdb
@@ -1511,7 +1513,10 @@ def load_season(
         for side in ("offense", "defense")
         for i in range(1, 6)
     )
-    data = connection.execute(ROW_SQL.format(players=players)).fetchnumpy()
+    query = ROW_SQL.format(
+        players=players, stream_revision="c.stream_revision, " if include_stream_revision else ""
+    )
+    data = connection.execute(query).fetchnumpy()
     if np.any(data["off_n"] != 5) or np.any(data["def_n"] != 5):
         raise ValueError("every model row needs five players on each side")
     period = np.asarray(data["period"], dtype=np.int64)

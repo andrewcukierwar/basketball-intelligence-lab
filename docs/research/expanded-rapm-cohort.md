@@ -53,3 +53,10 @@ Accepted/expected games and accepted-game shares of positive player minutes are 
 ## Verification
 
 The audit rechecked the selected raw snapshots against the source pins. For each season, it ran the archived pilot's hard checks, verified every row-set output digest and reused the #26/#28 context loader with the registered season pins. All sixteen loaded without score/clock violations. The loader recorded opening possessions without a prior event in its existing separate accounting. At `8eac253006592f9ac597758f50d1cdbddf858a1e`, each of the six #53 row sets produced its archived build ID and four byte-identical Parquet files. Use the [#53 replay commands](historical-backfill-2001-2017.md#verification-and-runtime) and the manifest's pilot/snapshot pins. Use `bil.features.box_build.load_appearances` with the explicit season year, and `bil.features.box.Accumulator` to derive full-season feature coverage for positive-minute players. No target fit or outcome comparison was run.
+
+The experimental input-only dry run verifies the registered archives and reports eligible counts without fitting.
+
+```sh
+uv run python -m bil.models.rapm.expanded_inputs data \
+  docs/research/expanded-rapm-cohort-v1.json --cohort conditional_16
+```
