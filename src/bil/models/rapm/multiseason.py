@@ -1404,7 +1404,7 @@ def run_outer(
 
 ROW_SQL = """
 SELECT c.game_id, c.season_type, c.game_date, c.season_start_year, c.period,
-       c.possession_seq, c.model_points, c.offense_team_id,
+       c.possession_seq, {outcome}c.offense_team_id,
        c.offense_home, coalesce(c.neutral_site, false) AS neutral,
        c.neutral_site IS NULL AS neutral_unknown, c.home_before, c.away_before,
        c.elapsed_before_ms, c.prior_seq IS NULL AS no_prior,
@@ -1477,6 +1477,7 @@ def load_season(
     pins: Mapping[int, SeasonPin] = SEASON_PINS,
     *,
     include_stream_revision: bool = False,
+    include_model_points: bool = True,
 ) -> SeasonLoad:
     """Verify and read one season's rows and pre-possession context. Holdout seasons refuse."""
     import duckdb
@@ -1500,7 +1501,12 @@ def load_season(
             raise ValueError(f"{pin.label} {table} has seasons {years}")
     if connection.execute("SELECT count(*) FROM model_row WHERE weight <> 1.0").fetchone() != (0,):
         raise ValueError("model rows must have unit weight (ADR-0013)")
-    connection.execute(f"CREATE OR REPLACE TEMP TABLE context AS {CONTEXT_SQL}")
+    context_query = (
+        CONTEXT_SQL
+        if include_model_points
+        else f"SELECT * EXCLUDE (model_points) FROM ({CONTEXT_SQL})"
+    )
+    connection.execute(f"CREATE OR REPLACE TEMP TABLE context AS {context_query}")
     connection.execute(
         "CREATE OR REPLACE TEMP VIEW game_latest AS SELECT game_id, home_team_id, away_team_id "
         "FROM game QUALIFY row_number() OVER (PARTITION BY game_id ORDER BY revision DESC) = 1"
@@ -1514,7 +1520,9 @@ def load_season(
         for i in range(1, 6)
     )
     query = ROW_SQL.format(
-        players=players, stream_revision="c.stream_revision, " if include_stream_revision else ""
+        players=players,
+        stream_revision="c.stream_revision, " if include_stream_revision else "",
+        outcome="c.model_points, " if include_model_points else "",
     )
     data = connection.execute(query).fetchnumpy()
     if np.any(data["off_n"] != 5) or np.any(data["def_n"] != 5):
@@ -1551,16 +1559,8 @@ def load_season(
     return SeasonLoad(season, pin, manifest, digests, audit, coverage, data, no_livedata)
 
 
-def assemble(loads: Sequence[SeasonLoad]) -> Rows:
-    """Concatenate seasons in chronological order and derive the context columns."""
-    data = {k: np.concatenate([np.asarray(s.data[k]) for s in loads]) for k in loads[0].data}
-    game_text = data["game_id"].astype(str)
-    game_ids, game = np.unique(game_text, return_inverse=True)
-    team_text = np.char.add(np.char.add(game_text, ":"), data["offense_team_id"].astype(str))
-    _, team_game = np.unique(team_text, return_inverse=True)
-    day = np.array(
-        [d.toordinal() for d in data["game_date"].astype("datetime64[D]").astype(object)]
-    )
+def pre_possession_features(data: Mapping[str, NDArray[Any]]) -> NDArray[np.float64]:
+    """Build the registered context matrix without opening the model-point vector."""
     period = data["period"].astype(np.int64)
     offense_home = data["offense_home"].astype(bool)
     home_before = data["home_before"].astype(np.float64)
@@ -1578,6 +1578,21 @@ def assemble(loads: Sequence[SeasonLoad]) -> Rows:
         elapsed_ms=elapsed,
     )
     columns = feature_columns(covariates)
+    context: NDArray[np.float64] = np.column_stack([columns[name] for name in CONTEXT_COLUMNS])
+    return context
+
+
+def assemble(loads: Sequence[SeasonLoad]) -> Rows:
+    """Concatenate seasons in chronological order and derive the context columns."""
+    data = {k: np.concatenate([np.asarray(s.data[k]) for s in loads]) for k in loads[0].data}
+    game_text = data["game_id"].astype(str)
+    game_ids, game = np.unique(game_text, return_inverse=True)
+    team_text = np.char.add(np.char.add(game_text, ":"), data["offense_team_id"].astype(str))
+    _, team_game = np.unique(team_text, return_inverse=True)
+    day = np.array(
+        [d.toordinal() for d in data["game_date"].astype("datetime64[D]").astype(object)]
+    )
+    period = data["period"].astype(np.int64)
     no_livedata_games = set().union(*(s.no_livedata_games for s in loads))
     return Rows(
         season=data["season_start_year"].astype(np.int64),
@@ -1591,7 +1606,7 @@ def assemble(loads: Sequence[SeasonLoad]) -> Rows:
         y=100.0 * data["model_points"].astype(np.float64),
         offense=np.column_stack([data[f"o{i}"] for i in range(1, 6)]).astype(np.int64),
         defense=np.column_stack([data[f"d{i}"] for i in range(1, 6)]).astype(np.int64),
-        context=np.column_stack([columns[name] for name in CONTEXT_COLUMNS]),
+        context=pre_possession_features(data),
         no_livedata=np.isin(game_text, sorted(no_livedata_games)),
     )
 

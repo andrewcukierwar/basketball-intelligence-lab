@@ -94,7 +94,9 @@ def _verify_played_dates(raw: NDArray[Any], label: str, cutoff: np.datetime64 = 
         raise ValueError(f"{label} rows are outside the registered historical date boundary")
 
 
-def _load_registered_season(data_root: Path, temp: Path, record: dict[str, Any]) -> SeasonLoad:
+def _load_registered_season(
+    data_root: Path, temp: Path, record: dict[str, Any], *, include_model_points: bool = True
+) -> SeasonLoad:
     season = record["year"]
     pin = SeasonPin(
         record["label"],
@@ -122,7 +124,13 @@ def _load_registered_season(data_root: Path, temp: Path, record: dict[str, Any])
     _verify_file(pilot / "possession.parquet", pilot_digests["possession.parquet"])
 
     loaded = load_season(
-        processed, season, (season,), temp, {season: pin}, include_stream_revision=True
+        processed,
+        season,
+        (season,),
+        temp,
+        {season: pin},
+        include_stream_revision=True,
+        include_model_points=include_model_points,
     )
     _verify_played_dates(
         loaded.data["game_date"], pin.label, np.datetime64(record["close_cutoff_exclusive"], "D")
