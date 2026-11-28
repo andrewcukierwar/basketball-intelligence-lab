@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -84,6 +84,16 @@ def _exclude(
     return {name: column[retained] for name, column in data.items()}
 
 
+def _verify_played_dates(raw: NDArray[Any], label: str, cutoff: np.datetime64 = DATA_END) -> None:
+    dates = raw.astype("datetime64[D]")
+    if (
+        np.any(np.ma.getmaskarray(dates))
+        or np.any(np.isnat(dates))
+        or np.any(dates >= min(DATA_END, cutoff))
+    ):
+        raise ValueError(f"{label} rows are outside the registered historical date boundary")
+
+
 def _load_registered_season(data_root: Path, temp: Path, record: dict[str, Any]) -> SeasonLoad:
     season = record["year"]
     pin = SeasonPin(
@@ -114,9 +124,9 @@ def _load_registered_season(data_root: Path, temp: Path, record: dict[str, Any])
     loaded = load_season(
         processed, season, (season,), temp, {season: pin}, include_stream_revision=True
     )
-    dates = loaded.data["game_date"].astype("datetime64[D]")
-    if np.any(np.isnat(dates)) or np.any(dates >= DATA_END):
-        raise ValueError(f"{pin.label} rows are outside the registered historical date boundary")
+    _verify_played_dates(
+        loaded.data["game_date"], pin.label, np.datetime64(record["close_cutoff_exclusive"], "D")
+    )
     if loaded.audit != record["timing_audit"]:
         raise ValueError(f"{pin.label} pre-possession timing audit differs from the registration")
     conflicts = _excluded_control_keys(pilot, rows / "model_row.parquet")
@@ -144,22 +154,31 @@ def _load_registered_season(data_root: Path, temp: Path, record: dict[str, Any])
 
 
 def load_inputs(
-    data_root: Path, registration: Path, cohort: str, temp: Path
-) -> Iterator[SeasonLoad]:
-    """Yield the registered rows in season order after checking every input lineage pin."""
+    data_root: Path,
+    registration: Path,
+    cohort: str,
+    temp: Path,
+    *,
+    closes_season: int | None = None,
+) -> tuple[SeasonLoad, ...]:
+    """Return the entire registered cohort only after every validation has passed."""
     if cohort not in COHORTS:
         raise ValueError(f"unregistered expanded input cohort: {cohort}")
     _verify_file(registration, REGISTRATION_SHA256)
     manifest = json.loads(registration.read_bytes())
     selection = manifest["nested_cohorts"][cohort]
     seasons = {record["year"]: record for record in manifest["seasons"]}
-    total = 0
-    for year in selection["seasons"]:
-        loaded = _load_registered_season(data_root, temp, seasons[year])
-        total += len(loaded.data["game_id"])
-        yield loaded
-    if total != selection["rows"]:
+    years = selection["seasons"]
+    expected_rows = selection["rows"]
+    if closes_season is not None:
+        if closes_season not in years:
+            raise ValueError(f"{cohort} has no registered origin closing {closes_season}")
+        years = years[: years.index(closes_season) + 1]
+        expected_rows = sum(seasons[year]["usable_rows"] for year in years)
+    loaded = tuple(_load_registered_season(data_root, temp, seasons[year]) for year in years)
+    if sum(len(item.data["game_id"]) for item in loaded) != expected_rows:
         raise ValueError(f"{cohort} total eligible row count differs from the registration")
+    return loaded
 
 
 def main() -> None:
@@ -167,11 +186,18 @@ def main() -> None:
     parser.add_argument("data_root", type=Path)
     parser.add_argument("registration", type=Path)
     parser.add_argument("--cohort", choices=COHORTS, default="conditional_16")
+    parser.add_argument("--closes-season", type=int)
     args = parser.parse_args()
     with TemporaryDirectory(prefix="bil-expanded-inputs-") as temp:
         counts = {
             item.pin.label: len(item.data["game_id"])
-            for item in load_inputs(args.data_root, args.registration, args.cohort, Path(temp))
+            for item in load_inputs(
+                args.data_root,
+                args.registration,
+                args.cohort,
+                Path(temp),
+                closes_season=args.closes_season,
+            )
         }
     print(json.dumps({"cohort": args.cohort, "rows": sum(counts.values()), "seasons": counts}))
 

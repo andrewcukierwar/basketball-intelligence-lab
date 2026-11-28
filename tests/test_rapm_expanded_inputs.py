@@ -1,11 +1,19 @@
+import json
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
 
 import duckdb
 import numpy as np
 import pytest
 
-from bil.models.rapm.expanded_inputs import _exclude, _excluded_control_keys, load_inputs
+from bil.models.rapm import expanded_inputs
+from bil.models.rapm.expanded_inputs import (
+    _exclude,
+    _excluded_control_keys,
+    _verify_played_dates,
+    load_inputs,
+)
 
 
 def test_scoreless_wrong_side_excludes_only_the_registered_stream(tmp_path: Path) -> None:
@@ -56,3 +64,45 @@ def test_invalid_registration_is_refused_before_opening_data(tmp_path: Path) -> 
         list(load_inputs(tmp_path / "missing", manifest, "frozen_5", tmp_path))
     with pytest.raises(ValueError, match="unexpected registered digest"):
         list(load_inputs(tmp_path / "missing", manifest, "expanded_15", tmp_path))
+
+
+def test_all_seasons_and_cohort_total_verified_before_return(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = tmp_path / "registration.json"
+    document = {
+        "nested_cohorts": {"expanded_15": {"seasons": [2018, 2019], "rows": 3}},
+        "seasons": [{"year": 2018, "usable_rows": 1}, {"year": 2019, "usable_rows": 1}],
+    }
+    payload = json.dumps(document).encode()
+    manifest.write_bytes(payload)
+    monkeypatch.setattr(expanded_inputs, "REGISTRATION_SHA256", sha256(payload).hexdigest())
+    first = SimpleNamespace(data={"game_id": np.array(["001"])})
+
+    def invalid_late_season(_raw, _temp, record):
+        if record["year"] == 2019:
+            raise ValueError("late season invalid")
+        return first
+
+    monkeypatch.setattr(expanded_inputs, "_load_registered_season", invalid_late_season)
+    with pytest.raises(ValueError, match="late season invalid"):
+        load_inputs(tmp_path, manifest, "expanded_15", tmp_path)
+    assert load_inputs(tmp_path, manifest, "expanded_15", tmp_path, closes_season=2018) == (first,)
+    with pytest.raises(ValueError, match="no registered origin"):
+        load_inputs(tmp_path, manifest, "expanded_15", tmp_path, closes_season=2023)
+
+    monkeypatch.setattr(expanded_inputs, "_load_registered_season", lambda *_: first)
+    with pytest.raises(ValueError, match="total eligible row count"):
+        load_inputs(tmp_path, manifest, "expanded_15", tmp_path)
+
+
+def test_played_dates_reject_masked_missing_and_boundary() -> None:
+    earlier = np.array(["2023-06-30"], dtype="datetime64[D]")
+    _verify_played_dates(earlier, "season")
+    for dates in (
+        np.ma.array(earlier, mask=[True]),
+        np.array(["NaT"], dtype="datetime64[D]"),
+        np.array(["2023-07-01"], dtype="datetime64[D]"),
+    ):
+        with pytest.raises(ValueError, match="historical date boundary"):
+            _verify_played_dates(dates, "season")
