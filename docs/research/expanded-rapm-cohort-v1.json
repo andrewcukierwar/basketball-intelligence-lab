@@ -1,0 +1,1464 @@
+{
+  "cohort_id": "expanded-rapm-cohort-issue-161-v1",
+  "data_end_exclusive": "2023-07-01",
+  "evidence_tier": "retrospective_capture_bound",
+  "nested_cohorts": {
+    "conditional_16": {
+      "apply_control_exclusion": true,
+      "rows": 3368797,
+      "seasons": [
+        2004,
+        2005,
+        2006,
+        2007,
+        2008,
+        2009,
+        2010,
+        2012,
+        2014,
+        2015,
+        2016,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022
+      ]
+    },
+    "expanded_15": {
+      "apply_control_exclusion": true,
+      "rows": 3162069,
+      "seasons": [
+        2004,
+        2005,
+        2006,
+        2007,
+        2008,
+        2009,
+        2010,
+        2014,
+        2015,
+        2016,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022
+      ]
+    },
+    "frozen_10": {
+      "apply_control_exclusion": false,
+      "rows": 2117689,
+      "seasons": [
+        2005,
+        2006,
+        2007,
+        2015,
+        2016,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022
+      ]
+    },
+    "frozen_5": {
+      "apply_control_exclusion": false,
+      "rows": 1066152,
+      "seasons": [
+        2018,
+        2019,
+        2020,
+        2021,
+        2022
+      ]
+    },
+    "matched_10": {
+      "apply_control_exclusion": true,
+      "rows": 2117658,
+      "seasons": [
+        2005,
+        2006,
+        2007,
+        2015,
+        2016,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022
+      ]
+    },
+    "matched_5": {
+      "apply_control_exclusion": true,
+      "rows": 1066123,
+      "seasons": [
+        2018,
+        2019,
+        2020,
+        2021,
+        2022
+      ]
+    }
+  },
+  "schema_version": 1,
+  "seasons": [
+    {
+      "box_appearances": 26602,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "83662facc36fef3525acbc1b17096658d764a67a88aafb48947d044419d9db79",
+        "team_game_logs.parquet": "542d70c7a535ed628e36c3ca40272ae70965f700d64f5983fd98c27909cc2123"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2382600000,
+          "all_ms": 2440200000
+        },
+        "regular": {
+          "accepted_ms": 34945200000,
+          "all_ms": 35699869000
+        }
+      },
+      "box_snapshot": "issue-97-v1",
+      "box_snapshot_sha256": "37ad8c21ba53ed1150c1fe13fb21c91c4ab72cceb4c763c6fbfe1fa3ae13d159",
+      "close_cutoff_exclusive": "2005-06-24",
+      "control_conflicts_accepted": 0,
+      "control_conflicts_modeled": 0,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 82,
+          "expected_games": 84,
+          "rows": 12489,
+          "usable_rows": 12489
+        },
+        "regular": {
+          "accepted_games": 1204,
+          "expected_games": 1230,
+          "rows": 190976,
+          "usable_rows": 190976
+        }
+      },
+      "excluded_control_keys_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "first_played_date": "2004-11-02",
+      "hard_checks": 26,
+      "label": "2004-05",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 49
+      },
+      "on_court_players": 464,
+      "pilot_build": "issue-111-rule-v5",
+      "pilot_manifest_sha256": "a255a84694be31a776f5efa71342b9940bc68d85f327259cb05dce22d63f0708",
+      "pilot_snapshot": "issue-97-v1",
+      "pilot_snapshot_sha256": "37ad8c21ba53ed1150c1fe13fb21c91c4ab72cceb4c763c6fbfe1fa3ae13d159",
+      "players_with_250_each_side": 394,
+      "positive_box_players": 464,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "0f98535c8420e33458ef193792e2bbbd97c885af1779593853f62a09645f633b",
+        "model_row.parquet": "db51e6ee864fe69985c60dc7b8c7123dba089775502168754a647dfcb6e6598c",
+        "possession_disposition.parquet": "73fc5e8f4459c57141c65014361b4448f4c8a19bad5770366fa90264cea54082",
+        "score_reconciliation.parquet": "88783ea7e7577ba5afe231ede7fc6918fb17ad7b9645e255a23ea4bd05080d2f"
+      },
+      "row_build_id": "eba238e34d33aab62ddbf6ee0d3442467bf2623665548c83a3b52abdc2e6cc41",
+      "row_manifest_sha256": "281dcd59b81c54dcb080043b85a3e4284f2809cb331bd7a5a04c6b7b7d60b483",
+      "row_set": "issue-53-rows-v1",
+      "rows": 203465,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1285,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 203465,
+      "verification_strata": {
+        "inferred_starters": 9,
+        "no_datanba": 1286,
+        "no_livedata": 1286,
+        "overtime": 83,
+        "same_clock_box_credit": 33,
+        "same_clock_free_throw_substitution": 1286,
+        "same_clock_order": 2,
+        "technical_free_throw": 941,
+        "unresolved_possessions": 29
+      },
+      "year": 2004
+    },
+    {
+      "box_appearances": 26637,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "315c603c625f5a2b6123a48ac32605442dc3ae2ad3c92266310f9c080a9eacad",
+        "team_game_logs.parquet": "c460a8d6054c0d61096191693c3c86aabb9d30f3e010fb1e50d2c6d31aa856d1"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2564400000,
+          "all_ms": 2596200000
+        },
+        "regular": {
+          "accepted_ms": 35430000000,
+          "all_ms": 35733000000
+        }
+      },
+      "box_snapshot": "issue-97-v1",
+      "box_snapshot_sha256": "78b57d0481f95b9c0c54d6d0670480c4d3ef607129f92b7180c85cf240a3e824",
+      "close_cutoff_exclusive": "2006-06-21",
+      "control_conflicts_accepted": 1,
+      "control_conflicts_modeled": 1,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 88,
+          "expected_games": 89,
+          "rows": 13536,
+          "usable_rows": 13536
+        },
+        "regular": {
+          "accepted_games": 1220,
+          "expected_games": 1230,
+          "rows": 192218,
+          "usable_rows": 192217
+        }
+      },
+      "excluded_control_keys_sha256": "c42cad455b1536ba59d7c0a6395aff74b71c5bceb32fa54d0b64258bf0c7b83f",
+      "first_played_date": "2005-11-01",
+      "hard_checks": 26,
+      "label": "2005-06",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 60
+      },
+      "on_court_players": 458,
+      "pilot_build": "issue-97-v1",
+      "pilot_manifest_sha256": "66d2904d79e43321b2a57fbef498f294c1ed3e7333dd7dd6c920ac1395cce8c5",
+      "pilot_snapshot": "issue-90-v1",
+      "pilot_snapshot_sha256": "78b57d0481f95b9c0c54d6d0670480c4d3ef607129f92b7180c85cf240a3e824",
+      "players_with_250_each_side": 401,
+      "positive_box_players": 458,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "23cbdc39ce43d05b9586764d81b522e09ff584641e8f6fb90c30e152be8d640b",
+        "model_row.parquet": "da13ef3ddafacc916ffe5dbd550f05220d3b9264ce5cd3607b2db3f2f931137a",
+        "possession_disposition.parquet": "3cc1241fb85359af50a4fb3b52ccec994dd6211a336cbc9fd70ae29cdff3dd1b",
+        "score_reconciliation.parquet": "cf41b395b7243b77b24b6593a8831273bfc4cc5a65ec99d5bb7a1b5d5172b06d"
+      },
+      "row_build_id": "40308b6e82c17ee23cb6a76b9edeb5fb1815b0a8ed83e89d3450816d023dc632",
+      "row_manifest_sha256": "0cd0db16dbf6b7819eb5e88449bedccd9577204050b24ce6415429452b06e062",
+      "row_set": "issue-97-rows-v1",
+      "rows": 205754,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1308,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 205753,
+      "verification_strata": {
+        "inferred_starters": 13,
+        "no_datanba": 1308,
+        "no_livedata": 1308,
+        "overtime": 92,
+        "same_clock_box_credit": 12,
+        "same_clock_free_throw_substitution": 1308,
+        "technical_free_throw": 989,
+        "unresolved_possessions": 20
+      },
+      "year": 2005
+    },
+    {
+      "box_appearances": 26648,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "bf594dbe485a0ee29e529199e46316ab85f96ce1644c638bd423262f43d43b4b",
+        "team_game_logs.parquet": "2579eb3e0bf3ce0c7342ade5d50d001260925501b6cadbdcfed0020576b66c95"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2255400000,
+          "all_ms": 2284200000
+        },
+        "regular": {
+          "accepted_ms": 35122188000,
+          "all_ms": 35744988000
+        }
+      },
+      "box_snapshot": "issue-97-v1",
+      "box_snapshot_sha256": "9433786ea2eaac54ba948127274bbe9626c4eb59eb159dee287cf486098c3098",
+      "close_cutoff_exclusive": "2007-06-15",
+      "control_conflicts_accepted": 0,
+      "control_conflicts_modeled": 0,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 78,
+          "expected_games": 79,
+          "rows": 11939,
+          "usable_rows": 11939
+        },
+        "regular": {
+          "accepted_games": 1209,
+          "expected_games": 1230,
+          "rows": 193042,
+          "usable_rows": 193042
+        }
+      },
+      "excluded_control_keys_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "first_played_date": "2006-10-31",
+      "hard_checks": 26,
+      "label": "2006-07",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 48
+      },
+      "on_court_players": 458,
+      "pilot_build": "issue-97-v1",
+      "pilot_manifest_sha256": "1cb82fe3160d9e722d4e86a8b3362c5a900f1f40da756adfe9ece61d4d67bce9",
+      "pilot_snapshot": "issue-97-v1",
+      "pilot_snapshot_sha256": "9433786ea2eaac54ba948127274bbe9626c4eb59eb159dee287cf486098c3098",
+      "players_with_250_each_side": 397,
+      "positive_box_players": 458,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "be6aaf8194510b7dc679829992d29c5b0049d09d6ad4abe226f70ff4764a103c",
+        "model_row.parquet": "1d821b20cef5f578389117f84634d6e5777e734f9f9e3df5ca73ff578a3ba45c",
+        "possession_disposition.parquet": "0c22de0580b91407852aa494eb87bb08c762db7e8564719d42250751d48ff3e1",
+        "score_reconciliation.parquet": "2e1ae35bbb9ace92edff6c9ec7fdd1d3d6ec4dc4b597b8cfc84d61a3553718a2"
+      },
+      "row_build_id": "b8d872c24006c8aa3c30f6b504e543d6546f7f74b97fe440b2921f62a0fb1f07",
+      "row_manifest_sha256": "4dcd6a00be96da4011f9e9aac56152ec043e15f8a16b3e8f18d58106c8686f5c",
+      "row_set": "issue-97-rows-v1",
+      "rows": 204981,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1287,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 204981,
+      "verification_strata": {
+        "inferred_starters": 10,
+        "no_datanba": 1287,
+        "no_livedata": 1287,
+        "overtime": 88,
+        "same_clock_box_credit": 19,
+        "same_clock_free_throw_substitution": 1287,
+        "technical_free_throw": 1015,
+        "unresolved_possessions": 28
+      },
+      "year": 2006
+    },
+    {
+      "box_appearances": 26651,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "dc2f4393e6342f822649e37c06ecfd469c1e7df3369146d4ded4bc1e8b95b022",
+        "team_game_logs.parquet": "dad17a19b2c97fa8935756568b48b9a46b7271a820efaf512502f4d2aaff6473"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2485800000,
+          "all_ms": 2485800000
+        },
+        "regular": {
+          "accepted_ms": 35179200000,
+          "all_ms": 35646000000
+        }
+      },
+      "box_snapshot": "issue-97-v1",
+      "box_snapshot_sha256": "7e3189d65ba78fb37a07b302e9dddae9646021a4d2432263863781d28fa1ae49",
+      "close_cutoff_exclusive": "2008-06-18",
+      "control_conflicts_accepted": 0,
+      "control_conflicts_modeled": 0,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 86,
+          "expected_games": 86,
+          "rows": 13159,
+          "usable_rows": 13159
+        },
+        "regular": {
+          "accepted_games": 1214,
+          "expected_games": 1230,
+          "rows": 196672,
+          "usable_rows": 196672
+        }
+      },
+      "excluded_control_keys_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "first_played_date": "2007-10-30",
+      "hard_checks": 26,
+      "label": "2007-08",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 46
+      },
+      "on_court_players": 451,
+      "pilot_build": "issue-97-v1",
+      "pilot_manifest_sha256": "d2e4be9d6bdd53306126252fc527ecb0a88bb77f72175c31aed8a16490809769",
+      "pilot_snapshot": "issue-97-v1",
+      "pilot_snapshot_sha256": "7e3189d65ba78fb37a07b302e9dddae9646021a4d2432263863781d28fa1ae49",
+      "players_with_250_each_side": 394,
+      "positive_box_players": 451,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "2bf59796f3a3948e790f6653baf02da59a530e628b9ba5f370e8b7b3e3847eb6",
+        "model_row.parquet": "3f4c3fdca74ce9a999508ddc1331892882ff4338618c80ebfd75dbed99b48e3d",
+        "possession_disposition.parquet": "84346f0f05d883b992486ff0e4c5ba00bfadfd9b8cbb8d344d72e11e66e93f90",
+        "score_reconciliation.parquet": "0d4fd24ffb920842f99b99771cf87dac1a147aa4bb4adc8058b9b34478a4117a"
+      },
+      "row_build_id": "0daa90b46b1b8635461d13395d2d2d27399a8d622b84f3aeef5e76f2ad1c279b",
+      "row_manifest_sha256": "8aa10687f33efb950315eb11c11db2dbb50418882d9a86e5a39e43b727012c57",
+      "row_set": "issue-97-rows-v1",
+      "rows": 209831,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1300,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 209831,
+      "verification_strata": {
+        "inferred_starters": 13,
+        "no_datanba": 1300,
+        "no_livedata": 1300,
+        "overtime": 64,
+        "same_clock_box_credit": 25,
+        "same_clock_free_throw_substitution": 1300,
+        "technical_free_throw": 933,
+        "unresolved_possessions": 22
+      },
+      "year": 2007
+    },
+    {
+      "box_appearances": 26370,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "89b6f3175fd3949f47cc630ef92c5483911b17461bc5edf3f3e9a92c9dd27b3e",
+        "team_game_logs.parquet": "f4369f6e16ab5302f7eb9ce8deea16dd2494b51332111ef0da9b75148b94f60a"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2478000000,
+          "all_ms": 2478000000
+        },
+        "regular": {
+          "accepted_ms": 35390999000,
+          "all_ms": 35678999000
+        }
+      },
+      "box_snapshot": "issue-111-v1",
+      "box_snapshot_sha256": "bc77bd319967d31c2f7be29e18d87a15ae273e358f6c5ac6e94136a5d26af110",
+      "close_cutoff_exclusive": "2009-06-15",
+      "control_conflicts_accepted": 0,
+      "control_conflicts_modeled": 0,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 85,
+          "expected_games": 85,
+          "rows": 13146,
+          "usable_rows": 13146
+        },
+        "regular": {
+          "accepted_games": 1220,
+          "expected_games": 1230,
+          "rows": 196673,
+          "usable_rows": 196673
+        }
+      },
+      "excluded_control_keys_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "first_played_date": "2008-10-28",
+      "hard_checks": 26,
+      "label": "2008-09",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 42
+      },
+      "on_court_players": 445,
+      "pilot_build": "issue-115-v2",
+      "pilot_manifest_sha256": "35ef0c5382fd6ab6da88da841fa18f6526114444ceb3f8cda938de4f04899cca",
+      "pilot_snapshot": "issue-111-v1",
+      "pilot_snapshot_sha256": "bc77bd319967d31c2f7be29e18d87a15ae273e358f6c5ac6e94136a5d26af110",
+      "players_with_250_each_side": 391,
+      "positive_box_players": 445,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "29c10375e88a173d8b4923671baa87c84d7de6ca7dd06bea5047ab43eb756cdc",
+        "model_row.parquet": "bca642c698721b36bf962c46ba5ce338c16fb08b0043cdfd261edfdf046c92ca",
+        "possession_disposition.parquet": "1ccae795bf95ef45830fe6dcee5f94cbedb9c0932b9e8663bef9f8cc41d213e7",
+        "score_reconciliation.parquet": "a7e515ecd4ac6220072d0ea3915a0203e55614bab948fda080111291dbe5b20c"
+      },
+      "row_build_id": "f8240e142424c061d2a1345cd6b883c15a0099afa655aa95875678d6d0efc54c",
+      "row_manifest_sha256": "c5e38c2541a8cd7f7523d28c52a138fc7ccaf5b6f6e04ad4d2410b52d23c311e",
+      "row_set": "issue-53-rows-v1",
+      "rows": 209819,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1304,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 209819,
+      "verification_strata": {
+        "free_throw_miss": 14,
+        "inferred_starters": 14,
+        "no_datanba": 1305,
+        "no_livedata": 1305,
+        "overtime": 77,
+        "same_clock_box_credit": 18,
+        "same_clock_free_throw_substitution": 1305,
+        "same_clock_order": 4,
+        "technical_free_throw": 936,
+        "unresolved_possessions": 35
+      },
+      "year": 2008
+    },
+    {
+      "box_appearances": 26487,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "2fa6eb61cf0c46a5f80e565cece0a240d3de31a50b1fcd1734a1743f22a3ade1",
+        "team_game_logs.parquet": "22f95aaa23fa7a649c60913715d95b6bce7a69daab90c9df8886823586cec3fd"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2364600000,
+          "all_ms": 2364600000
+        },
+        "regular": {
+          "accepted_ms": 35379000000,
+          "all_ms": 35670000000
+        }
+      },
+      "box_snapshot": "issue-111-v1",
+      "box_snapshot_sha256": "f0fee335befad49de32be087ba876e5bf90108993390dc58c0705b708535e896",
+      "close_cutoff_exclusive": "2010-06-18",
+      "control_conflicts_accepted": 0,
+      "control_conflicts_modeled": 0,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 82,
+          "expected_games": 82,
+          "rows": 12684,
+          "usable_rows": 12684
+        },
+        "regular": {
+          "accepted_games": 1220,
+          "expected_games": 1230,
+          "rows": 198545,
+          "usable_rows": 198545
+        }
+      },
+      "excluded_control_keys_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "first_played_date": "2009-10-27",
+      "hard_checks": 26,
+      "label": "2009-10",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 41
+      },
+      "on_court_players": 441,
+      "pilot_build": "issue-115-v2",
+      "pilot_manifest_sha256": "a558d8d0f5b48e22597005e965405eb6943ab69ac7a8544e4e0f0ae6557e9e32",
+      "pilot_snapshot": "issue-111-v1",
+      "pilot_snapshot_sha256": "f0fee335befad49de32be087ba876e5bf90108993390dc58c0705b708535e896",
+      "players_with_250_each_side": 393,
+      "positive_box_players": 442,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "491a0eb517d280a27e2e273f135dd9802de192173c22050f291b8dbb55f2c000",
+        "model_row.parquet": "73019d94a6e200388d15d8a903efe2f779feb693b2b1be83a61eb2b758d6a2de",
+        "possession_disposition.parquet": "07efc3d078d44049a9ed6707196740261f7af76d671bc488594e7dce3bf4cffd",
+        "score_reconciliation.parquet": "a1498339c41274294ee5d0598279ba71e6acbae902d7a83743918d463eff7320"
+      },
+      "row_build_id": "002a334404ceaaeb20feb4dee0635db87a6f41a267bfd73f0dfa246a321a6c12",
+      "row_manifest_sha256": "0a477a1bd00d85ea3a325b536ba20689ba4b77973c22b9db79141c2fa472fa5e",
+      "row_set": "issue-53-rows-v1",
+      "rows": 211229,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1302,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 211229,
+      "verification_strata": {
+        "free_throw_miss": 6,
+        "inferred_starters": 13,
+        "no_datanba": 1302,
+        "no_livedata": 1302,
+        "overtime": 72,
+        "same_clock_box_credit": 25,
+        "same_clock_free_throw_substitution": 1302,
+        "same_clock_order": 12,
+        "technical_free_throw": 943,
+        "unresolved_possessions": 26
+      },
+      "year": 2009
+    },
+    {
+      "box_appearances": 26769,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "4bdfd03b37236c054a7282c2e9fa5685e8df4368abb69645657c39ede897416d",
+        "team_game_logs.parquet": "14febf00675b74c53f3e7d76383fabfb5128409ad85a9e800b17c973d5186b45"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2356800000,
+          "all_ms": 2356800000
+        },
+        "regular": {
+          "accepted_ms": 35296800000,
+          "all_ms": 35703000000
+        }
+      },
+      "box_snapshot": "issue-90-v1",
+      "box_snapshot_sha256": "376c2d2dadec67e02c00a5d6a1c222d78f14ddf69a5ebe20820b9372b3392599",
+      "close_cutoff_exclusive": "2011-06-13",
+      "control_conflicts_accepted": 1,
+      "control_conflicts_modeled": 1,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 81,
+          "expected_games": 81,
+          "rows": 12237,
+          "usable_rows": 12237
+        },
+        "regular": {
+          "accepted_games": 1216,
+          "expected_games": 1230,
+          "rows": 195773,
+          "usable_rows": 195772
+        }
+      },
+      "excluded_control_keys_sha256": "e1a0dd5343edfea9983824ab4069a624b2b73e002253c53291d6066c4107a47d",
+      "first_played_date": "2010-10-26",
+      "hard_checks": 26,
+      "label": "2010-11",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 48,
+        "ft_pct": 1
+      },
+      "on_court_players": 452,
+      "pilot_build": "issue-115-v2",
+      "pilot_manifest_sha256": "38de0099ef20325ad9527e4dadfc18d18d6384822c76761b96b122ece10c31e7",
+      "pilot_snapshot": "issue-90-v1",
+      "pilot_snapshot_sha256": "376c2d2dadec67e02c00a5d6a1c222d78f14ddf69a5ebe20820b9372b3392599",
+      "players_with_250_each_side": 402,
+      "positive_box_players": 452,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "7f50aa24c93d3551a7253937f563d51a2b44a5b396278eb761c782c73bb6eda4",
+        "model_row.parquet": "fd99678e188e42b371a2bc743845f076d792b1a631eeee6c1284037dcd502f75",
+        "possession_disposition.parquet": "143f3cebe20da3f0534ccb716acdc76bf46f2a031b7eb6f033c02b773f91dfd4",
+        "score_reconciliation.parquet": "186b03ecebb3bb0acdb2b589efdfbbbefe81ba8428efa04dd43863e95b6866aa"
+      },
+      "row_build_id": "0bd8b21c69a3aff18e05d0b2c47f4cd7de1e8f9083804c1fa43619fd924fc666",
+      "row_manifest_sha256": "7f62b1ccc2ca6ae61165de603f63ab5468c661005c8e6429f06ea757733b7e25",
+      "row_set": "issue-53-rows-v1",
+      "rows": 208010,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1296,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 208009,
+      "verification_strata": {
+        "free_throw_miss": 7,
+        "inferred_starters": 11,
+        "no_datanba": 1297,
+        "no_livedata": 1297,
+        "overtime": 86,
+        "same_clock_box_credit": 18,
+        "same_clock_free_throw_substitution": 1297,
+        "same_clock_order": 23,
+        "technical_free_throw": 987,
+        "unresolved_possessions": 27
+      },
+      "year": 2010
+    },
+    {
+      "box_appearances": 27538,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "aac022ae62eb7413d84d5be2766834ac2b71b14207eec01d4e57226db98b5401",
+        "team_game_logs.parquet": "281491dafbdde0b1f05e7ec889a7c23019da3598cddc61fec047fe1ec7e308a5"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2484000000,
+          "all_ms": 2484000000
+        },
+        "regular": {
+          "accepted_ms": 34830000000,
+          "all_ms": 35668200000
+        }
+      },
+      "box_snapshot": "issue-98-v1",
+      "box_snapshot_sha256": "c9c808fdde9a47e830aa423019c11a1f8d136787be6c35db2827422ec635e0f9",
+      "close_cutoff_exclusive": "2013-06-21",
+      "control_conflicts_accepted": 1,
+      "control_conflicts_modeled": 1,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 85,
+          "expected_games": 85,
+          "rows": 13129,
+          "usable_rows": 13129
+        },
+        "regular": {
+          "accepted_games": 1200,
+          "expected_games": 1229,
+          "rows": 193600,
+          "usable_rows": 193599
+        }
+      },
+      "excluded_control_keys_sha256": "8d055adeb97fd83affaf5608762a6f7dcaf045766195bdea9a99d17c4a348a25",
+      "first_played_date": "2012-10-30",
+      "hard_checks": 26,
+      "label": "2012-13",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 40
+      },
+      "on_court_players": 471,
+      "pilot_build": "issue-115-v2",
+      "pilot_manifest_sha256": "38c4b6fe802ca10dbd4a59aa8e2b81852d594d2350d7c096224d7d088a304285",
+      "pilot_snapshot": "issue-98-v1",
+      "pilot_snapshot_sha256": "c9c808fdde9a47e830aa423019c11a1f8d136787be6c35db2827422ec635e0f9",
+      "players_with_250_each_side": 416,
+      "positive_box_players": 471,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "ea7261e895d6f4c05aef734aeaaf260dbf3ef671d4dbb3b71dad23517fb294f8",
+        "model_row.parquet": "bccdb6258aa8cba560c020b613d5c3ed1566b50bbbbb44a22f6413410f705249",
+        "possession_disposition.parquet": "a66013313dc048174a744cd7426c420c26fb832dda47a317e47fca2437aacfa7",
+        "score_reconciliation.parquet": "ac82f3065fa38215fa7fcfbf550f55ca216eac45b080c6186c55243513a687d8"
+      },
+      "row_build_id": "307c077e7024124adf26854f21a2ee3a5c6a7997ab8c85586707c35e7b81d63d",
+      "row_manifest_sha256": "e10cbc0dbce08e20914d16abfd963bd4691bb02ace4ec1c1d6865bc988f2216f",
+      "row_set": "issue-53-rows-v1",
+      "rows": 206729,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1284,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 206728,
+      "verification_strata": {
+        "free_throw_miss": 9,
+        "inferred_starters": 11,
+        "no_datanba": 1285,
+        "no_livedata": 1285,
+        "overtime": 83,
+        "same_clock_box_credit": 12,
+        "same_clock_free_throw_substitution": 1285,
+        "same_clock_order": 5,
+        "technical_free_throw": 846,
+        "unresolved_possessions": 32
+      },
+      "year": 2012
+    },
+    {
+      "box_appearances": 27634,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "8be6e39f9f7431015b81795c20aada4d475a3967f19ce70b05bf6015377ceb4d",
+        "team_game_logs.parquet": "9c122bd1362c0911b5b47cd5992d97c74b6e8060b6a3a09641b0a085c6e70d8c"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2331000000,
+          "all_ms": 2359800000
+        },
+        "regular": {
+          "accepted_ms": 35299800000,
+          "all_ms": 35712000000
+        }
+      },
+      "box_snapshot": "issue-98-v1",
+      "box_snapshot_sha256": "52c81fa3b34e0ce851f6accfa3f47d721301229d0be2fefd8f592147508a35fc",
+      "close_cutoff_exclusive": "2015-06-17",
+      "control_conflicts_accepted": 1,
+      "control_conflicts_modeled": 1,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 80,
+          "expected_games": 81,
+          "rows": 13056,
+          "usable_rows": 13056
+        },
+        "regular": {
+          "accepted_games": 1216,
+          "expected_games": 1230,
+          "rows": 198834,
+          "usable_rows": 198833
+        }
+      },
+      "excluded_control_keys_sha256": "7bb9ee7272f1ce2fa40ee6ccff0c9df02ea0efb677a6dfdd2a909bab976329b3",
+      "first_played_date": "2014-10-28",
+      "hard_checks": 26,
+      "label": "2014-15",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 41,
+        "ft_pct": 1
+      },
+      "on_court_players": 491,
+      "pilot_build": "issue-115-v2",
+      "pilot_manifest_sha256": "f661be3a2e7e0dd01e46e60a02bae0e7c190f371f1180b8f389f0ed0c73d8ca2",
+      "pilot_snapshot": "issue-90-v1",
+      "pilot_snapshot_sha256": "52c81fa3b34e0ce851f6accfa3f47d721301229d0be2fefd8f592147508a35fc",
+      "players_with_250_each_side": 431,
+      "positive_box_players": 492,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "184619125ac771ae6282968189b8e1ac7624ff41109016e46c99470d9d1874c7",
+        "model_row.parquet": "c57a8268f081745bd6efe7d0eadeacf5bdc7fe3dcdc2e63bb2926f9e874b7618",
+        "possession_disposition.parquet": "2d418a714b937c1d1059c840352d983ddbe8d509ee80d23c2a1718d3664371e2",
+        "score_reconciliation.parquet": "3a034b70d2fb49750a457aa7ff98d3ef1e5ec88d91dafc48b620d7acd9d99dbf"
+      },
+      "row_build_id": "50efd43074edfc7a6c9e7d854299d57d7f644147e26d7d478e28a61334198953",
+      "row_manifest_sha256": "3ddd1274639cb751c497ce01d1c5b1ffd1c9315d9d11e83cd65ccbaac1df76c4",
+      "row_set": "issue-53-rows-v1",
+      "rows": 211890,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1296,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 211889,
+      "verification_strata": {
+        "free_throw_miss": 5,
+        "inferred_starters": 11,
+        "no_datanba": 1296,
+        "no_livedata": 1296,
+        "overtime": 82,
+        "same_clock_box_credit": 8,
+        "same_clock_free_throw_substitution": 1296,
+        "same_clock_order": 3,
+        "source_repeat": 112,
+        "technical_free_throw": 750,
+        "unresolved_possessions": 21
+      },
+      "year": 2014
+    },
+    {
+      "box_appearances": 27978,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "6875ef5245ee653fb0c8cd2257d09eba81d0645a564c5a57b0693d3be52b9c0a",
+        "team_game_logs.parquet": "86e7afe4432057aa3775f03fa4af7bd24704b289172a364d5551e6e527d4e043"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2463000000,
+          "all_ms": 2491800000
+        },
+        "regular": {
+          "accepted_ms": 35033400000,
+          "all_ms": 35691000000
+        }
+      },
+      "box_snapshot": "issue-98-v1",
+      "box_snapshot_sha256": "1a49c70c29cc45ecd9bb87aa824716e1071c4524c3eaeb6d894bbf276ed24fdd",
+      "close_cutoff_exclusive": "2016-06-20",
+      "control_conflicts_accepted": 1,
+      "control_conflicts_modeled": 0,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 85,
+          "expected_games": 86,
+          "rows": 13615,
+          "usable_rows": 13615
+        },
+        "regular": {
+          "accepted_games": 1208,
+          "expected_games": 1230,
+          "rows": 201472,
+          "usable_rows": 201472
+        }
+      },
+      "excluded_control_keys_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "first_played_date": "2015-10-27",
+      "hard_checks": 26,
+      "label": "2015-16",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 25,
+        "ft_pct": 1
+      },
+      "on_court_players": 478,
+      "pilot_build": "issue-98-v1",
+      "pilot_manifest_sha256": "fa68579155d6689a36ad733c362caf552394e1bc5939e37b1dd2f84c0807fbea",
+      "pilot_snapshot": "issue-98-v1",
+      "pilot_snapshot_sha256": "1a49c70c29cc45ecd9bb87aa824716e1071c4524c3eaeb6d894bbf276ed24fdd",
+      "players_with_250_each_side": 425,
+      "positive_box_players": 478,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "040676b56be9f4ba9a2ce34b58832d9e072eec16973129c46fcedcf266f56c1b",
+        "model_row.parquet": "13b55e2b4e397ded41c4b9496899ae842ad3a380f4ac8147d80672cea3b3de2e",
+        "possession_disposition.parquet": "f25a8193bd530d274571d6d5c02db157d7616a0d76a13cdb4ecc5851ddd73a45",
+        "score_reconciliation.parquet": "3a0fa2f0d52db5911a982797cff22fc0a16ececce6b06d858245bab217fc3a24"
+      },
+      "row_build_id": "c0d27717988df7659b3930277f12b5fb8c2a77158627fb9cfff5e1c4e9361fd6",
+      "row_manifest_sha256": "4214ed84b842a7575848462847d2788867465ff7a09c505479c5cbcc64e29373",
+      "row_set": "issue-98-rows-v1",
+      "rows": 215087,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1290,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 215087,
+      "verification_strata": {
+        "inferred_starters": 12,
+        "no_datanba": 1293,
+        "no_livedata": 1293,
+        "overtime": 77,
+        "same_clock_box_credit": 10,
+        "same_clock_free_throw_substitution": 1293,
+        "source_repeat": 76,
+        "technical_free_throw": 823,
+        "unresolved_possessions": 24
+      },
+      "year": 2015
+    },
+    {
+      "box_appearances": 27876,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "98a0ca9890ea831276059cadc837439372bd7b613c7d6b5a51ca6380554c8827",
+        "team_game_logs.parquet": "5f437d5802e09e87dda9ce2fd5e73db189d061222cbc9d6e82625862b1d6e950"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2284200000,
+          "all_ms": 2284200000
+        },
+        "regular": {
+          "accepted_ms": 35047200000,
+          "all_ms": 35664000000
+        }
+      },
+      "box_snapshot": "issue-96-v1",
+      "box_snapshot_sha256": "7489dc412ef5a36ca7d7748c0b5035ebe432ad8421864913a3c1906e434a8d88",
+      "close_cutoff_exclusive": "2017-06-13",
+      "control_conflicts_accepted": 1,
+      "control_conflicts_modeled": 1,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 79,
+          "expected_games": 79,
+          "rows": 12847,
+          "usable_rows": 12847
+        },
+        "regular": {
+          "accepted_games": 1209,
+          "expected_games": 1230,
+          "rows": 203037,
+          "usable_rows": 203036
+        }
+      },
+      "excluded_control_keys_sha256": "c2eaa0c8293877a43631171d028d2e9481f910e1acf61912fb02a3049bbd1bbc",
+      "first_played_date": "2016-10-25",
+      "hard_checks": 26,
+      "label": "2016-17",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 19,
+        "ft_pct": 2
+      },
+      "on_court_players": 486,
+      "pilot_build": "issue-96-v1",
+      "pilot_manifest_sha256": "e96ba9042e6463566cd0666f1c4b88d89b07d2484908a4125b8860218ac2e9b2",
+      "pilot_snapshot": "issue-90-v1",
+      "pilot_snapshot_sha256": "7489dc412ef5a36ca7d7748c0b5035ebe432ad8421864913a3c1906e434a8d88",
+      "players_with_250_each_side": 422,
+      "positive_box_players": 486,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "2b09985385e8c062d045913897f33b32a8365690033a575688cdd72b2bdb1cd6",
+        "model_row.parquet": "f685cdcf60b3cdef962058a61f878fbd90645fdab4d45081ecf45b48ed2ac439",
+        "possession_disposition.parquet": "a083a8a61d006bce616ced1426b6a2a496f392cf42cec226a1911aeac0f908a6",
+        "score_reconciliation.parquet": "724c59bab73831f38cdcba1dc49872b4660d5a53bcee5efcf3d5b456c6186332"
+      },
+      "row_build_id": "b77fe289a83189d4cd21d08800879d9925ef743ccd700be839357ea88cf19daf",
+      "row_manifest_sha256": "eca05cb8515446a6a61f36685d621b3701b502f621f490bc1280614dac8d1bde",
+      "row_set": "issue-96-rows-v1",
+      "rows": 215884,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1287,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 215883,
+      "verification_strata": {
+        "datanba_possession_labels": 3,
+        "inferred_starters": 8,
+        "no_livedata": 1288,
+        "overtime": 69,
+        "same_clock_box_credit": 19,
+        "same_clock_free_throw_substitution": 1288,
+        "source_repeat": 84,
+        "technical_free_throw": 802,
+        "unresolved_possessions": 44
+      },
+      "year": 2016
+    },
+    {
+      "box_appearances": 27862,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "c47e47e027c63271cb5e52d85bb7b5855ab338bc176b71a0327f9870d3d0b844",
+        "team_game_logs.parquet": "e8e744d71159206a88be82bec62eeeefe54bd8083b8871158af643d1c9c17076"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2328000000,
+          "all_ms": 2385600000
+        },
+        "regular": {
+          "accepted_ms": 34930800000,
+          "all_ms": 35667000000
+        }
+      },
+      "box_snapshot": "issue-25-v1",
+      "box_snapshot_sha256": "3dddf8dd0731630f838b1375fc4f494e27cf8aecb4895618ba07154defdabfe1",
+      "close_cutoff_exclusive": "2019-06-14",
+      "control_conflicts_accepted": 13,
+      "control_conflicts_modeled": 5,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 80,
+          "expected_games": 82,
+          "rows": 13476,
+          "usable_rows": 13476
+        },
+        "regular": {
+          "accepted_games": 1206,
+          "expected_games": 1230,
+          "rows": 210210,
+          "usable_rows": 210205
+        }
+      },
+      "excluded_control_keys_sha256": "aa877da6280444ba64a87de4c9c0e7f0c75d829d40a2d4eb726713981bf2de78",
+      "first_played_date": "2018-10-16",
+      "hard_checks": 26,
+      "label": "2018-19",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 18,
+        "ft_pct": 1
+      },
+      "on_court_players": 530,
+      "pilot_build": "issue-25-v1",
+      "pilot_manifest_sha256": "a5f52e4880666fb8eb887d82eecedf6cf7ebd1e6c5e5ba42e6fea25fdb43ce35",
+      "pilot_snapshot": "issue-25-v1",
+      "pilot_snapshot_sha256": "3dddf8dd0731630f838b1375fc4f494e27cf8aecb4895618ba07154defdabfe1",
+      "players_with_250_each_side": 447,
+      "positive_box_players": 530,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "44487ac5bd1f0b4f1f35a7581ce51e08ae54c21d8dee90a9b1d521886ecf52d2",
+        "model_row.parquet": "0c7e9b1a6e4ed9769d8a9366e507f309a0ceec4886ed39c5867f9ef14c893389",
+        "possession_disposition.parquet": "ef2f2e26f3f3c40f23bbdf3384b7a11e40de89b07e5fc164376c9f135c242189",
+        "score_reconciliation.parquet": "1b32401ea750340666c3da58a537a285d37297ef47b9d10986c7d10dd38bcb14"
+      },
+      "row_build_id": "1cde411ac761baf07b6127533579f67242d7aef0c2824f3bf51ca8694b34a31e",
+      "row_manifest_sha256": "c0fa49896b96827ec9ff6864bbcf5d3ddb55e8b6079ed693f4a88ebd4b1e1df1",
+      "row_set": "issue-93-v1",
+      "rows": 223686,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1286,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 223681,
+      "verification_strata": {
+        "datanba_possession_labels": 1,
+        "immaterial_starters": 1,
+        "inferred_starters": 11,
+        "no_livedata": 1286,
+        "overtime": 62,
+        "same_clock_box_credit": 18,
+        "same_clock_free_throw_substitution": 1286,
+        "source_repeat": 106,
+        "technical_free_throw": 802,
+        "unresolved_possessions": 86,
+        "v3_event_order": 208,
+        "v3_primary_order": 25
+      },
+      "year": 2018
+    },
+    {
+      "box_appearances": 24087,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "33b2b4be41b9f26a3e249f572d936a341f2a2165e83461267b1a635e552e7200",
+        "team_game_logs.parquet": "3bccb3f6d1381d64498172e81afb796815b072b8edfc357fc602a8ef4e9bcf53"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2382600000,
+          "all_ms": 2411400000
+        },
+        "regular": {
+          "accepted_ms": 30202800000,
+          "all_ms": 30724200000
+        }
+      },
+      "box_snapshot": "issue-25-v1",
+      "box_snapshot_sha256": "b3d131f42a5588b9b39a2d2ee4a034c85a0addc10ce68ee04c728099baa8827b",
+      "close_cutoff_exclusive": "2020-10-12",
+      "control_conflicts_accepted": 12,
+      "control_conflicts_modeled": 4,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 82,
+          "expected_games": 83,
+          "rows": 13793,
+          "usable_rows": 13793
+        },
+        "regular": {
+          "accepted_games": 1041,
+          "expected_games": 1059,
+          "rows": 181335,
+          "usable_rows": 181331
+        }
+      },
+      "excluded_control_keys_sha256": "9ada075b0954f1e79f1ea3466d21654a6083599319f26e1b388e72739cf955b0",
+      "first_played_date": "2019-10-22",
+      "hard_checks": 26,
+      "label": "2019-20",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 12
+      },
+      "on_court_players": 530,
+      "pilot_build": "issue-25-v1",
+      "pilot_manifest_sha256": "334daf0237f3f9669d76ca807929802426bf667ad68f0932ffdcdfd0a0a52ac6",
+      "pilot_snapshot": "issue-25-v1",
+      "pilot_snapshot_sha256": "b3d131f42a5588b9b39a2d2ee4a034c85a0addc10ce68ee04c728099baa8827b",
+      "players_with_250_each_side": 436,
+      "positive_box_players": 530,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "04d7c5f074bf068449046cea3477c5f693faaec3e74a035dc81202b3083164d3",
+        "model_row.parquet": "5be7176ca20a390b4cdbd094a8a5a9dfd39c5e0b7ec73a8ff093a940e0740eee",
+        "possession_disposition.parquet": "e5438103ed66a364df5902e75f650537718e8b5bd6af11856f01c7777e52acc5",
+        "score_reconciliation.parquet": "aae5f52456d99ae77f5d5122cfde0ddbc92ea2e424fcd9f0ce71f34a9ad4b59c"
+      },
+      "row_build_id": "234b02d92bbd2432991e1362df2c2db3047469295cbbbaff44ef8b535edf4834",
+      "row_manifest_sha256": "f17dfd1bd9b39cdd022375656be2681cc119c65b5f66b97466f2992bbd6ed777",
+      "row_set": "issue-93-v1",
+      "rows": 195128,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1123,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 195124,
+      "verification_strata": {
+        "datanba_possession_labels": 1,
+        "inferred_starters": 19,
+        "no_livedata": 1123,
+        "overtime": 74,
+        "same_clock_box_credit": 26,
+        "same_clock_free_throw_substitution": 1123,
+        "source_repeat": 53,
+        "technical_free_throw": 710,
+        "unresolved_possessions": 47,
+        "v3_event_order": 61,
+        "v3_primary_order": 3
+      },
+      "year": 2019
+    },
+    {
+      "box_appearances": 24918,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "e162c06ebf9d1bf19c6cef955142f24213e602c632823f045a39958e76eb95b4",
+        "team_game_logs.parquet": "7d5289ca4eb37a692980e1b69d91a967d85546d6203a3a1721311bde596e7713"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2460000000,
+          "all_ms": 2460000000
+        },
+        "regular": {
+          "accepted_ms": 31059600000,
+          "all_ms": 31290000000
+        }
+      },
+      "box_snapshot": "issue-25-v1",
+      "box_snapshot_sha256": "45a78182453945572e404418c411b1490a7f20a21d4a00124ffaa94017e293df",
+      "close_cutoff_exclusive": "2021-07-21",
+      "control_conflicts_accepted": 16,
+      "control_conflicts_modeled": 7,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 85,
+          "expected_games": 85,
+          "rows": 14122,
+          "usable_rows": 14122
+        },
+        "regular": {
+          "accepted_games": 1072,
+          "expected_games": 1080,
+          "rows": 186134,
+          "usable_rows": 186127
+        }
+      },
+      "excluded_control_keys_sha256": "4b43a65112625fcfa35c5bcbf3364aec4b612ebeb1b5830d36bd8c837d2da9e1",
+      "first_played_date": "2020-12-22",
+      "hard_checks": 26,
+      "label": "2020-21",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 9,
+        "ft_pct": 1
+      },
+      "on_court_players": 540,
+      "pilot_build": "issue-25-v1",
+      "pilot_manifest_sha256": "c3c75d43236a93070fd8fb3dd90200f572894af6aa5f5c05b8f38881ede72a11",
+      "pilot_snapshot": "issue-25-v1",
+      "pilot_snapshot_sha256": "45a78182453945572e404418c411b1490a7f20a21d4a00124ffaa94017e293df",
+      "players_with_250_each_side": 459,
+      "positive_box_players": 540,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "a4259861621434e3bb2b0d310b56799495ef2bb093bcc113387da2b5c43d8999",
+        "model_row.parquet": "fce0f23b9e81aeaff14ce8a313ad416e690b415c51bbff417d160cc4a5b443da",
+        "possession_disposition.parquet": "c32d8d9a69bf4cbb81ad703e8928b2083624396ba81aa94d3e6804c74a338f9b",
+        "score_reconciliation.parquet": "d8206f7d26c22ff0f5b275358fb6681a377227ef5b4704bc46b7eea087c813c2"
+      },
+      "row_build_id": "b778f8e09fc24ac40866f5a1ade088bd1b3bd0186efb8c872489181e68060d86",
+      "row_manifest_sha256": "231f742dbf7aeeb02e99c5a4b1ff8c2c3eed5e5bfb484390d307ecf0d8c5e756",
+      "row_set": "issue-93-v1",
+      "rows": 200256,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1155,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 200249,
+      "verification_strata": {
+        "datanba_possession_labels": 1,
+        "inferred_starters": 5,
+        "livedata_starters": 14,
+        "overtime": 59,
+        "same_clock_box_credit": 15,
+        "same_clock_free_throw_substitution": 1157,
+        "source_repeat": 69,
+        "technical_free_throw": 673,
+        "unresolved_possessions": 36,
+        "v3_event_order": 71,
+        "v3_period_defect": 1,
+        "v3_primary_order": 10
+      },
+      "year": 2020
+    },
+    {
+      "box_appearances": 27930,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "6cea151853bbd901b84ddff93100eb571c6f8ca73d7124bcf0d127d6a06deb0e",
+        "team_game_logs.parquet": "ebfe309962d4d6c31550b25f4d2816d341946f8c2d6e58246faad237ba63f99c"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2508600000,
+          "all_ms": 2508600000
+        },
+        "regular": {
+          "accepted_ms": 35299200000,
+          "all_ms": 35625000000
+        }
+      },
+      "box_snapshot": "issue-25-v1",
+      "box_snapshot_sha256": "d634e22e6db4bcfcf4b0933b13835f034e32de62c564db9a4e5934ebd4c4570c",
+      "close_cutoff_exclusive": "2022-06-17",
+      "control_conflicts_accepted": 23,
+      "control_conflicts_modeled": 11,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 87,
+          "expected_games": 87,
+          "rows": 14254,
+          "usable_rows": 14254
+        },
+        "regular": {
+          "accepted_games": 1219,
+          "expected_games": 1230,
+          "rows": 208789,
+          "usable_rows": 208778
+        }
+      },
+      "excluded_control_keys_sha256": "3883f5ec19d0b9a9d706aa5e73cb82d6150af5c487c61db4a0a3eb952c67f912",
+      "first_played_date": "2021-10-19",
+      "hard_checks": 26,
+      "label": "2021-22",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 15,
+        "ft_pct": 1
+      },
+      "on_court_players": 606,
+      "pilot_build": "issue-25-v1",
+      "pilot_manifest_sha256": "49bb4a91c71d2f255a17ba1c52a3ae6e5c2737f1a8c6716c0405980949947075",
+      "pilot_snapshot": "issue-25-v1",
+      "pilot_snapshot_sha256": "d634e22e6db4bcfcf4b0933b13835f034e32de62c564db9a4e5934ebd4c4570c",
+      "players_with_250_each_side": 478,
+      "positive_box_players": 606,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "f8c752c7bd05cf93ee664d74bc8e3969c4b5907a497a245d799a957fd762f25e",
+        "model_row.parquet": "bcc651b8d88bbe821a81824560cd157b05db8d2f80f545f50ec0a70039898096",
+        "possession_disposition.parquet": "21665bc5b7c4724eb4dc61e18b4863826ca747d40d4ef98723f6d018f434adcb",
+        "score_reconciliation.parquet": "66b4c23256ea169dd5c72a36e182b91a25bdbd7bdf050bf462cf701e70d90b0f"
+      },
+      "row_build_id": "5afe67edaf8f19f46fd51361b45763a65da480c6ab28b05c66b45309cf0d9215",
+      "row_manifest_sha256": "58fed85cce0822865e7b3bf369e55b5ba5a280f6a1347d19832381df383cc298",
+      "row_set": "issue-93-v1",
+      "rows": 223043,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1303,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 223032,
+      "verification_strata": {
+        "inferred_starters": 4,
+        "livedata_starters": 10,
+        "overtime": 56,
+        "same_clock_box_credit": 22,
+        "same_clock_free_throw_substitution": 1305,
+        "source_repeat": 11,
+        "technical_free_throw": 831,
+        "unresolved_possessions": 43,
+        "v3_event_order": 109,
+        "v3_period_defect": 3,
+        "v3_primary_order": 8
+      },
+      "year": 2021
+    },
+    {
+      "box_appearances": 27622,
+      "box_artifact_sha256": {
+        "player_game_logs.parquet": "5f378f06b35f36bf2aa928d2fb77c4d14ed87a4f43161f43b4e4de30c601638e",
+        "team_game_logs.parquet": "bd3b4a9f745249c970970beffd27813ce2ed7e235a9df20228fde042535a6c43"
+      },
+      "box_minutes_ms": {
+        "playoffs": {
+          "accepted_ms": 2431200000,
+          "all_ms": 2431200000
+        },
+        "regular": {
+          "accepted_ms": 35057400000,
+          "all_ms": 35691000000
+        }
+      },
+      "box_snapshot": "issue-5-v2",
+      "box_snapshot_sha256": "348eb8a072534659956082fd64cf3106c2d07092c87b5aca6f9d0ca056ae6611",
+      "close_cutoff_exclusive": "2023-06-13",
+      "control_conflicts_accepted": 4,
+      "control_conflicts_modeled": 2,
+      "coverage": {
+        "playoffs": {
+          "accepted_games": 84,
+          "expected_games": 84,
+          "rows": 14097,
+          "usable_rows": 14097
+        },
+        "regular": {
+          "accepted_games": 1208,
+          "expected_games": 1230,
+          "rows": 209942,
+          "usable_rows": 209940
+        }
+      },
+      "excluded_control_keys_sha256": "92938cec515f854b849754537845f8d35c1e0cabe76391d20b8a64e8e3107b03",
+      "first_played_date": "2022-10-18",
+      "hard_checks": 26,
+      "label": "2022-23",
+      "modeled_players_missing_positive_box": 0,
+      "null_features_at_250_exposure": {
+        "fg3_pct": 7,
+        "ft_pct": 1
+      },
+      "on_court_players": 541,
+      "pilot_build": "issue-19-v6",
+      "pilot_manifest_sha256": "89cb2e82af4d0fc4b7a95cf0f94b99b2b088361ffa893ce192de2b519d711570",
+      "pilot_snapshot": "issue-5-v2",
+      "pilot_snapshot_sha256": "348eb8a072534659956082fd64cf3106c2d07092c87b5aca6f9d0ca056ae6611",
+      "players_with_250_each_side": 456,
+      "positive_box_players": 541,
+      "row_artifact_sha256": {
+        "game_reconciliation.parquet": "5ffde1f5106d833311ec894438c4815af443fe17577ace84defb1b9e747ce29d",
+        "model_row.parquet": "ebadd15122df870cdfd40e43b04d381bbb6f7058e014c4c26802d8c93b58ad90",
+        "possession_disposition.parquet": "53a5a40e6f7e84c789200cb109e9720575151388d8a30230612c5e4438179501",
+        "score_reconciliation.parquet": "fb8a7b49b3b0aa6aa575d620bde7841b6ed211c75d02a3c2dd32c71d9803b2de"
+      },
+      "row_build_id": "9d3090ad3505b7cb6ef8bd703052c9bb75cffc1918712f55dd2f9056fa3969b7",
+      "row_manifest_sha256": "2affb62a8d875963f05e5eb39e2e36d8e8fbab4df43840f1dc0062deb581a1ac",
+      "row_set": "issue-93-v1",
+      "rows": 224039,
+      "teams": 30,
+      "timing_audit": {
+        "event_and_allocation_scores_disagree": 0,
+        "own_points_sequenced_after_end": 0,
+        "own_points_sequenced_before_start": 0,
+        "possessions_without_prior_event": 1291,
+        "prior_clock_after_first_event": 0,
+        "prior_clock_before_period_start_clamped": 0
+      },
+      "usable_rows": 224037,
+      "verification_strata": {
+        "datanba_possession_labels": 2,
+        "inferred_starters": 2,
+        "livedata_starters": 29,
+        "overtime": 83,
+        "same_clock_box_credit": 18,
+        "same_clock_free_throw_substitution": 1291,
+        "source_repeat": 14,
+        "technical_free_throw": 823,
+        "unresolved_possessions": 30,
+        "v3_event_order": 80,
+        "v3_period_defect": 2,
+        "v3_primary_order": 7
+      },
+      "year": 2022
+    }
+  ],
+  "shared_control_key_columns": [
+    "game_id",
+    "stream_revision",
+    "possession_seq"
+  ]
+}
