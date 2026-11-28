@@ -38,4 +38,4 @@ Run the exposure-only audit with:
 uv run python scripts/rapm_action_exposure.py data/processed
 ```
 
-Five focused tests passed, covering zero-clock live action, an opponent technical/free-throw cluster, unresolved and wrong-side events, role mass, and sparse agreement with a dense ridge oracle. No paired model comparison has run.
+Six focused tests passed, covering zero-clock live action, an opponent technical/free-throw cluster, unresolved and wrong-side events, role mass, preserved free-throw credit across a shooting substitution, and sparse agreement with a dense ridge oracle. No paired model comparison has run.

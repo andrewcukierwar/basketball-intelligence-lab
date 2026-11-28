@@ -96,3 +96,39 @@ def test_fractional_design_and_sparse_fit_match_dense_oracle(
     penalty = np.diag([0.0, *[4.0] * len(players), *[8.0] * len(players)])
     expected = np.linalg.solve(dense.T @ dense + penalty, dense.T @ target)
     np.testing.assert_allclose(coef, expected, atol=1e-7, rtol=0)
+
+
+def test_score_credit_precedes_shooting_substitution_without_adding_action_weight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
+    from rapm_action_exposure import ACTION_EXPOSURE
+    from rapm_lineup_exposure import LEDGER_AUDIT
+
+    with duckdb.connect() as con:
+        con.execute("""
+            CREATE TABLE cohort AS SELECT 0 AS row_id, 'g' AS game_id, 1 AS stream_revision,
+              1 AS start_seq, 5 AS end_seq, 'h' AS offense_team_id, true AS multi;
+            CREATE TABLE segments AS SELECT 0 AS row_id, * FROM (VALUES (1,0),(2,0)) x(stint_seq,ms);
+            CREATE TABLE stint AS SELECT 'g' AS game_id, 1 AS stream_revision, * FROM (VALUES
+              (1,1,2),(2,2,5)
+            ) x(stint_seq,start_seq,end_seq);
+            CREATE TABLE event AS SELECT 'g' AS game_id, 1 AS stream_revision, 1 AS period,
+              1200 AS elapsed_ms, * FROM (VALUES
+                (1,'foul','a'),(2,'substitution','h'),(3,'free_throw','h'),(4,'shot','h')
+              ) x(seq,kind,team_id);
+            CREATE TABLE score_allocation AS SELECT 'g' AS game_id, 1 AS stream_revision,
+              1 AS possession_seq, 'control_possession' AS possession_reason, 'h' AS scoring_team_id,
+              * FROM (VALUES (3,1,1),(4,2,2)) x(seq,points_delta,credited_stint_seq);
+            CREATE TABLE possession_disposition AS SELECT 'g' AS game_id, 1 AS stream_revision,
+              1 AS possession_seq, 'multiple_lineups' AS reason, 3 AS control_points,
+              'h' AS offense_team_id;
+        """)
+        con.execute(ACTION_EXPOSURE)
+        assert con.execute(LEDGER_AUDIT).fetchall() == [(0,)]
+        assert con.execute(
+            "SELECT stint_seq, share FROM action_pieces ORDER BY stint_seq"
+        ).fetchall() == [(1, 0.0), (2, 1.0)]
+        assert con.execute(
+            "SELECT credited_stint_seq FROM score_allocation WHERE seq = 3"
+        ).fetchall() == [(1,)]
